@@ -40,26 +40,35 @@ export interface JourneyResult {
   durationMs: number;
 }
 
-const registry: JourneyDef[] = [];
-let collecting: StepDef[] | undefined;
+// Shared across module instances — tsx can load `@journey/core` more than once
+// (once from the runner, once through the journey file's imports), and we need
+// both copies to point at the same registry/collector.
+interface SharedState {
+  registry: JourneyDef[];
+  collecting: StepDef[] | undefined;
+}
+const STATE_KEY = Symbol.for("@journey/core::runtime-state");
+const globals = globalThis as unknown as { [STATE_KEY]?: SharedState };
+const state: SharedState =
+  globals[STATE_KEY] ?? (globals[STATE_KEY] = { registry: [], collecting: undefined });
 
 export function journey(name: string, body: () => void | Promise<void>): void {
-  registry.push({ name, body });
+  state.registry.push({ name, body });
 }
 
 export function step<E extends Endpoint>(name: string, options: StepOptions<E>): void {
-  if (!collecting) {
+  if (!state.collecting) {
     throw new Error(`step(${JSON.stringify(name)}) called outside a journey(...) body`);
   }
-  collecting.push({ name, options: options as StepOptions<Endpoint> });
+  state.collecting.push({ name, options: options as StepOptions<Endpoint> });
 }
 
 export function getRegisteredJourneys(): ReadonlyArray<JourneyDef> {
-  return registry;
+  return state.registry;
 }
 
 export function clearRegistry(): void {
-  registry.length = 0;
+  state.registry.length = 0;
 }
 
 async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
@@ -69,12 +78,12 @@ async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
 
 export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<JourneyResult> {
   const steps: StepDef[] = [];
-  const prev = collecting;
-  collecting = steps;
+  const prev = state.collecting;
+  state.collecting = steps;
   try {
     await def.body();
   } finally {
-    collecting = prev;
+    state.collecting = prev;
   }
 
   const results: StepResult[] = [];
@@ -124,7 +133,7 @@ export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<Jou
 }
 
 export async function runAllRegistered(ctx: HttpContext): Promise<JourneyResult[]> {
-  const defs = registry.slice();
+  const defs = state.registry.slice();
   clearRegistry();
   const results: JourneyResult[] = [];
   for (const def of defs) {

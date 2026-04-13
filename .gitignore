@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Journey local run cache
 .journey/cache/
+
+# Test-generated scratch projects
+packages/*/.test-tmp/

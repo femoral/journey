@@ -6,14 +6,18 @@
   "bin": {
     "journey": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@journey/codegen": "workspace:^",
     "@journey/core": "workspace:*",
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "tsx": "^4.21.0"
   }
 }

@@ -8,25 +8,30 @@ interface ActiveEnvState {
   values: EnvValues;
 }
 
-let active: ActiveEnvState | undefined;
+interface Shared {
+  active?: ActiveEnvState;
+}
+const KEY = Symbol.for("@journey/core::env-state");
+const globals = globalThis as unknown as { [KEY]?: Shared };
+const shared: Shared = globals[KEY] ?? (globals[KEY] = {});
 
 export function setActiveEnvironment(name: string, values: EnvValues): void {
-  active = { name, values };
+  shared.active = { name, values };
 }
 
 export function clearActiveEnvironment(): void {
-  active = undefined;
+  delete shared.active;
 }
 
 export function env(key: string): string {
-  if (!active) {
+  if (!shared.active) {
     throw new Error(
       `env(${JSON.stringify(key)}) called with no active environment. Pass --env <name> or set one via setActiveEnvironment().`,
     );
   }
-  const value = active.values[key];
+  const value = shared.active.values[key];
   if (value === undefined) {
-    throw new Error(`env: key "${key}" not found in environment "${active.name}"`);
+    throw new Error(`env: key "${key}" not found in environment "${shared.active.name}"`);
   }
   return value;
 }
