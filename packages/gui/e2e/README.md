@@ -1,16 +1,20 @@
 # GUI end-to-end tests
 
-Run with:
+On NixOS, the repo ships a `shell.nix` that pins `nodejs`, `pnpm`, `k6`, and
+`playwright-driver.browsers` so the Playwright version and its Chromium bundle
+line up (nixpkgs' `playwright-driver` is 1.52.0 → Chromium 1169; the
+`@playwright/test` dep is pinned to match).
 
-```
-# Keep the API + dev server running; Playwright launches its own browser.
+```bash
+cd <repo root>
+nix-shell
+pnpm --filter @journey/cli build
 pnpm --filter @journey/gui test:e2e
 ```
 
-Requires Chromium system libraries (`libglib-2.0`, `libnss3`, `libatk-1.0`, etc.). On NixOS, enter a shell with the Playwright driver deps, e.g.:
+The test spawns `node packages/cli/dist/index.js serve` on a random free port
+and `vite dev` on another random free port, then drives the SPA with
+Playwright's Chromium.
 
-```
-nix-shell -p playwright-driver.browsers glib nss nspr atk cups dbus libdrm mesa libxkbcommon pango cairo alsa-lib
-```
-
-Or use `nix develop` with a flake exposing `playwright`. The test spawns `node packages/cli/dist/index.js serve` + a Vite dev server, so build the CLI first with `pnpm --filter @journey/cli build`.
+If you're not on Nix, make sure the system libs Chromium needs are installed
+(Debian/Ubuntu: `sudo pnpm --filter @journey/gui exec playwright install-deps chromium`).
