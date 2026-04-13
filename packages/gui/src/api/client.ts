@@ -59,6 +59,31 @@ export interface ProxyRequestBody {
   body?: unknown;
 }
 
+export interface JourneyListResponse {
+  journeysDir: string;
+  files: string[];
+}
+
+export interface StepResult {
+  name: string;
+  ok: boolean;
+  request?: { method: string; url: string };
+  response?: { status: number; headers: Record<string, string>; body: unknown };
+  error?: string;
+  durationMs: number;
+}
+
+export interface JourneyResult {
+  name: string;
+  ok: boolean;
+  steps: StepResult[];
+  durationMs: number;
+}
+
+export interface RunJourneyResponse {
+  results: JourneyResult[];
+}
+
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
   getTree: () => req<ProjectTree>("/api/tree"),
@@ -68,5 +93,12 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+    }),
+  getJourneys: () => req<JourneyListResponse>("/api/journeys"),
+  runJourney: (file: string, env?: string) =>
+    req<RunJourneyResponse>(`/api/journeys/${encodeURIComponent(file)}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(env ? { env } : {}),
     }),
 };

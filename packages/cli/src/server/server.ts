@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
+import { runJourneyFile } from "./runner.js";
 
 export interface StartServerOptions {
   projectDir: string;
@@ -223,6 +224,36 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
     if (url.pathname === "/api/request" && req.method === "POST") {
       const body = (await readRequestBody(req)) as ProxyRequest;
       send(res, 200, await proxyRequest(body));
+      return;
+    }
+    if (url.pathname === "/api/journeys" && req.method === "GET") {
+      const loaded = await loadConfig(projectDir);
+      const { journeysDir } = resolveConfigPaths(loaded);
+      const { readdir } = await import("node:fs/promises");
+      let files: string[] = [];
+      try {
+        const entries = await readdir(journeysDir);
+        files = entries.filter((e) => e.endsWith(".journey.ts")).sort();
+      } catch {
+        files = [];
+      }
+      send(res, 200, { journeysDir, files });
+      return;
+    }
+    const runMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)\/run$/);
+    if (runMatch && req.method === "POST") {
+      const file = decodeURIComponent(runMatch[1]!);
+      const body = ((await readRequestBody(req)) ?? {}) as { env?: string };
+      const loaded = await loadConfig(projectDir);
+      const { journeysDir, environmentsDir } = resolveConfigPaths(loaded);
+      const results = await runJourneyFile({
+        loaded,
+        journeysDir,
+        environmentsDir,
+        file,
+        ...(body.env !== undefined ? { env: body.env } : {}),
+      });
+      send(res, 200, { results });
       return;
     }
     if (url.pathname === "/api/health") {
