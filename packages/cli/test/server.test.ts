@@ -74,6 +74,32 @@ describe("journey serve — /api/project", () => {
     );
   });
 
+  it("lists, saves, and deletes environments", async () => {
+    type EnvListBody = { environments: Array<{ name: string; values: Record<string, string> }> };
+    const list = (await (await fetch(`${srv.url}/api/environments`)).json()) as EnvListBody;
+    expect(list.environments.map((e) => e.name).sort()).toEqual(["dev", "staging"]);
+
+    const put = await fetch(`${srv.url}/api/environments/dev`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ TOKEN: "abc" }),
+    });
+    expect(put.status).toBe(200);
+
+    const refetched = (await (await fetch(`${srv.url}/api/environments`)).json()) as EnvListBody;
+    const dev = refetched.environments.find((e) => e.name === "dev");
+    expect(dev?.values).toEqual({ TOKEN: "abc" });
+
+    const del = await fetch(`${srv.url}/api/environments/staging`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+    const afterDelete = (await (await fetch(`${srv.url}/api/environments`)).json()) as EnvListBody;
+    expect(afterDelete.environments.map((e) => e.name)).toEqual(["dev"]);
+
+    // invalid name
+    const bad = await fetch(`${srv.url}/api/environments/..%2Fetc%2Fpasswd`, { method: "DELETE" });
+    expect(bad.status).toBe(400);
+  });
+
   it("proxies a request and returns status + body", async () => {
     // Stand up a throwaway target server.
     const { createServer } = await import("node:http");

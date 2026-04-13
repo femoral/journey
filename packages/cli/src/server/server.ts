@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
 import { runJourneyFile } from "./runner.js";
@@ -239,6 +239,59 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
       }
       send(res, 200, { journeysDir, files });
       return;
+    }
+    if (url.pathname === "/api/environments" && req.method === "GET") {
+      const loaded = await loadConfig(projectDir);
+      const { environmentsDir } = resolveConfigPaths(loaded);
+      const names = await listEnvironments(environmentsDir);
+      const out: Array<{ name: string; values: Record<string, string> }> = [];
+      for (const name of names) {
+        try {
+          const raw = await readFile(join(environmentsDir, `${name}.json`), "utf8");
+          const values = JSON.parse(raw) as Record<string, unknown>;
+          const normalized: Record<string, string> = {};
+          for (const [k, v] of Object.entries(values)) normalized[k] = typeof v === "string" ? v : JSON.stringify(v);
+          out.push({ name, values: normalized });
+        } catch {
+          out.push({ name, values: {} });
+        }
+      }
+      send(res, 200, { defaultEnvironment: loaded.config.defaultEnvironment, environments: out });
+      return;
+    }
+    const envMatch = url.pathname.match(/^\/api\/environments\/([^/]+)$/);
+    if (envMatch) {
+      const name = decodeURIComponent(envMatch[1]!);
+      if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
+        send(res, 400, { error: "invalid environment name" });
+        return;
+      }
+      const loaded = await loadConfig(projectDir);
+      const { environmentsDir } = resolveConfigPaths(loaded);
+      const file = join(environmentsDir, `${name}.json`);
+      if (req.method === "PUT") {
+        const body = (await readRequestBody(req)) as Record<string, string> | undefined;
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+          send(res, 400, { error: "body must be a JSON object" });
+          return;
+        }
+        await writeFile(file, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+        send(res, 200, { name, values: body });
+        return;
+      }
+      if (req.method === "DELETE") {
+        try {
+          await unlink(file);
+          send(res, 200, { name, deleted: true });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+            send(res, 404, { error: "not found" });
+          } else {
+            throw err;
+          }
+        }
+        return;
+      }
     }
     const runMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)\/run$/);
     if (runMatch && req.method === "POST") {

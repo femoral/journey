@@ -84,6 +84,16 @@ export interface RunJourneyResponse {
   results: JourneyResult[];
 }
 
+export interface Environment {
+  name: string;
+  values: Record<string, string>;
+}
+
+export interface EnvironmentsResponse {
+  defaultEnvironment?: string;
+  environments: Environment[];
+}
+
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
   getTree: () => req<ProjectTree>("/api/tree"),
@@ -100,5 +110,16 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(env ? { env } : {}),
+    }),
+  getEnvironments: () => req<EnvironmentsResponse>("/api/environments"),
+  saveEnvironment: (name: string, values: Record<string, string>) =>
+    req<Environment>(`/api/environments/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(values),
+    }),
+  deleteEnvironment: (name: string) =>
+    req<{ name: string; deleted: true }>(`/api/environments/${encodeURIComponent(name)}`, {
+      method: "DELETE",
     }),
 };
