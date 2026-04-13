@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { runEnvList } from "./commands/envList.js";
+import { runExportK6 } from "./commands/exportK6.js";
 import { runGenerate } from "./commands/generate.js";
 import { runInit } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
@@ -62,11 +63,16 @@ export function buildProgram(): Command {
   const exp = program.command("export").description("Export a journey to another format");
   exp
     .command("k6 <journey-file>")
+    .option("--out <path>", "Output file (defaults to <journey>.k6.js next to the source)")
     .description("Export a journey as a k6 script")
-    .action(() => {
-      console.error("journey export k6: not implemented");
-      process.exit(1);
-    });
+    .action((journeyFile: string, options: { out?: string }) =>
+      handle(() =>
+        runExportK6({
+          journeyFile,
+          ...(options.out !== undefined ? { out: options.out } : {}),
+        }),
+      ),
+    );
 
   const envCmd = program.command("env").description("Environment management");
   envCmd

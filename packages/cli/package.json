@@ -17,6 +17,7 @@
   "dependencies": {
     "@journey/codegen": "workspace:^",
     "@journey/core": "workspace:*",
+    "@journey/k6-adapter": "workspace:^",
     "commander": "^12.1.0",
     "tsx": "^4.21.0"
   }

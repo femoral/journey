@@ -32,6 +32,9 @@ importers:
       '@journey/core':
         specifier: workspace:*
         version: link:../core
+      '@journey/k6-adapter':
+        specifier: workspace:^
+        version: link:../k6-adapter
       commander:
         specifier: ^12.1.0
         version: 12.1.0
