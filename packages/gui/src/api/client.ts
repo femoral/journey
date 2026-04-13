@@ -122,4 +122,16 @@ export const api = {
     req<{ name: string; deleted: true }>(`/api/environments/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
+  getJourneySource: (file: string) =>
+    req<{ file: string; source: string }>(`/api/journeys/${encodeURIComponent(file)}`),
+  saveJourneySource: (file: string, source: string) =>
+    req<{ file: string; bytes: number }>(`/api/journeys/${encodeURIComponent(file)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source }),
+    }),
+  deleteJourney: (file: string) =>
+    req<{ file: string; deleted: true }>(`/api/journeys/${encodeURIComponent(file)}`, {
+      method: "DELETE",
+    }),
 };

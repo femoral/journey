@@ -3,6 +3,7 @@ import type { Component } from "solid-js";
 import { EndpointsPage } from "./pages/EndpointsPage";
 import { EnvironmentsPage } from "./pages/EnvironmentsPage";
 import { FilesPage } from "./pages/FilesPage";
+import { JourneyEditorPage } from "./pages/JourneyEditorPage";
 import { JourneysPage } from "./pages/JourneysPage";
 import { ProjectPage } from "./pages/ProjectPage";
 
@@ -26,6 +27,9 @@ const Shell: Component<{ children?: unknown }> = (props) => (
       <a href="/environments" class="px-2 py-1 rounded hover:bg-slate-800">
         Environments
       </a>
+      <a href="/editor" class="px-2 py-1 rounded hover:bg-slate-800">
+        Editor
+      </a>
     </nav>
     <main class="flex-1 p-6 overflow-auto">{props.children as any}</main>
   </div>
@@ -38,5 +42,6 @@ export const App: Component = () => (
     <Route path="/endpoints" component={EndpointsPage} />
     <Route path="/journeys" component={JourneysPage} />
     <Route path="/environments" component={EnvironmentsPage} />
+    <Route path="/editor" component={JourneyEditorPage} />
   </Router>
 );

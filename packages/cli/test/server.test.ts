@@ -100,6 +100,29 @@ describe("journey serve — /api/project", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("reads, writes, and deletes journey source files", async () => {
+    const file = "demo.journey.ts";
+    const source = `import { journey } from "@journey/core";\njourney("x", () => {});\n`;
+
+    const put = await fetch(`${srv.url}/api/journeys/${file}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    expect(put.status).toBe(200);
+
+    const get = await fetch(`${srv.url}/api/journeys/${file}`);
+    expect(get.status).toBe(200);
+    const body = (await get.json()) as { source: string };
+    expect(body.source).toBe(source);
+
+    const bad = await fetch(`${srv.url}/api/journeys/..%2Fetc%2Fpasswd`);
+    expect(bad.status).toBe(400);
+
+    const del = await fetch(`${srv.url}/api/journeys/${file}`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+  });
+
   it("proxies a request and returns status + body", async () => {
     // Stand up a throwaway target server.
     const { createServer } = await import("node:http");

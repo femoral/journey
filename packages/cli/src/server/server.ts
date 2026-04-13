@@ -226,6 +226,51 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
       send(res, 200, await proxyRequest(body));
       return;
     }
+    const journeyFileMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)$/);
+    if (journeyFileMatch) {
+      const file = decodeURIComponent(journeyFileMatch[1]!);
+      if (!/^[a-zA-Z0-9_.-]+\.journey\.ts$/.test(file)) {
+        send(res, 400, { error: "invalid journey filename" });
+        return;
+      }
+      const loaded = await loadConfig(projectDir);
+      const { journeysDir } = resolveConfigPaths(loaded);
+      const filePath = join(journeysDir, file);
+      if (req.method === "GET") {
+        try {
+          const source = await readFile(filePath, "utf8");
+          send(res, 200, { file, source });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+            send(res, 404, { error: "not found" });
+          } else throw err;
+        }
+        return;
+      }
+      if (req.method === "PUT") {
+        const body = ((await readRequestBody(req)) ?? {}) as { source?: string };
+        if (typeof body.source !== "string") {
+          send(res, 400, { error: "body.source must be a string" });
+          return;
+        }
+        const { mkdir } = await import("node:fs/promises");
+        await mkdir(journeysDir, { recursive: true });
+        await writeFile(filePath, body.source, "utf8");
+        send(res, 200, { file, bytes: Buffer.byteLength(body.source, "utf8") });
+        return;
+      }
+      if (req.method === "DELETE") {
+        try {
+          await unlink(filePath);
+          send(res, 200, { file, deleted: true });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+            send(res, 404, { error: "not found" });
+          } else throw err;
+        }
+        return;
+      }
+    }
     if (url.pathname === "/api/journeys" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
       const { journeysDir } = resolveConfigPaths(loaded);
