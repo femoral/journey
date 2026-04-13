@@ -22,6 +22,18 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface TreeNode {
+  name: string;
+  type: "file" | "dir";
+  children?: TreeNode[];
+}
+
+export interface ProjectTree {
+  projectDir: string;
+  sections: Array<{ label: string; dir: string; children: TreeNode[] }>;
+}
+
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
+  getTree: () => req<ProjectTree>("/api/tree"),
 };

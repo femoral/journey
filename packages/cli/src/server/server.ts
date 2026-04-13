@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
 
 export interface StartServerOptions {
@@ -71,6 +72,52 @@ export async function buildProjectSummary(loaded: LoadedConfig): Promise<unknown
   };
 }
 
+interface TreeNode {
+  name: string;
+  type: "file" | "dir";
+  children?: TreeNode[];
+}
+
+async function buildTree(root: string): Promise<TreeNode[]> {
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    const out: TreeNode[] = [];
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory()) {
+        out.push({
+          name: entry.name,
+          type: "dir",
+          children: await buildTree(join(root, entry.name)),
+        });
+      } else {
+        out.push({ name: entry.name, type: "file" });
+      }
+    }
+    return out;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+async function buildProjectTree(loaded: LoadedConfig): Promise<unknown> {
+  const paths = resolveConfigPaths(loaded);
+  const [journeys, environments, generated] = await Promise.all([
+    buildTree(paths.journeysDir),
+    buildTree(paths.environmentsDir),
+    buildTree(paths.generatedDir),
+  ]);
+  return {
+    projectDir: loaded.projectDir,
+    sections: [
+      { label: "journeys", dir: paths.journeysDir, children: journeys },
+      { label: "environments", dir: paths.environmentsDir, children: environments },
+      { label: "generated", dir: paths.generatedDir, children: generated },
+    ],
+  };
+}
+
 async function route(req: IncomingMessage, res: ServerResponse, projectDir: string): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -86,6 +133,11 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
     if (url.pathname === "/api/project" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
       send(res, 200, await buildProjectSummary(loaded));
+      return;
+    }
+    if (url.pathname === "/api/tree" && req.method === "GET") {
+      const loaded = await loadConfig(projectDir);
+      send(res, 200, await buildProjectTree(loaded));
       return;
     }
     if (url.pathname === "/api/health") {
