@@ -1,0 +1,32 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { loadConfig, resolveConfigPaths } from "../src/config.js";
+
+describe("loadConfig", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "journey-config-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("applies defaults and resolves paths", async () => {
+    await writeFile(join(dir, "journey.config.json"), JSON.stringify({ name: "x" }));
+    const loaded = await loadConfig(dir);
+    expect(loaded.config.spec).toBe("openapi.yaml");
+    expect(loaded.config.generatedDir).toBe("generated");
+    const paths = resolveConfigPaths(loaded);
+    expect(paths.specPath).toBe(join(dir, "openapi.yaml"));
+    expect(paths.environmentsDir).toBe(join(dir, "environments"));
+  });
+
+  it("rejects unknown fields and bad URLs", async () => {
+    await writeFile(join(dir, "journey.config.json"), JSON.stringify({ nope: true }));
+    await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
+    await writeFile(join(dir, "journey.config.json"), JSON.stringify({ baseUrl: "not-a-url" }));
+    await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
+  });
+});
