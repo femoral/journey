@@ -4,6 +4,7 @@ import { runExportK6 } from "./commands/exportK6.js";
 import { runGenerate } from "./commands/generate.js";
 import { runInit } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
+import { runServe } from "./commands/serve.js";
 
 async function handle(fn: () => Promise<number | void>): Promise<never> {
   try {
@@ -70,6 +71,21 @@ export function buildProgram(): Command {
         runExportK6({
           journeyFile,
           ...(options.out !== undefined ? { out: options.out } : {}),
+        }),
+      ),
+    );
+
+  program
+    .command("serve")
+    .option("--port <n>", "Port (default 5181)", (v) => parseInt(v, 10))
+    .option("--host <host>", "Host (default 127.0.0.1)")
+    .description("Run the GUI backend API for the current project")
+    .action((options: { port?: number; host?: string }) =>
+      handle(() =>
+        runServe({
+          projectDir: process.cwd(),
+          ...(options.port !== undefined ? { port: options.port } : {}),
+          ...(options.host !== undefined ? { host: options.host } : {}),
         }),
       ),
     );
