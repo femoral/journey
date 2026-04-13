@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
 
@@ -118,6 +118,79 @@ async function buildProjectTree(loaded: LoadedConfig): Promise<unknown> {
   };
 }
 
+interface EndpointSummary {
+  name: string;
+  method: string;
+  path: string;
+  operationId?: string;
+}
+
+const ENDPOINT_RE =
+  /^\s{2}([a-zA-Z_$][a-zA-Z0-9_$]*):\s*\{\s*method:\s*"([^"]+)",\s*path:\s*"([^"]+)"(?:,\s*operationId:\s*"([^"]+)")?/gm;
+
+async function readEndpoints(generatedDir: string): Promise<EndpointSummary[]> {
+  try {
+    const content = await readFile(join(generatedDir, "endpoints.ts"), "utf8");
+    const out: EndpointSummary[] = [];
+    ENDPOINT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = ENDPOINT_RE.exec(content))) {
+      const entry: EndpointSummary = { name: m[1]!, method: m[2]!, path: m[3]! };
+      if (m[4]) entry.operationId = m[4];
+      out.push(entry);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+interface ProxyRequest {
+  method?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+async function readRequestBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error("request body is not valid JSON");
+  }
+}
+
+async function proxyRequest(body: ProxyRequest): Promise<unknown> {
+  if (!body.method || !body.url) throw new Error("method and url are required");
+  const init: RequestInit = {
+    method: body.method,
+    ...(body.headers ? { headers: body.headers } : {}),
+  };
+  if (body.body !== undefined) {
+    init.body = typeof body.body === "string" ? body.body : JSON.stringify(body.body);
+  }
+  const started = Date.now();
+  const res = await fetch(body.url, init);
+  const respHeaders: Record<string, string> = {};
+  res.headers.forEach((v, k) => {
+    respHeaders[k] = v;
+  });
+  const ct = res.headers.get("content-type") ?? "";
+  const parsed: unknown = ct.includes("json")
+    ? await res.json().catch(() => null)
+    : await res.text();
+  return {
+    status: res.status,
+    headers: respHeaders,
+    body: parsed,
+    durationMs: Date.now() - started,
+  };
+}
+
 async function route(req: IncomingMessage, res: ServerResponse, projectDir: string): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -138,6 +211,18 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
     if (url.pathname === "/api/tree" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
       send(res, 200, await buildProjectTree(loaded));
+      return;
+    }
+    if (url.pathname === "/api/endpoints" && req.method === "GET") {
+      const loaded = await loadConfig(projectDir);
+      const { generatedDir } = resolveConfigPaths(loaded);
+      const endpoints = await readEndpoints(generatedDir);
+      send(res, 200, { baseUrl: loaded.config.baseUrl, endpoints });
+      return;
+    }
+    if (url.pathname === "/api/request" && req.method === "POST") {
+      const body = (await readRequestBody(req)) as ProxyRequest;
+      send(res, 200, await proxyRequest(body));
       return;
     }
     if (url.pathname === "/api/health") {

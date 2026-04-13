@@ -57,4 +57,45 @@ describe("journey serve — /api/project", () => {
     const res = await fetch(`${srv.url}/api/nope`);
     expect(res.status).toBe(404);
   });
+
+  it("lists endpoints parsed from generated/endpoints.ts", async () => {
+    const res = await fetch(`${srv.url}/api/endpoints`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      baseUrl?: string;
+      endpoints: Array<{ name: string; method: string; path: string }>;
+    };
+    expect(body.baseUrl).toBe("https://api.example.com");
+    expect(body.endpoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "listPets", method: "GET", path: "/pets" }),
+        expect.objectContaining({ name: "getPet", method: "GET", path: "/pets/{id}" }),
+      ]),
+    );
+  });
+
+  it("proxies a request and returns status + body", async () => {
+    // Stand up a throwaway target server.
+    const { createServer } = await import("node:http");
+    const target = createServer((req, res) => {
+      res.writeHead(201, { "content-type": "application/json" });
+      res.end(JSON.stringify({ echo: req.method }));
+    });
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
+    const addr = target.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    try {
+      const res = await fetch(`${srv.url}/api/request`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "POST", url: `http://127.0.0.1:${port}/x`, body: { a: 1 } }),
+      });
+      expect(res.status).toBe(200);
+      const out = (await res.json()) as { status: number; body: unknown };
+      expect(out.status).toBe(201);
+      expect(out.body).toEqual({ echo: "POST" });
+    } finally {
+      await new Promise<void>((r) => target.close(() => r()));
+    }
+  });
 });

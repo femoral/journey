@@ -33,7 +33,40 @@ export interface ProjectTree {
   sections: Array<{ label: string; dir: string; children: TreeNode[] }>;
 }
 
+export interface EndpointSummary {
+  name: string;
+  method: string;
+  path: string;
+  operationId?: string;
+}
+
+export interface EndpointListResponse {
+  baseUrl?: string;
+  endpoints: EndpointSummary[];
+}
+
+export interface ProxyResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: unknown;
+  durationMs: number;
+}
+
+export interface ProxyRequestBody {
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
   getTree: () => req<ProjectTree>("/api/tree"),
+  getEndpoints: () => req<EndpointListResponse>("/api/endpoints"),
+  sendRequest: (body: ProxyRequestBody) =>
+    req<ProxyResponse>("/api/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };

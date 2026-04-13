@@ -1,5 +1,6 @@
 import { Router, Route } from "@solidjs/router";
 import type { Component } from "solid-js";
+import { EndpointsPage } from "./pages/EndpointsPage";
 import { FilesPage } from "./pages/FilesPage";
 import { ProjectPage } from "./pages/ProjectPage";
 
@@ -14,6 +15,9 @@ const Shell: Component<{ children?: unknown }> = (props) => (
       <a href="/files" class="px-2 py-1 rounded hover:bg-slate-800">
         Files
       </a>
+      <a href="/endpoints" class="px-2 py-1 rounded hover:bg-slate-800">
+        Endpoints
+      </a>
     </nav>
     <main class="flex-1 p-6 overflow-auto">{props.children as any}</main>
   </div>
@@ -23,5 +27,6 @@ export const App: Component = () => (
   <Router root={Shell}>
     <Route path="/" component={ProjectPage} />
     <Route path="/files" component={FilesPage} />
+    <Route path="/endpoints" component={EndpointsPage} />
   </Router>
 );
