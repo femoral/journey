@@ -33,11 +33,19 @@ export interface ProjectTree {
   sections: Array<{ label: string; dir: string; children: TreeNode[] }>;
 }
 
+export interface ParameterInfo {
+  name: string;
+  in: "query" | "path" | "header";
+  required: boolean;
+  description?: string;
+}
+
 export interface EndpointSummary {
   name: string;
   method: string;
   path: string;
   operationId?: string;
+  parameters: ParameterInfo[];
 }
 
 export interface EndpointListResponse {

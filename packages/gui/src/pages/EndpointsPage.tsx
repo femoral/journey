@@ -1,5 +1,5 @@
 import { createResource, createSignal, For, Show, type Component } from "solid-js";
-import { api, type EndpointSummary, type ProxyResponse } from "../api/client";
+import { api, type EndpointSummary, type ParameterInfo, type ProxyResponse } from "../api/client";
 
 const METHOD_COLORS: Record<string, string> = {
   GET: "text-emerald-400",
@@ -17,14 +17,26 @@ function interpolate(path: string, params: Record<string, string>): string {
   return out;
 }
 
-function extractParams(path: string): string[] {
-  return [...path.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]!);
+function paramsByLocation(endpoint: EndpointSummary, loc: ParameterInfo["in"]): ParameterInfo[] {
+  // Fallback: if the spec didn't declare path params but the URL template has
+  // braces, surface those so users can still fill them in.
+  if (loc === "path") {
+    const declared = endpoint.parameters.filter((p) => p.in === "path");
+    const declaredNames = new Set(declared.map((p) => p.name));
+    const fromPath = [...endpoint.path.matchAll(/\{([^}]+)\}/g)]
+      .map((m) => m[1]!)
+      .filter((n) => !declaredNames.has(n))
+      .map((n): ParameterInfo => ({ name: n, in: "path", required: true }));
+    return [...declared, ...fromPath];
+  }
+  return endpoint.parameters.filter((p) => p.in === loc);
 }
 
 export const EndpointsPage: Component = () => {
   const [list] = createResource(api.getEndpoints);
   const [selected, setSelected] = createSignal<EndpointSummary | undefined>(undefined);
   const [paramValues, setParamValues] = createSignal<Record<string, string>>({});
+  const [queryValues, setQueryValues] = createSignal<Record<string, string>>({});
   const [headers, setHeaders] = createSignal("");
   const [body, setBody] = createSignal("");
   const [response, setResponse] = createSignal<ProxyResponse | undefined>(undefined);
@@ -53,7 +65,11 @@ export const EndpointsPage: Component = () => {
       }
       const base = l.baseUrl.endsWith("/") ? l.baseUrl : `${l.baseUrl}/`;
       const path = interpolate(ep.path, paramValues()).replace(/^\//, "");
-      const url = `${base}${path}`;
+      const query = Object.entries(queryValues())
+        .filter(([, v]) => v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+      const url = `${base}${path}${query ? `?${query}` : ""}`;
       const res = await api.sendRequest({
         method: ep.method,
         url,
@@ -85,6 +101,7 @@ export const EndpointsPage: Component = () => {
                       onClick={() => {
                         setSelected(ep);
                         setParamValues({});
+                        setQueryValues({});
                         setResponse(undefined);
                         setError(undefined);
                       }}
@@ -112,22 +129,53 @@ export const EndpointsPage: Component = () => {
                 <span class={METHOD_COLORS[ep().method] ?? "text-slate-300"}>{ep().method}</span>{" "}
                 <span class="text-slate-200">{ep().path}</span>
               </div>
-              <Show when={extractParams(ep().path).length > 0}>
+              <Show when={paramsByLocation(ep(), "path").length > 0}>
                 <div>
                   <h3 class="text-xs uppercase text-slate-500 mb-2">Path params</h3>
                   <div class="space-y-1">
-                    <For each={extractParams(ep().path)}>
+                    <For each={paramsByLocation(ep(), "path")}>
                       {(param) => (
                         <label class="flex items-center gap-2 font-mono text-sm">
-                          <span class="text-slate-400 w-24">{param}</span>
+                          <span class="text-slate-400 w-24">{param.name}</span>
                           <input
                             class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1"
-                            data-testid={`param-${param}`}
-                            value={paramValues()[param] ?? ""}
+                            data-testid={`param-${param.name}`}
+                            value={paramValues()[param.name] ?? ""}
                             onInput={(e) =>
                               setParamValues({
                                 ...paramValues(),
-                                [param]: e.currentTarget.value,
+                                [param.name]: e.currentTarget.value,
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={paramsByLocation(ep(), "query").length > 0}>
+                <div>
+                  <h3 class="text-xs uppercase text-slate-500 mb-2">Query params</h3>
+                  <div class="space-y-1">
+                    <For each={paramsByLocation(ep(), "query")}>
+                      {(param) => (
+                        <label class="flex items-center gap-2 font-mono text-sm">
+                          <span class="text-slate-400 w-24">
+                            {param.name}
+                            <Show when={param.required}>
+                              <span class="text-rose-400">*</span>
+                            </Show>
+                          </span>
+                          <input
+                            class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1"
+                            data-testid={`query-${param.name}`}
+                            value={queryValues()[param.name] ?? ""}
+                            placeholder={param.description ?? ""}
+                            onInput={(e) =>
+                              setQueryValues({
+                                ...queryValues(),
+                                [param.name]: e.currentTarget.value,
                               })
                             }
                           />

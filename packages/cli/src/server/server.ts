@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
+import { collectOperations, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
 
 export interface StartServerOptions {
@@ -119,25 +120,73 @@ async function buildProjectTree(loaded: LoadedConfig): Promise<unknown> {
   };
 }
 
+interface ParameterInfo {
+  name: string;
+  in: "query" | "path" | "header";
+  required: boolean;
+  description?: string;
+}
+
 interface EndpointSummary {
   name: string;
   method: string;
   path: string;
   operationId?: string;
+  parameters: ParameterInfo[];
 }
 
-const ENDPOINT_RE =
-  /^\s{2}([a-zA-Z_$][a-zA-Z0-9_$]*):\s*\{\s*method:\s*"([^"]+)",\s*path:\s*"([^"]+)"(?:,\s*operationId:\s*"([^"]+)")?/gm;
+type RawParam = {
+  name?: unknown;
+  in?: unknown;
+  required?: unknown;
+  description?: unknown;
+};
 
-async function readEndpoints(generatedDir: string): Promise<EndpointSummary[]> {
+function normalizeParameters(params: unknown): ParameterInfo[] {
+  if (!Array.isArray(params)) return [];
+  const out: ParameterInfo[] = [];
+  for (const p of params as RawParam[]) {
+    if (!p || typeof p !== "object") continue;
+    const loc = p.in;
+    if (loc !== "query" && loc !== "path" && loc !== "header") continue;
+    if (typeof p.name !== "string") continue;
+    const entry: ParameterInfo = {
+      name: p.name,
+      in: loc,
+      required: p.required === true || loc === "path",
+    };
+    if (typeof p.description === "string") entry.description = p.description;
+    out.push(entry);
+  }
+  return out;
+}
+
+async function readEndpoints(specPath: string): Promise<EndpointSummary[]> {
   try {
-    const content = await readFile(join(generatedDir, "endpoints.ts"), "utf8");
+    const doc = await loadSpec(specPath);
+    const ops = collectOperations(doc);
+    const paths = (doc.paths ?? {}) as Record<string, Record<string, unknown> | undefined>;
     const out: EndpointSummary[] = [];
-    ENDPOINT_RE.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = ENDPOINT_RE.exec(content))) {
-      const entry: EndpointSummary = { name: m[1]!, method: m[2]!, path: m[3]! };
-      if (m[4]) entry.operationId = m[4];
+    for (const op of ops) {
+      const pathItem = paths[op.path];
+      const pathLevel = normalizeParameters((pathItem as { parameters?: unknown })?.parameters);
+      const opLevel = normalizeParameters(
+        (pathItem?.[op.method] as { parameters?: unknown } | undefined)?.parameters,
+      );
+      // Op-level params override path-level params with the same name+in.
+      const merged = new Map<string, ParameterInfo>();
+      for (const p of pathLevel) merged.set(`${p.in}:${p.name}`, p);
+      for (const p of opLevel) merged.set(`${p.in}:${p.name}`, p);
+
+      const rawOp = pathItem?.[op.method] as { operationId?: unknown } | undefined;
+      const rawOperationId = typeof rawOp?.operationId === "string" ? rawOp.operationId : undefined;
+      const entry: EndpointSummary = {
+        name: operationName(op.method, op.path, rawOperationId),
+        method: op.method.toUpperCase(),
+        path: op.path,
+        parameters: [...merged.values()],
+      };
+      if (rawOperationId) entry.operationId = rawOperationId;
       out.push(entry);
     }
     return out;
@@ -216,8 +265,8 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
     }
     if (url.pathname === "/api/endpoints" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
-      const { generatedDir } = resolveConfigPaths(loaded);
-      const endpoints = await readEndpoints(generatedDir);
+      const { specPath } = resolveConfigPaths(loaded);
+      const endpoints = await readEndpoints(specPath);
       send(res, 200, { baseUrl: loaded.config.baseUrl, endpoints });
       return;
     }

@@ -5,8 +5,18 @@ import { EndpointsPage } from "../src/pages/EndpointsPage";
 const listResp = {
   baseUrl: "https://api.example.com",
   endpoints: [
-    { name: "listPets", method: "GET", path: "/pets" },
-    { name: "getPet", method: "GET", path: "/pets/{id}" },
+    {
+      name: "findPetsByStatus",
+      method: "GET",
+      path: "/pet/findByStatus",
+      parameters: [{ name: "status", in: "query", required: true }],
+    },
+    {
+      name: "getPet",
+      method: "GET",
+      path: "/pets/{id}",
+      parameters: [{ name: "id", in: "path", required: true }],
+    },
   ],
 };
 
@@ -17,41 +27,40 @@ const proxyResp = {
   durationMs: 4,
 };
 
-function stub(): ReturnType<typeof vi.fn> {
-  return vi.fn(async (input: Request | string, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input.url;
-    if (url.endsWith("/api/endpoints")) {
-      return new Response(JSON.stringify(listResp), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    if (url.endsWith("/api/request")) {
-      const body = init?.body ? JSON.parse(init.body as string) : undefined;
-      expect(body.url).toBe("https://api.example.com/pets");
-      expect(body.method).toBe("GET");
-      return new Response(JSON.stringify(proxyResp), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    throw new Error(`unexpected ${url}`);
-  });
-}
-
 describe("EndpointsPage", () => {
-  it("lists endpoints and sends a request against the selected one", async () => {
-    vi.stubGlobal("fetch", stub());
+  it("appends query params to the URL when sending a request", async () => {
+    let captured: { url?: string } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/api/endpoints")) {
+          return new Response(JSON.stringify(listResp), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.endsWith("/api/request")) {
+          captured = JSON.parse(init!.body as string) as { url?: string };
+          return new Response(JSON.stringify(proxyResp), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        throw new Error(`unexpected ${url}`);
+      }),
+    );
+
     render(() => <EndpointsPage />);
-    await waitFor(() => {
-      expect(screen.getByTestId("endpoint-list")).toBeTruthy();
-    });
-    fireEvent.click(screen.getAllByRole("button")[0]!);
+    await waitFor(() => expect(screen.getByTestId("endpoint-list")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button")[0]!); // findPetsByStatus
+
+    const statusInput = await waitFor(() => screen.getByTestId("query-status"));
+    fireEvent.input(statusInput, { target: { value: "available" } });
     fireEvent.click(screen.getByTestId("send-button"));
-    await waitFor(() => {
-      expect(screen.getByTestId("response-status").textContent).toBe("200");
-    });
-    expect(screen.getByTestId("response-body").textContent).toContain('"id": "1"');
+
+    await waitFor(() => expect(screen.getByTestId("response-status").textContent).toBe("200"));
+    expect(captured.url).toBe("https://api.example.com/pet/findByStatus?status=available");
     vi.unstubAllGlobals();
   });
 });

@@ -18,6 +18,35 @@ describe("journey serve — /api/project", () => {
       JSON.stringify({ name: "demo", spec: "openapi.yaml", baseUrl: "https://api.example.com" }),
     );
     await writeFile(
+      join(projectDir, "openapi.yaml"),
+      `openapi: 3.0.0
+info: { title: t, version: "1" }
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: filter by status
+        - name: limit
+          in: query
+          required: false
+      responses:
+        "200": { description: ok }
+  /pets/{id}:
+    get:
+      operationId: getPet
+      parameters:
+        - name: id
+          in: path
+          required: true
+      responses:
+        "200": { description: ok }
+`,
+    );
+    await writeFile(
       join(projectDir, "generated", "endpoints.ts"),
       `export const endpoints = {
   listPets: { method: "GET", path: "/pets" },
@@ -58,20 +87,30 @@ describe("journey serve — /api/project", () => {
     expect(res.status).toBe(404);
   });
 
-  it("lists endpoints parsed from generated/endpoints.ts", async () => {
+  it("lists endpoints with parameters parsed from the spec", async () => {
     const res = await fetch(`${srv.url}/api/endpoints`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       baseUrl?: string;
-      endpoints: Array<{ name: string; method: string; path: string }>;
+      endpoints: Array<{
+        name: string;
+        method: string;
+        path: string;
+        parameters: Array<{ name: string; in: string; required: boolean }>;
+      }>;
     };
     expect(body.baseUrl).toBe("https://api.example.com");
-    expect(body.endpoints).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "listPets", method: "GET", path: "/pets" }),
-        expect.objectContaining({ name: "getPet", method: "GET", path: "/pets/{id}" }),
-      ]),
-    );
+
+    const list = body.endpoints.find((e) => e.name === "listPets");
+    expect(list).toMatchObject({ method: "GET", path: "/pets" });
+    expect(list?.parameters.map((p) => `${p.in}:${p.name}`).sort()).toEqual([
+      "query:limit",
+      "query:status",
+    ]);
+
+    const getPet = body.endpoints.find((e) => e.name === "getPet");
+    expect(getPet?.parameters.map((p) => `${p.in}:${p.name}`)).toEqual(["path:id"]);
+    expect(getPet?.parameters[0]?.required).toBe(true);
   });
 
   it("lists, saves, and deletes environments", async () => {
