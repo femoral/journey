@@ -1,3 +1,4 @@
+import { resolve as resolvePath } from "node:path";
 import { Command } from "commander";
 import { runEnvList } from "./commands/envList.js";
 import { runExportK6 } from "./commands/exportK6.js";
@@ -79,16 +80,20 @@ export function buildProgram(): Command {
     .command("serve")
     .option("--port <n>", "Port (default 5181)", (v) => parseInt(v, 10))
     .option("--host <host>", "Host (default 127.0.0.1)")
+    .option("--project <dir>", "Project directory (default: cwd)")
     .description("Run the GUI backend API for the current project")
-    .action((options: { port?: number; host?: string }) =>
-      handle(() =>
+    .action((options: { port?: number; host?: string; project?: string }) => {
+      const projectDir = options.project
+        ? resolvePath(process.cwd(), options.project)
+        : process.cwd();
+      return handle(() =>
         runServe({
-          projectDir: process.cwd(),
+          projectDir,
           ...(options.port !== undefined ? { port: options.port } : {}),
           ...(options.host !== undefined ? { host: options.host } : {}),
         }),
-      ),
-    );
+      );
+    });
 
   const envCmd = program.command("env").description("Environment management");
   envCmd

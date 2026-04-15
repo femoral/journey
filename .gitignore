@@ -143,3 +143,5 @@ vite.config.ts.timestamp-*
 
 # Test-generated scratch projects
 packages/*/.test-tmp/
+packages/*/test-results/
+packages/*/playwright-report/

@@ -12,10 +12,12 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "dev:web": "pnpm --filter @journey/cli build && concurrently -n api,gui -c cyan,magenta --kill-others --handle-input \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\""
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
+    "concurrently": "^9.2.1",
     "prettier": "^3.3.3",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",

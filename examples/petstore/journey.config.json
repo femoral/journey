@@ -1,0 +1,9 @@
+{
+  "name": "petstore",
+  "spec": "openapi.yaml",
+  "generatedDir": "generated",
+  "journeysDir": "journeys",
+  "environmentsDir": "environments",
+  "defaultEnvironment": "dev",
+  "baseUrl": "https://petstore3.swagger.io/api/v3"
+}
