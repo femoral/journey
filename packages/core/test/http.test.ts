@@ -29,6 +29,13 @@ describe("resolveUrl", () => {
     expect(resolveUrl(ep, { baseUrl: "https://x" }, undefined, { limit: 10, skip: undefined }))
       .toBe("https://x/pets?limit=10");
   });
+
+  it("preserves a base path even when endpoint.path starts with /", () => {
+    const ep: Endpoint = { method: "GET", path: "/pet/findByStatus", operationId: "f" };
+    expect(
+      resolveUrl(ep, { baseUrl: "https://petstore3.swagger.io/api/v3" }, undefined, undefined),
+    ).toBe("https://petstore3.swagger.io/api/v3/pet/findByStatus");
+  });
 });
 
 describe("buildRequest + execute", () => {

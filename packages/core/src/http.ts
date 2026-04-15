@@ -54,7 +54,11 @@ export function resolveUrl(
   if (missing) {
     throw new Error(`Missing path param "${missing[1]}" for ${endpoint.method} ${endpoint.path}`);
   }
-  const url = new URL(path, base.endsWith("/") ? base : `${base}/`);
+  // Append the path under the full base — `new URL("/x", "https://h/api")` would
+  // drop `/api` because a leading slash makes the path origin-relative.
+  const baseWithSlash = base.endsWith("/") ? base : `${base}/`;
+  const relPath = path.startsWith("/") ? path.slice(1) : path;
+  const url = new URL(relPath, baseWithSlash);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined) url.searchParams.append(k, String(v));
