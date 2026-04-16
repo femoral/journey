@@ -27,6 +27,17 @@ export {
 export { AssertionError, expect, type Expectation } from "./expect.js";
 
 export {
+  SECRET_HEADERS,
+  createConsoleLogger,
+  loggerFromEnv,
+  maskHeaders,
+  type ConsoleLoggerOptions,
+  type JourneyLogger,
+  type RequestLog,
+  type ResponseLog,
+} from "./logger.js";
+
+export {
   buildRequest,
   execute,
   resolveUrl,

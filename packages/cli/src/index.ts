@@ -49,15 +49,17 @@ export function buildProgram(): Command {
     .command("run [journey-file...]")
     .option("--env <name>", "Environment file to use")
     .option("--all", "Run all journeys in the project", false)
+    .option("--debug", "Log every request and response to stderr", false)
     .description("Run one or more journeys (or --all)")
     .action(
-      (files: string[], options: { env?: string; all?: boolean }) =>
+      (files: string[], options: { env?: string; all?: boolean; debug?: boolean }) =>
         handle(() =>
           runCommand({
             projectDir: process.cwd(),
             files,
             ...(options.all !== undefined ? { all: options.all } : {}),
             ...(options.env !== undefined ? { env: options.env } : {}),
+            ...(options.debug !== undefined ? { debug: options.debug } : {}),
           }),
         ),
     );
@@ -81,19 +83,23 @@ export function buildProgram(): Command {
     .option("--port <n>", "Port (default 5181)", (v) => parseInt(v, 10))
     .option("--host <host>", "Host (default 127.0.0.1)")
     .option("--project <dir>", "Project directory (default: cwd)")
+    .option("--debug", "Log every request/response while running journeys", false)
     .description("Run the GUI backend API for the current project")
-    .action((options: { port?: number; host?: string; project?: string }) => {
-      const projectDir = options.project
-        ? resolvePath(process.cwd(), options.project)
-        : process.cwd();
-      return handle(() =>
-        runServe({
-          projectDir,
-          ...(options.port !== undefined ? { port: options.port } : {}),
-          ...(options.host !== undefined ? { host: options.host } : {}),
-        }),
-      );
-    });
+    .action(
+      (options: { port?: number; host?: string; project?: string; debug?: boolean }) => {
+        const projectDir = options.project
+          ? resolvePath(process.cwd(), options.project)
+          : process.cwd();
+        return handle(() =>
+          runServe({
+            projectDir,
+            ...(options.port !== undefined ? { port: options.port } : {}),
+            ...(options.host !== undefined ? { host: options.host } : {}),
+            ...(options.debug !== undefined ? { debug: options.debug } : {}),
+          }),
+        );
+      },
+    );
 
   const envCmd = program.command("env").description("Environment management");
   envCmd

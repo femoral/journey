@@ -1,4 +1,5 @@
 import { isEndpointRef, type Endpoint, type HttpMethod } from "./endpoint.js";
+import type { JourneyLogger, RequestLog } from "./logger.js";
 
 export interface HttpResponse<T = unknown> {
   status: number;
@@ -13,6 +14,8 @@ export interface HttpContext {
   defaultHeaders?: Record<string, string>;
   /** Injectable fetch — default is global fetch. Tests override this. */
   fetchImpl?: typeof fetch;
+  /** Optional logger called before/after each request. */
+  logger?: JourneyLogger;
 }
 
 export interface RequestSpec {
@@ -87,6 +90,14 @@ function lower(h: Record<string, string>): Record<string, string> {
 }
 
 export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpResponse> {
+  const logReq: RequestLog = {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    ...(req.body !== undefined ? { body: req.body } : {}),
+  };
+  ctx.logger?.onRequest?.(logReq);
+
   const f = ctx.fetchImpl ?? fetch;
   const init: RequestInit = { method: req.method, headers: req.headers };
   if (req.body !== undefined) {
@@ -99,6 +110,7 @@ export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpR
     init.signal = abort.signal;
     timer = setTimeout(() => abort?.abort(), req.timeoutMs);
   }
+  const started = Date.now();
   try {
     const res = await f(req.url, init);
     const headers: Record<string, string> = {};
@@ -109,7 +121,12 @@ export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpR
     const body: unknown = contentType.includes("json")
       ? await res.json().catch(() => null)
       : await res.text();
-    return { status: res.status, headers, body };
+    const wrapped: HttpResponse = { status: res.status, headers, body };
+    ctx.logger?.onResponse?.(logReq, { ...wrapped, durationMs: Date.now() - started });
+    return wrapped;
+  } catch (err) {
+    ctx.logger?.onError?.(logReq, err, Date.now() - started);
+    throw err;
   } finally {
     if (timer) clearTimeout(timer);
   }

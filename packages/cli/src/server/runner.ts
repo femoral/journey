@@ -3,10 +3,13 @@ import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
   clearRegistry,
+  createConsoleLogger,
   loadEnvironment,
+  loggerFromEnv,
   runAllRegistered,
   setActiveEnvironment,
   type HttpContext,
+  type JourneyLogger,
   type JourneyResult,
   type LoadedConfig,
 } from "@journey/core";
@@ -20,6 +23,10 @@ export interface RunJourneyFileOptions {
   file: string;
   /** Environment name; defaults to `config.defaultEnvironment`. */
   env?: string;
+  /** When true, attach a console logger that prints every request/response. */
+  debug?: boolean;
+  /** Override the logger entirely (e.g. for tests). */
+  logger?: JourneyLogger;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -41,5 +48,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
 
   const ctx: HttpContext = {};
   if (opts.loaded.config.baseUrl) ctx.baseUrl = opts.loaded.config.baseUrl;
+  const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
+  if (logger) ctx.logger = logger;
   return runAllRegistered(ctx);
 }

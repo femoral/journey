@@ -9,6 +9,8 @@ export interface StartServerOptions {
   projectDir: string;
   host?: string;
   port?: number;
+  /** When true, journey runs triggered through the API log every request. */
+  debug?: boolean;
 }
 
 export interface RunningServer {
@@ -241,7 +243,12 @@ async function proxyRequest(body: ProxyRequest): Promise<unknown> {
   };
 }
 
-async function route(req: IncomingMessage, res: ServerResponse, projectDir: string): Promise<void> {
+async function route(
+  req: IncomingMessage,
+  res: ServerResponse,
+  projectDir: string,
+  debug: boolean,
+): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
@@ -399,6 +406,7 @@ async function route(req: IncomingMessage, res: ServerResponse, projectDir: stri
         environmentsDir,
         file,
         ...(body.env !== undefined ? { env: body.env } : {}),
+        ...(debug ? { debug: true } : {}),
       });
       send(res, 200, { results });
       return;
@@ -418,7 +426,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   const port = opts.port ?? 5181;
 
   const http: Server = createServer((req, res) => {
-    void route(req, res, opts.projectDir);
+    void route(req, res, opts.projectDir, opts.debug ?? false);
   });
 
   await new Promise<void>((resolve, reject) => {

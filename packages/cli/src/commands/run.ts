@@ -4,8 +4,10 @@ import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
   clearRegistry,
+  createConsoleLogger,
   loadConfig,
   loadEnvironment,
+  loggerFromEnv,
   resolveConfigPaths,
   runAllRegistered,
   setActiveEnvironment,
@@ -20,6 +22,7 @@ export interface RunOptions {
   files?: string[];
   all?: boolean;
   env?: string;
+  debug?: boolean;
 }
 
 async function discoverJourneyFiles(journeysDir: string): Promise<string[]> {
@@ -61,6 +64,8 @@ export async function runCommand(opts: RunOptions): Promise<number> {
 
   const ctx: HttpContext = {};
   if (loaded.config.baseUrl) ctx.baseUrl = loaded.config.baseUrl;
+  const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();
+  if (logger) ctx.logger = logger;
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);
   return overallOk(results) ? 0 : 1;
