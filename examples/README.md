@@ -1,24 +1,60 @@
 # Examples
 
-Sample Journey projects checked in for local dev-testing.
+Sample Journey projects checked in for local dev-testing. Each one is a
+self-contained pnpm workspace member — `@journey/core` resolves through
+`examples/<name>/node_modules/`.
 
 ## `petstore`
 
-Minimal project wired to the public Swagger Petstore API
-(`https://petstore3.swagger.io/api/v3`). Has one journey, one
-environment, and a generated endpoints/models pair.
+A toy pet-management API exercised offline against a tiny in-memory mock
+backend. Covers every HTTP method (GET / POST / PUT / PATCH / DELETE),
+path params, query params, request headers (auth + tracing), JSON request
+bodies, and multi-step flows that pass state via closure variables.
+
+### Run from the repo root
 
 ```bash
-# From the repo root:
 pnpm dev:web
 ```
 
-This builds `@journey/cli`, starts `journey serve --project examples/petstore`
-on port 5181, and the Vite dev server on port 5173. Open http://localhost:5173.
-Both processes are killed together on Ctrl+C.
+This starts three processes via concurrently, killed together on Ctrl+C:
 
-To point the backend at a different project of your own, skip `dev:web` and
-run the two halves manually:
+- **mock** — `node examples/petstore/server.mjs` on `:5180` (the API the
+  journeys hit).
+- **api** — `journey serve --project examples/petstore` on `:5181`
+  (the GUI's backend).
+- **gui** — `vite dev` on `:5173` (open this in a browser).
+
+### What's in the spec
+
+| Method | Path                 | Notes                            |
+|--------|----------------------|----------------------------------|
+| POST   | `/auth/login`        | Returns a bearer token           |
+| GET    | `/pet/findByStatus`  | `?status=…&limit=…`              |
+| POST   | `/pet`               | Auth + body; `X-Request-Id` hdr  |
+| GET    | `/pet/{id}`          | Path param                       |
+| PUT    | `/pet/{id}`          | Auth + full replace              |
+| PATCH  | `/pet/{id}`          | Auth + partial update            |
+| DELETE | `/pet/{id}`          | Auth                             |
+| GET    | `/pet/{id}/notes`    | List notes                       |
+| POST   | `/pet/{id}/notes`    | Auth + body                      |
+
+Mock credentials live in `environments/dev.json` (`alice` / `wonderland`).
+Override at runtime with `MOCK_USER=… MOCK_PASSWORD=…` when launching the
+mock.
+
+### Journeys
+
+- `list-available-pets.journey.ts` — single GET with query params.
+- `pet-crud-flow.journey.ts` — 9-step lifecycle: log in, create a pet,
+  fetch it, PATCH the status, PUT it whole, attach a note, list notes,
+  delete the pet, then verify the GET 404s. Closure variables (`token`,
+  `petId`) chain state between steps.
+
+### Pointing at your own project
+
+`dev:web` is wired to `examples/petstore`. For your own project, run the
+two halves manually:
 
 ```bash
 pnpm --filter @journey/cli build

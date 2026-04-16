@@ -5,5 +5,5 @@
   "journeysDir": "journeys",
   "environmentsDir": "environments",
   "defaultEnvironment": "dev",
-  "baseUrl": "https://petstore3.swagger.io/api/v3"
+  "baseUrl": "http://127.0.0.1:5180"
 }

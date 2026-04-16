@@ -5,7 +5,7 @@ type Lazy<T> = T | (() => T | Promise<T>);
 
 export interface StepOptions<E extends Endpoint> {
   endpoint: E;
-  params?: Record<string, string | number>;
+  params?: Lazy<Record<string, string | number>>;
   query?: Lazy<Record<string, string | number | boolean | undefined>>;
   headers?: Lazy<Record<string, string>>;
   body?: Lazy<unknown>;
@@ -96,10 +96,11 @@ export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<Jou
       const headers = await resolveLazy(s.options.headers);
       const query = await resolveLazy(s.options.query);
       const body = await resolveLazy(s.options.body);
+      const params = await resolveLazy(s.options.params);
       const req = buildRequest(
         {
           endpoint: s.options.endpoint,
-          ...(s.options.params !== undefined ? { params: s.options.params } : {}),
+          ...(params !== undefined ? { params } : {}),
           ...(query !== undefined ? { query } : {}),
           ...(headers !== undefined ? { headers } : {}),
           ...(body !== undefined ? { body } : {}),

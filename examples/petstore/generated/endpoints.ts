@@ -11,8 +11,15 @@ type JsonResponse<P extends keyof paths, M extends keyof paths[P]> =
     : unknown;
 
 export const endpoints = {
+  login: { method: "POST", path: "/auth/login", operationId: "login" } as unknown as EndpointRef<JsonResponse<"/auth/login", "post">>,
   findPetsByStatus: { method: "GET", path: "/pet/findByStatus", operationId: "findPetsByStatus" } as unknown as EndpointRef<JsonResponse<"/pet/findByStatus", "get">>,
-  getPetById: { method: "GET", path: "/pet/{petId}", operationId: "getPetById" } as unknown as EndpointRef<JsonResponse<"/pet/{petId}", "get">>,
+  createPet: { method: "POST", path: "/pet", operationId: "createPet" } as unknown as EndpointRef<JsonResponse<"/pet", "post">>,
+  getPetById: { method: "GET", path: "/pet/{id}", operationId: "getPetById" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "get">>,
+  replacePet: { method: "PUT", path: "/pet/{id}", operationId: "replacePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "put">>,
+  updatePet: { method: "PATCH", path: "/pet/{id}", operationId: "updatePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "patch">>,
+  deletePet: { method: "DELETE", path: "/pet/{id}", operationId: "deletePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "delete">>,
+  listPetNotes: { method: "GET", path: "/pet/{id}/notes", operationId: "listPetNotes" } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "get">>,
+  addPetNote: { method: "POST", path: "/pet/{id}/notes", operationId: "addPetNote" } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "post">>,
 } as const;
 
 export type EndpointName = keyof typeof endpoints;

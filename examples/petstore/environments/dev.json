@@ -1,3 +1,5 @@
 {
-  "PET_ID": "1"
+  "USERNAME": "alice",
+  "PASSWORD": "wonderland",
+  "REQUEST_ID_PREFIX": "journey-dev"
 }

@@ -2,35 +2,100 @@ openapi: 3.0.0
 info:
   title: Petstore (example)
   version: 1.0.0
+  description: |
+    Toy API used by the Journey examples. A local mock implementation lives
+    next to this spec at `server.mjs` — `pnpm dev:web` boots it on port 5180.
 servers:
-  - url: https://petstore3.swagger.io/api/v3
+  - url: http://127.0.0.1:5180
 paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Exchange username + password for a bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Bad credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /pet/findByStatus:
     get:
       operationId: findPetsByStatus
-      summary: Find pets by status
+      summary: List pets, optionally filtered by status.
       parameters:
         - name: status
           in: query
+          required: false
+          description: Filter by status (default any).
           schema:
             type: string
             enum: [available, pending, sold]
-            default: available
+        - name: limit
+          in: query
+          required: false
+          description: Max number of pets to return (default 50).
+          schema:
+            type: integer
       responses:
         "200":
-          description: successful operation
+          description: A list of pets
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Pet"
-  /pet/{petId}:
+
+  /pet:
+    post:
+      operationId: createPet
+      summary: Create a new pet (requires bearer token).
+      parameters:
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetInput"
+      responses:
+        "201":
+          description: Pet created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /pet/{id}:
     get:
       operationId: getPetById
-      summary: Find pet by ID
+      summary: Fetch a single pet by id.
       parameters:
-        - name: petId
+        - name: id
           in: path
           required: true
           schema:
@@ -38,16 +103,168 @@ paths:
             format: int64
       responses:
         "200":
-          description: successful operation
+          description: A pet
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Pet"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: replacePet
+      summary: Replace a pet wholesale (requires bearer token).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetInput"
+      responses:
+        "200":
+          description: Updated pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+    patch:
+      operationId: updatePet
+      summary: Patch one or more fields on a pet (requires bearer token).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetPatch"
+      responses:
+        "200":
+          description: Updated pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+    delete:
+      operationId: deletePet
+      summary: Delete a pet (requires bearer token).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Deleted
+
+  /pet/{id}/notes:
+    get:
+      operationId: listPetNotes
+      summary: List notes attached to a pet.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+    post:
+      operationId: addPetNote
+      summary: Add a note to a pet (requires bearer token).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "201":
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+
 components:
   schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      required: [token, expiresIn]
+      properties:
+        token:
+          type: string
+        expiresIn:
+          type: integer
+          description: Seconds until the token expires.
+    PetInput:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [available, pending, sold]
+        tags:
+          type: array
+          items:
+            type: string
+    PetPatch:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [available, pending, sold]
+        tags:
+          type: array
+          items:
+            type: string
     Pet:
       type: object
-      required: [id, name]
+      required: [id, name, status, tags]
       properties:
         id:
           type: integer
@@ -57,3 +274,34 @@ components:
         status:
           type: string
           enum: [available, pending, sold]
+        tags:
+          type: array
+          items:
+            type: string
+    NoteInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+    Note:
+      type: object
+      required: [id, petId, text, createdAt]
+      properties:
+        id:
+          type: integer
+        petId:
+          type: integer
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+        message:
+          type: string

@@ -13,7 +13,7 @@
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "dev:web": "pnpm --filter @journey/cli build && concurrently -n api,gui -c cyan,magenta --kill-others --handle-input \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\""
+    "dev:web": "pnpm --filter @journey/cli build && concurrently -n mock,api,gui -c green,cyan,magenta --kill-others --handle-input \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\""
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
