@@ -1,5 +1,5 @@
-import { readdir } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { readdir, watch } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
@@ -25,6 +25,7 @@ export interface RunOptions {
   all?: boolean;
   env?: string;
   debug?: boolean;
+  watch?: boolean;
 }
 
 async function discoverJourneyFiles(journeysDir: string): Promise<string[]> {
@@ -75,5 +76,72 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   await writeRun(cacheDir, results);
   await pruneRuns(cacheDir, loaded.config.runHistoryKeepCount);
 
-  return overallOk(results) ? 0 : 1;
+  if (!opts.watch) return overallOk(results) ? 0 : 1;
+
+  // Watch mode: rerun on TS file changes, debounced.
+  const DEBOUNCE_MS = 300;
+  let timer: NodeJS.Timeout | undefined;
+  let running = false;
+  const abortCtrl = new AbortController();
+
+  const rerun = async () => {
+    if (running) return;
+    running = true;
+    process.stdout.write("\x1Bc"); // clear terminal
+    try {
+      await runCommand({ ...opts, watch: false });
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      running = false;
+    }
+  };
+
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => void rerun(), DEBOUNCE_MS);
+  };
+
+  // Collect directories to watch: the project journeys dir + each file's dir.
+  const dirs = new Set<string>([paths.journeysDir]);
+  for (const f of files) dirs.add(dirname(f));
+
+  const watchers: AsyncIterable<unknown>[] = [];
+  for (const dir of dirs) {
+    try {
+      watchers.push(watch(dir, { recursive: true, signal: abortCtrl.signal }));
+    } catch {
+      // directory may not support recursive; skip silently
+    }
+  }
+
+  console.log(`\nWatching for changes in ${[...dirs].join(", ")}…`);
+  console.log("Press Ctrl+C to stop.\n");
+
+  const consume = async (watcher: AsyncIterable<unknown>) => {
+    try {
+      for await (const event of watcher) {
+        const e = event as { filename?: string };
+        if (e.filename && (e.filename.endsWith(".ts") || e.filename.endsWith(".json"))) {
+          schedule();
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      throw err;
+    }
+  };
+
+  const exitPromise = new Promise<void>((res) => {
+    const handler = () => {
+      abortCtrl.abort();
+      if (timer) clearTimeout(timer);
+      res();
+    };
+    process.once("SIGINT", handler);
+    process.once("SIGTERM", handler);
+  });
+
+  await Promise.race([...watchers.map(consume), exitPromise]);
+  return 0;
 }

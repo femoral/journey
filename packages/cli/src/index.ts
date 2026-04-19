@@ -50,9 +50,10 @@ export function buildProgram(): Command {
     .option("--env <name>", "Environment file to use")
     .option("--all", "Run all journeys in the project", false)
     .option("--debug", "Log every request and response to stderr", false)
+    .option("--watch", "Rerun on file changes", false)
     .description("Run one or more journeys (or --all)")
     .action(
-      (files: string[], options: { env?: string; all?: boolean; debug?: boolean }) =>
+      (files: string[], options: { env?: string; all?: boolean; debug?: boolean; watch?: boolean }) =>
         handle(() =>
           runCommand({
             projectDir: process.cwd(),
@@ -60,6 +61,7 @@ export function buildProgram(): Command {
             ...(options.all !== undefined ? { all: options.all } : {}),
             ...(options.env !== undefined ? { env: options.env } : {}),
             ...(options.debug !== undefined ? { debug: options.debug } : {}),
+            ...(options.watch !== undefined ? { watch: options.watch } : {}),
           }),
         ),
     );
