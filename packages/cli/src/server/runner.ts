@@ -6,8 +6,10 @@ import {
   createConsoleLogger,
   loadEnvironment,
   loggerFromEnv,
+  pruneRuns,
   runAllRegistered,
   setActiveEnvironment,
+  writeRun,
   type HttpContext,
   type JourneyLogger,
   type JourneyResult,
@@ -50,5 +52,11 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (opts.loaded.config.baseUrl) ctx.baseUrl = opts.loaded.config.baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
-  return runAllRegistered(ctx);
+  const results = await runAllRegistered(ctx);
+
+  const cacheDir = join(opts.loaded.projectDir, ".journey", "cache");
+  await writeRun(cacheDir, results);
+  await pruneRuns(cacheDir, opts.loaded.config.runHistoryKeepCount);
+
+  return results;
 }

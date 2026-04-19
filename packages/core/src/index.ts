@@ -27,6 +27,15 @@ export {
 export { AssertionError, expect, type Expectation } from "./expect.js";
 
 export {
+  listRuns,
+  pruneRuns,
+  readRun,
+  writeRun,
+  type RunRecord,
+  type RunSummary,
+} from "./history.js";
+
+export {
   SECRET_HEADERS,
   createConsoleLogger,
   loggerFromEnv,

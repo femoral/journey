@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadConfig, listEnvironments, resolveConfigPaths, type LoadedConfig } from "@journey/core";
+import { listRuns, loadConfig, listEnvironments, readRun, resolveConfigPaths, type LoadedConfig } from "@journey/core";
 import { collectOperations, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
 
@@ -409,6 +409,20 @@ async function route(
         ...(debug ? { debug: true } : {}),
       });
       send(res, 200, { results });
+      return;
+    }
+    if (url.pathname === "/api/runs" && req.method === "GET") {
+      const cacheDir = join(projectDir, ".journey", "cache");
+      send(res, 200, await listRuns(cacheDir));
+      return;
+    }
+    const runIdMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
+    if (runIdMatch && req.method === "GET") {
+      const id = decodeURIComponent(runIdMatch[1]!);
+      const cacheDir = join(projectDir, ".journey", "cache");
+      const record = await readRun(cacheDir, id);
+      if (!record) { send(res, 404, { error: "run not found" }); return; }
+      send(res, 200, record);
       return;
     }
     if (url.pathname === "/api/health") {

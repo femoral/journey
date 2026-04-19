@@ -8,9 +8,11 @@ import {
   loadConfig,
   loadEnvironment,
   loggerFromEnv,
+  pruneRuns,
   resolveConfigPaths,
   runAllRegistered,
   setActiveEnvironment,
+  writeRun,
   type HttpContext,
   type JourneyResult,
 } from "@journey/core";
@@ -68,5 +70,10 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   if (logger) ctx.logger = logger;
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);
+
+  const cacheDir = join(opts.projectDir, ".journey", "cache");
+  await writeRun(cacheDir, results);
+  await pruneRuns(cacheDir, loaded.config.runHistoryKeepCount);
+
   return overallOk(results) ? 0 : 1;
 }

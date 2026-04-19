@@ -11,6 +11,7 @@ export const JourneyConfigSchema = z
     environmentsDir: z.string().min(1).default("environments"),
     defaultEnvironment: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
+    runHistoryKeepCount: z.number().int().min(0).default(20),
   })
   .strict();
 
