@@ -88,6 +88,15 @@ pkgs.mkShell {
   # GIO needs this to find the TLS module (otherwise HTTPS in WebView fails)
   GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules";
 
+  # WSLg doesn't forward Windows' DPI scale to GTK/WebKit apps; force a sensible
+  # default for HiDPI displays. Override if your monitor is 1080p.
+  #   GDK_SCALE=2 → integer pixel doubling (crisp text)
+  #   GDK_DPI_SCALE=1 → no further fractional adjustment
+  # For non-HiDPI, prepend `GDK_SCALE=1 ` to the command or export in your
+  # shell after entering nix-shell.
+  GDK_SCALE = "2";
+  GDK_DPI_SCALE = "1";
+
   # XDG for WSLg — make sure glib/gio find schemas
   XDG_DATA_DIRS = pkgs.lib.makeSearchPathOutput "out" "share" [ pkgs.gsettings-desktop-schemas pkgs.gtk3 ];
 
