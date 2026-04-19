@@ -1,27 +1,116 @@
 { pkgs ? import <nixpkgs> { } }:
 
+let
+  # Tauri 2 needs webkit2gtk 4.1 + its runtime deps
+  tauriDeps = with pkgs; [
+    # Build tools
+    pkg-config
+    gcc
+    gnumake
+    openssl
+
+    # Rust
+    rustc
+    cargo
+    cargo-tauri
+    clippy
+    rustfmt
+
+    # Tauri system libraries (Linux/WSL)
+    webkitgtk_4_1
+    gtk3
+    glib
+    glib-networking  # TLS for libsoup (WebKit's HTTP stack)
+    libsoup_3
+    cairo
+    pango
+    gdk-pixbuf
+    atk
+    harfbuzz
+    librsvg
+
+    # Wayland + X11 (WSLg provides both)
+    wayland
+    libxkbcommon
+    xorg.libX11
+    xorg.libXrandr
+    xorg.libXcursor
+    xorg.libXi
+  ];
+
+  # Libraries that need to be on LD_LIBRARY_PATH for Tauri's WebKit at runtime
+  runtimeLibs = with pkgs; [
+    webkitgtk_4_1
+    gtk3
+    glib
+    glib-networking
+    libsoup_3
+    cairo
+    pango
+    gdk-pixbuf
+    atk
+    harfbuzz
+    librsvg
+    openssl
+    wayland
+    libxkbcommon
+    mesa
+    xorg.libX11
+    xorg.libXrandr
+    xorg.libXcursor
+    xorg.libXi
+  ];
+in
 pkgs.mkShell {
   name = "journey-dev";
 
   packages = with pkgs; [
+    # Node / JS
     nodejs_22
     pnpm
+
+    # Testing
     playwright-driver.browsers
     k6
-  ];
+  ] ++ tauriDeps;
 
-  # Point Playwright at the nixpkgs-patched browser bundle so its binaries
-  # resolve their dynamic libs correctly on NixOS, and skip the default
-  # download into ~/.cache/ms-playwright.
+  # Playwright (pinned to nixpkgs' browser bundle)
   PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
   PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1";
 
+  # pkg-config needs to find .pc files for WebKit, GTK, etc.
+  PKG_CONFIG_PATH = pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" tauriDeps;
+
+  # Runtime library path so Tauri's WebView can dlopen system libs
+  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
+
+  # GIO needs this to find the TLS module (otherwise HTTPS in WebView fails)
+  GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules";
+
+  # XDG for WSLg — make sure glib/gio find schemas
+  XDG_DATA_DIRS = pkgs.lib.makeSearchPathOutput "out" "share" [ pkgs.gsettings-desktop-schemas pkgs.gtk3 ];
+
   shellHook = ''
-    echo "journey-dev shell — node $(node --version), pnpm $(pnpm --version), k6 $(k6 version | head -1)"
-    echo "Playwright browsers: $PLAYWRIGHT_BROWSERS_PATH"
-    echo
-    echo "Run the GUI e2e tests:"
-    echo "  pnpm --filter @journey/cli build && pnpm --filter @journey/gui test:e2e"
+    echo "journey-dev shell"
+    echo "  node   $(node --version)"
+    echo "  pnpm   $(pnpm --version)"
+    echo "  rustc  $(rustc --version)"
+    echo "  cargo  $(cargo --version)"
+    echo "  k6     $(k6 version | head -1)"
+    echo ""
+    echo "Commands:"
+    echo "  pnpm dev:web       — mock + API + GUI (web only)"
+    echo "  pnpm dev:tauri     — mock + API + Tauri app (once #25 lands)"
+    echo "  pnpm test:e2e      — Playwright headless e2e"
+    echo ""
+
+    # Quick WSLg check
+    if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+      echo "WSLg detected (DISPLAY=$DISPLAY, WAYLAND=$WAYLAND_DISPLAY)"
+    else
+      echo "⚠  No display server found — GUI apps won't open."
+      echo "   Make sure you're on Windows 11 with WSLg enabled."
+    fi
   '';
 }
