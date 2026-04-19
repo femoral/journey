@@ -102,6 +102,19 @@ export interface EnvironmentsResponse {
   environments: Environment[];
 }
 
+export interface RunSummary {
+  id: string;
+  timestamp: string;
+  journeyNames: string[];
+  ok: boolean;
+}
+
+export interface RunDetail {
+  id: string;
+  timestamp: string;
+  results: JourneyResult[];
+}
+
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
   getTree: () => req<ProjectTree>("/api/tree"),
@@ -142,4 +155,6 @@ export const api = {
     req<{ file: string; deleted: true }>(`/api/journeys/${encodeURIComponent(file)}`, {
       method: "DELETE",
     }),
+  listRuns: () => req<RunSummary[]>("/api/runs"),
+  getRun: (id: string) => req<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
 };
