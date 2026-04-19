@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickelpack/tauri/refs/heads/v2/crates/tauri-cli/schema.json",
+  "productName": "Journey",
+  "version": "0.0.0",
+  "identifier": "dev.journey.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "pnpm --filter @journey/gui build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Journey",
+        "width": 1280,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}
