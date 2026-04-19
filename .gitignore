@@ -140,6 +140,7 @@ vite.config.ts.timestamp-*
 
 # Journey local run cache
 .journey/cache/
+**/.journey/cache/
 
 # Tauri / Rust build artifacts
 packages/gui/src-tauri/target/
