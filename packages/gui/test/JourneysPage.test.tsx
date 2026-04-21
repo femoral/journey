@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { JourneysPage } from "../src/pages/JourneysPage";
 
@@ -22,30 +22,41 @@ const runResp = {
   ],
 };
 
+function stubFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request | string) => {
+      const url = typeof input === "string" ? input : input.url;
+      let body: unknown;
+      if (url.endsWith("/run")) body = runResp;
+      else if (url.endsWith("/api/journeys")) body = list;
+      else if (url.endsWith("/api/runs")) body = [];
+      else body = {};
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+}
+
 describe("JourneysPage", () => {
+  beforeEach(() => stubFetch());
+  afterEach(() => vi.unstubAllGlobals());
+
   it("lists journeys and renders step results after running", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: Request | string) => {
-        const url = typeof input === "string" ? input : input.url;
-        const body = url.endsWith("/run") ? runResp : list;
-        return new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }),
-    );
     render(() => <JourneysPage />);
     await waitFor(() => {
       expect(screen.getByText("auth.journey.ts")).toBeTruthy();
     });
     fireEvent.click(screen.getByText("auth.journey.ts"));
-    fireEvent.click(screen.getByTestId("run-button"));
+    const runBtn = await waitFor(() => screen.getByTestId("run-button"));
+    fireEvent.click(runBtn);
     await waitFor(() => {
       expect(screen.getByTestId("run-results")).toBeTruthy();
     });
-    expect(screen.getByText("auth flow")).toBeTruthy();
     expect(screen.getByText("login")).toBeTruthy();
-    vi.unstubAllGlobals();
+    // Response tab is default; response status shows 200 via StatusPill
+    expect(screen.getByText("200")).toBeTruthy();
   });
 });

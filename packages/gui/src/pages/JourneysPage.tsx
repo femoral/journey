@@ -1,41 +1,96 @@
 import {
-  createResource,
-  createSignal,
   For,
   Show,
-  type Accessor,
+  createMemo,
+  createResource,
+  createSignal,
   type Component,
+  type JSX,
 } from "solid-js";
-import { api, type JourneyResult, type RunDetail, type RunSummary } from "../api/client";
+import {
+  api,
+  type JourneyResult,
+  type RunDetail,
+  type RunSummary,
+  type StepResult,
+} from "../api/client";
 import { JsonDiff } from "../components/JsonDiff";
+import {
+  IconCheck,
+  IconChevron,
+  IconClock,
+  IconCopy,
+  IconDiff,
+  IconEditor,
+  IconEndpoints,
+  IconPlay,
+  IconPlus,
+  IconSearch,
+  IconStop,
+  IconX,
+  JsonPretty,
+  MethodBadge,
+  MiniTab,
+  RunDot,
+  StatusPill,
+  type HttpMethod,
+  type RunState,
+} from "../ui";
+
+type UiRunState = "idle" | "running" | "done";
 
 export const JourneysPage: Component = () => {
-  const [list] = createResource(api.getJourneys);
+  const [list, { refetch: refetchList }] = createResource(api.getJourneys);
   const [selected, setSelected] = createSignal<string | undefined>(undefined);
   const [results, setResults] = createSignal<JourneyResult[] | undefined>(undefined);
   const [error, setError] = createSignal<string | undefined>(undefined);
-  const [busy, setBusy] = createSignal(false);
+  const [runState, setRunState] = createSignal<UiRunState>("idle");
+  const [filter, setFilter] = createSignal("");
 
-  // Run history
   const [runs, { refetch: refetchRuns }] = createResource(api.listRuns);
   const [diffA, setDiffA] = createSignal<RunDetail | undefined>(undefined);
   const [diffB, setDiffB] = createSignal<RunDetail | undefined>(undefined);
   const [diffStep, setDiffStep] = createSignal<number>(0);
+  const [showDiff, setShowDiff] = createSignal(false);
+
+  const filteredFiles = createMemo(() => {
+    const q = filter().toLowerCase();
+    const files = list()?.files ?? [];
+    return q ? files.filter((f) => f.toLowerCase().includes(q)) : files;
+  });
+
+  const runsForSelected = createMemo(() => {
+    const s = selected();
+    if (!s) return [];
+    return (runs() ?? []).filter((r) => r.journeyNames.includes(s));
+  });
+
+  const pickJourney = (file: string) => {
+    setSelected(file);
+    setResults(undefined);
+    setError(undefined);
+    setRunState("idle");
+    setDiffA(undefined);
+    setDiffB(undefined);
+    setDiffStep(0);
+    setShowDiff(false);
+  };
 
   const run = async () => {
     const file = selected();
     if (!file) return;
-    setBusy(true);
+    setRunState("running");
     setError(undefined);
     setResults(undefined);
     try {
       const res = await api.runJourney(file);
       setResults(res.results);
+      setRunState("done");
       await refetchRuns();
+      await refetchList();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+      setRunState("idle");
     }
   };
 
@@ -46,199 +101,1042 @@ export const JourneysPage: Component = () => {
   };
 
   return (
-    <div class="grid grid-cols-[20rem_1fr] gap-6">
-      <aside>
-        <h1 class="text-xl font-semibold mb-3">Journeys</h1>
-        <Show when={list()}>
-          {(l: Accessor<{ files: string[] }>) => (
-            <ul class="space-y-0.5" data-testid="journey-list">
-              <For
-                each={l().files}
-                fallback={<p class="text-slate-500 text-sm">No journeys found.</p>}
+    <div
+      style={{ display: "flex", height: "100%", "min-height": 0 }}
+      data-testid="journeys-page"
+    >
+      <aside
+        style={{
+          width: "300px",
+          "border-right": "1px solid var(--bd-1)",
+          display: "flex",
+          "flex-direction": "column",
+          background: "var(--bg-0)",
+          "flex-shrink": 0,
+        }}
+      >
+        <div
+          style={{
+            padding: "10px 10px 8px",
+            display: "flex",
+            gap: "6px",
+            "border-bottom": "1px solid var(--bd-1)",
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              "align-items": "center",
+              gap: "6px",
+              background: "var(--bg-2)",
+              border: "1px solid var(--bd-1)",
+              "border-radius": "4px",
+              padding: "5px 8px",
+            }}
+          >
+            <IconSearch size={12} style={{ color: "var(--fg-3)" }} />
+            <input
+              value={filter()}
+              onInput={(e) => setFilter(e.currentTarget.value)}
+              placeholder="filter…"
+              style={{ flex: 1, "font-size": "12px" }}
+            />
+          </div>
+          <button
+            title="New journey (M6)"
+            disabled
+            style={{
+              padding: "0 8px",
+              border: "1px solid var(--bd-2)",
+              "border-radius": "4px",
+              color: "var(--fg-2)",
+              opacity: 0.5,
+              cursor: "not-allowed",
+            }}
+          >
+            <IconPlus size={12} />
+          </button>
+        </div>
+        <div
+          style={{ flex: 1, overflow: "auto" }}
+          data-testid="journey-list"
+        >
+          <Show
+            when={filteredFiles().length > 0}
+            fallback={
+              <div
+                style={{
+                  padding: "14px",
+                  "font-size": "12px",
+                  color: "var(--fg-3)",
+                }}
               >
-                {(file) => (
-                  <li>
-                    <button
-                      type="button"
-                      class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 font-mono text-xs"
-                      classList={{ "bg-slate-800": selected() === file }}
-                      onClick={() => setSelected(file)}
-                    >
-                      {file}
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          )}
-        </Show>
+                No journeys found.
+              </div>
+            }
+          >
+            <For each={filteredFiles()}>
+              {(file) => (
+                <JourneyRow
+                  file={file}
+                  lastRun={(runs() ?? []).find((r) => r.journeyNames.includes(file))}
+                  active={selected() === file}
+                  onClick={() => pickJourney(file)}
+                />
+              )}
+            </For>
+          </Show>
+        </div>
       </aside>
-      <section class="min-w-0 space-y-6">
+
+      <section
+        style={{
+          flex: 1,
+          "min-width": 0,
+          display: "flex",
+          "flex-direction": "column",
+          overflow: "hidden",
+        }}
+      >
         <Show
           when={selected()}
-          fallback={<p class="text-slate-400">Select a journey on the left.</p>}
-        >
-          {/* ---- Runner ---- */}
-          <div class="space-y-4">
-            <div class="font-mono text-sm">{selected()}</div>
-            <button
-              type="button"
-              class="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
-              disabled={busy()}
-              onClick={() => void run()}
-              data-testid="run-button"
+          fallback={
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                "align-items": "center",
+                "justify-content": "center",
+                color: "var(--fg-3)",
+                "font-size": "13px",
+              }}
             >
-              {busy() ? "Running…" : "Run"}
-            </button>
-            <Show when={error()}>
-              <p class="text-rose-400 text-sm" data-testid="run-error">
-                {error()}
-              </p>
-            </Show>
-            <Show when={results()}>
-              {(rs: Accessor<JourneyResult[]>) => (
-                <div class="space-y-4" data-testid="run-results">
-                  <For each={rs()}>
-                    {(r) => (
-                      <div class="border border-slate-800 rounded p-3">
-                        <header class="flex items-center gap-2 mb-2">
-                          <span class={r.ok ? "text-emerald-400" : "text-rose-400"}>
-                            {r.ok ? "✓" : "✗"}
-                          </span>
-                          <span class="font-semibold">{r.name}</span>
-                          <span class="text-slate-500 text-xs">({r.durationMs}ms)</span>
-                        </header>
-                        <ul class="space-y-1">
-                          <For each={r.steps}>
-                            {(s) => (
-                              <li class="font-mono text-xs flex gap-2 items-baseline">
-                                <span class={s.ok ? "text-emerald-400" : "text-rose-400"}>
-                                  {s.ok ? "✓" : "✗"}
-                                </span>
-                                <span class="text-slate-200">{s.name}</span>
-                                <Show when={s.request}>
-                                  {(req: Accessor<{ method: string; url: string }>) => (
-                                    <span class="text-slate-400">
-                                      {req().method} {req().url}
-                                    </span>
-                                  )}
-                                </Show>
-                                <Show when={s.response}>
-                                  {(res: Accessor<{ status: number }>) => (
-                                    <span class="text-slate-400">→ {res().status}</span>
-                                  )}
-                                </Show>
-                                <span class="text-slate-600">({s.durationMs}ms)</span>
-                                <Show when={s.error}>
-                                  <span class="text-rose-400">— {s.error}</span>
-                                </Show>
-                              </li>
-                            )}
-                          </For>
-                        </ul>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              )}
-            </Show>
-          </div>
-
-          {/* ---- History + Diff ---- */}
-          <Show when={(runs() ?? []).length > 0}>
-            <div>
-              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-2">Run history</h2>
-              <div class="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <div class="text-slate-500 mb-1">Side A (previous)</div>
-                  <ul class="space-y-0.5" data-testid="history-a">
-                    <For each={runs()}>
-                      {(r) => (
-                        <li>
-                          <button
-                            type="button"
-                            class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 font-mono"
-                            classList={{ "bg-slate-800": diffA()?.id === r.id }}
-                            onClick={() => void loadForDiff(r, "A")}
-                          >
-                            <span class={r.ok ? "text-emerald-400" : "text-rose-400"}>
-                              {r.ok ? "✓" : "✗"}
-                            </span>{" "}
-                            {r.timestamp.slice(0, 19).replace("T", " ")}{" "}
-                            <span class="text-slate-500">{r.journeyNames.join(", ")}</span>
-                          </button>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </div>
-                <div>
-                  <div class="text-slate-500 mb-1">Side B (current)</div>
-                  <ul class="space-y-0.5" data-testid="history-b">
-                    <For each={runs()}>
-                      {(r) => (
-                        <li>
-                          <button
-                            type="button"
-                            class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 font-mono"
-                            classList={{ "bg-slate-800": diffB()?.id === r.id }}
-                            onClick={() => void loadForDiff(r, "B")}
-                          >
-                            <span class={r.ok ? "text-emerald-400" : "text-rose-400"}>
-                              {r.ok ? "✓" : "✗"}
-                            </span>{" "}
-                            {r.timestamp.slice(0, 19).replace("T", " ")}{" "}
-                            <span class="text-slate-500">{r.journeyNames.join(", ")}</span>
-                          </button>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </div>
-              </div>
+              Select a journey on the left.
             </div>
-          </Show>
+          }
+        >
+          {(file) => (
+            <>
+              <JourneyHeader
+                file={file()}
+                steps={results()?.[0]?.steps.length ?? 0}
+                runState={runState()}
+                onRun={() => void run()}
+                onToggleDiff={() => setShowDiff((v) => !v)}
+                diffOpen={showDiff()}
+              />
 
-          <Show when={diffA() && diffB()}>
-            <div>
-              <h2 class="text-sm uppercase tracking-wider text-slate-500 mb-2">Response diff</h2>
-              <Show
-                when={
-                  diffA()!.results[0]?.steps.length &&
-                  diffB()!.results[0]?.steps.length
-                }
-              >
-                <div class="flex gap-2 mb-2">
-                  <For
-                    each={diffA()!.results[0]!.steps}
-                  >
-                    {(s, i) => (
-                      <button
-                        type="button"
-                        class="px-2 py-0.5 rounded text-xs font-mono"
-                        classList={{
-                          "bg-brand-600 text-white": diffStep() === i(),
-                          "bg-slate-800 text-slate-300 hover:bg-slate-700": diffStep() !== i(),
-                        }}
-                        onClick={() => setDiffStep(i())}
-                        data-testid={`diff-step-${i()}`}
-                      >
-                        {s.name}
-                      </button>
-                    )}
-                  </For>
+              <Show when={error()}>
+                <div
+                  data-testid="run-error"
+                  style={{
+                    padding: "10px 20px",
+                    "font-size": "12px",
+                    color: "var(--err)",
+                    "border-bottom": "1px solid var(--bd-1)",
+                    background: "var(--err-bg)",
+                  }}
+                >
+                  {error()}
                 </div>
-                <JsonDiff
-                  left={diffA()!.results[0]!.steps[diffStep()]?.response?.body}
-                  right={diffB()!.results[0]!.steps[diffStep()]?.response?.body}
-                  leftLabel={`A: ${diffA()!.timestamp.slice(0, 19)}`}
-                  rightLabel={`B: ${diffB()!.timestamp.slice(0, 19)}`}
-                />
               </Show>
-            </div>
-          </Show>
+
+              <div style={{ flex: 1, overflow: "auto" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    "grid-template-columns": "minmax(0, 1fr) 280px",
+                    "min-height": "100%",
+                  }}
+                >
+                  <StepTimeline
+                    runState={runState()}
+                    results={results()}
+                  />
+                  <RunHistoryPanel
+                    runs={runsForSelected()}
+                    diffOpen={showDiff()}
+                    diffA={diffA()}
+                    diffB={diffB()}
+                    onPick={(r, slot) => void loadForDiff(r, slot)}
+                  />
+                </div>
+
+                <Show when={showDiff() && diffA() && diffB()}>
+                  <DiffSection
+                    a={diffA()!}
+                    b={diffB()!}
+                    step={diffStep()}
+                    onStep={setDiffStep}
+                  />
+                </Show>
+              </div>
+            </>
+          )}
         </Show>
       </section>
     </div>
   );
 };
+
+function JourneyRow(props: {
+  file: string;
+  lastRun: RunSummary | undefined;
+  active: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  const name = () => props.file.replace(/\.journey\.ts$/, "");
+  const state = (): RunState => {
+    if (!props.lastRun) return "idle";
+    return props.lastRun.ok ? "pass" : "fail";
+  };
+  return (
+    <button
+      onClick={props.onClick}
+      style={{
+        width: "100%",
+        display: "flex",
+        "flex-direction": "column",
+        gap: "4px",
+        padding: "10px 14px",
+        "text-align": "left",
+        background: props.active ? "var(--bg-3)" : "transparent",
+        "border-left": props.active
+          ? "2px solid var(--ac)"
+          : "2px solid transparent",
+        "border-bottom": "1px solid var(--bd-1)",
+      }}
+      onMouseEnter={(e) => {
+        if (!props.active)
+          (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
+      }}
+      onMouseLeave={(e) => {
+        if (!props.active)
+          (e.currentTarget as HTMLElement).style.background = "transparent";
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "8px",
+          width: "100%",
+        }}
+      >
+        <RunDot state={state()} />
+        <span
+          class="mono"
+          style={{
+            flex: 1,
+            "font-size": "13px",
+            color: "var(--fg-0)",
+            overflow: "hidden",
+            "text-overflow": "ellipsis",
+            "white-space": "nowrap",
+          }}
+        >
+          {name()}
+        </span>
+        <span
+          class="mono"
+          style={{ "font-size": "10px", color: "var(--fg-3)" }}
+        >
+          {props.lastRun ? formatRelative(props.lastRun.timestamp) : "—"}
+        </span>
+      </div>
+      <div
+        class="mono"
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "8px",
+          "font-size": "10px",
+          color: "var(--fg-3)",
+        }}
+      >
+        <span>{props.file}</span>
+      </div>
+    </button>
+  );
+}
+
+function JourneyHeader(props: {
+  file: string;
+  steps: number;
+  runState: UiRunState;
+  onRun: () => void;
+  onToggleDiff: () => void;
+  diffOpen: boolean;
+}): JSX.Element {
+  const name = () => props.file.replace(/\.journey\.ts$/, "");
+  return (
+    <div
+      style={{
+        padding: "14px 20px 12px",
+        "border-bottom": "1px solid var(--bd-1)",
+        "flex-shrink": 0,
+      }}
+    >
+      <div
+        style={{ display: "flex", "align-items": "center", gap: "12px" }}
+      >
+        <div style={{ flex: 1, "min-width": 0 }}>
+          <h2
+            class="mono"
+            style={{
+              "font-size": "16px",
+              "font-weight": 600,
+              margin: "0 0 3px",
+              overflow: "hidden",
+              "text-overflow": "ellipsis",
+              "white-space": "nowrap",
+            }}
+          >
+            {name()}
+          </h2>
+          <div
+            class="mono"
+            style={{
+              "font-size": "11px",
+              color: "var(--fg-3)",
+              overflow: "hidden",
+              "text-overflow": "ellipsis",
+              "white-space": "nowrap",
+            }}
+          >
+            {props.file}
+            <Show when={props.steps > 0}>
+              {" · "}
+              {props.steps} {props.steps === 1 ? "step" : "steps"}
+            </Show>
+          </div>
+        </div>
+        <button
+          title="Diff against another run"
+          onClick={props.onToggleDiff}
+          aria-pressed={props.diffOpen}
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+            padding: "6px 10px",
+            border: props.diffOpen ? "1px solid var(--ac-bd)" : "1px solid var(--bd-2)",
+            "border-radius": "4px",
+            "font-size": "12px",
+            color: props.diffOpen ? "var(--ac)" : "var(--fg-1)",
+            background: props.diffOpen ? "var(--ac-bg)" : "transparent",
+          }}
+        >
+          <IconDiff size={12} />
+        </button>
+        <button
+          title="Open in editor (M6)"
+          disabled
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+            padding: "6px 10px",
+            border: "1px solid var(--bd-2)",
+            "border-radius": "4px",
+            "font-size": "12px",
+            color: "var(--fg-2)",
+            opacity: 0.5,
+            cursor: "not-allowed",
+          }}
+        >
+          <IconEditor size={12} />
+        </button>
+        <button
+          type="button"
+          data-testid="run-button"
+          onClick={props.onRun}
+          disabled={props.runState === "running"}
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+            padding: "7px 16px",
+            background: props.runState === "running" ? "var(--bg-2)" : "var(--ac)",
+            color: props.runState === "running" ? "var(--fg-0)" : "#1a1200",
+            "border-radius": "5px",
+            "font-weight": 600,
+            "font-size": "12px",
+            border:
+              props.runState === "running"
+                ? "1px solid var(--bd-2)"
+                : "none",
+          }}
+        >
+          <Show
+            when={props.runState === "running"}
+            fallback={
+              <>
+                <IconPlay size={10} /> Run journey
+              </>
+            }
+          >
+            <IconStop size={10} /> Running…
+          </Show>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepTimeline(props: {
+  runState: UiRunState;
+  results: JourneyResult[] | undefined;
+}): JSX.Element {
+  const allSteps = createMemo<StepResult[]>(() => {
+    const rs = props.results ?? [];
+    return rs.flatMap((r) => r.steps);
+  });
+
+  return (
+    <div
+      style={{
+        padding: "14px 20px",
+        "border-right": "1px solid var(--bd-1)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "10px",
+          "margin-bottom": "12px",
+          "font-size": "11px",
+          color: "var(--fg-2)",
+        }}
+      >
+        <span
+          class="mono"
+          style={{
+            "text-transform": "uppercase",
+            "letter-spacing": "0.06em",
+            color: "var(--fg-3)",
+          }}
+        >
+          Current run
+        </span>
+        <Show when={props.runState === "done" && allSteps().length > 0}>
+          <span class="mono">
+            {allSteps().reduce((a, s) => a + s.durationMs, 0)}ms
+          </span>
+        </Show>
+        <Show when={props.runState === "running"}>
+          <span class="mono" style={{ color: "var(--ac)" }}>
+            running…
+          </span>
+        </Show>
+        <span style={{ flex: 1 }} />
+        <IconClock size={11} />
+      </div>
+
+      <Show
+        when={allSteps().length > 0}
+        fallback={
+          <div
+            style={{
+              padding: "32px 12px",
+              "font-size": "12px",
+              color: "var(--fg-3)",
+              "text-align": "center",
+            }}
+            data-testid="empty-run"
+          >
+            Hit <span class="mono">Run journey</span> to see steps stream in.
+          </div>
+        }
+      >
+        <div style={{ position: "relative" }} data-testid="run-results">
+          <div
+            style={{
+              position: "absolute",
+              left: "11px",
+              top: "14px",
+              bottom: "14px",
+              width: "1px",
+              background: "var(--bd-2)",
+            }}
+          />
+          <For each={allSteps()}>
+            {(step, i) => (
+              <StepCard step={step} index={i()} defaultExpanded={!step.ok} />
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+function StepCard(props: {
+  step: StepResult;
+  index: number;
+  defaultExpanded: boolean;
+}): JSX.Element {
+  const [expanded, setExpanded] = createSignal(props.defaultExpanded);
+  const state = (): RunState => (props.step.ok ? "pass" : "fail");
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        "margin-bottom": "8px",
+        position: "relative",
+      }}
+      data-testid={`step-card-${props.index}`}
+    >
+      <div style={{ "padding-top": "4px", "z-index": 1 }}>
+        <StepIcon state={state()} index={props.index} />
+      </div>
+      <div
+        style={{
+          flex: 1,
+          border: "1px solid var(--bd-1)",
+          "border-radius": "5px",
+          background: "var(--bg-1)",
+          overflow: "hidden",
+          "min-width": 0,
+        }}
+      >
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded()}
+          style={{
+            width: "100%",
+            display: "flex",
+            "align-items": "center",
+            gap: "10px",
+            padding: "8px 12px",
+            "text-align": "left",
+          }}
+        >
+          <Show when={props.step.request}>
+            {(req) => <MethodBadge method={req().method as HttpMethod} />}
+          </Show>
+          <div
+            style={{
+              flex: 1,
+              "min-width": 0,
+              display: "flex",
+              "flex-direction": "column",
+              "align-items": "flex-start",
+            }}
+          >
+            <span
+              style={{
+                "font-size": "12px",
+                color: "var(--fg-0)",
+                "font-weight": 500,
+                overflow: "hidden",
+                "text-overflow": "ellipsis",
+                "white-space": "nowrap",
+                "max-width": "100%",
+              }}
+            >
+              {props.step.name}
+            </span>
+            <Show when={props.step.request?.url}>
+              {(url) => (
+                <span
+                  class="mono"
+                  style={{
+                    "font-size": "10px",
+                    color: "var(--fg-3)",
+                    overflow: "hidden",
+                    "text-overflow": "ellipsis",
+                    "white-space": "nowrap",
+                    "max-width": "100%",
+                  }}
+                >
+                  {url()}
+                </span>
+              )}
+            </Show>
+          </div>
+          <Show when={props.step.response}>
+            {(res) => <StatusPill status={res().status} />}
+          </Show>
+          <span
+            class="mono"
+            style={{
+              "font-size": "11px",
+              color: "var(--fg-2)",
+              width: "50px",
+              "text-align": "right",
+            }}
+          >
+            {props.step.durationMs}ms
+          </span>
+          <IconChevron
+            size={11}
+            style={{
+              color: "var(--fg-3)",
+              transform: expanded() ? "rotate(90deg)" : "none",
+              transition: "transform 0.15s",
+            }}
+          />
+        </button>
+        <Show when={expanded()}>
+          <StepDetail step={props.step} />
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function StepIcon(props: { state: RunState; index: number }): JSX.Element {
+  const base = {
+    width: "22px",
+    height: "22px",
+    "border-radius": "50%",
+    background: "var(--bg-0)",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "center",
+  } as const;
+  if (props.state === "pass") {
+    return (
+      <div
+        style={{
+          ...base,
+          border: "1.5px solid var(--ok)",
+          color: "var(--ok)",
+        }}
+      >
+        <IconCheck size={11} />
+      </div>
+    );
+  }
+  if (props.state === "fail") {
+    return (
+      <div
+        style={{
+          ...base,
+          border: "1.5px solid var(--err)",
+          color: "var(--err)",
+        }}
+      >
+        <IconX size={11} />
+      </div>
+    );
+  }
+  if (props.state === "running") {
+    return (
+      <div
+        style={{
+          ...base,
+          border: "1.5px solid var(--ac)",
+          "box-shadow": "0 0 0 3px var(--ac-bg)",
+        }}
+      >
+        <RunDot state="running" size={6} />
+      </div>
+    );
+  }
+  return (
+    <div
+      class="mono"
+      style={{
+        ...base,
+        border: "1.5px solid var(--bd-2)",
+        color: "var(--fg-3)",
+        "font-size": "10px",
+      }}
+    >
+      {props.index + 1}
+    </div>
+  );
+}
+
+type DetailTab = "request" | "response" | "logs";
+
+function StepDetail(props: { step: StepResult }): JSX.Element {
+  const [tab, setTab] = createSignal<DetailTab>(
+    props.step.ok ? "response" : "response",
+  );
+  const reqBodyPresent = createMemo(
+    () => false, // StepResult.request only exposes method/url today
+  );
+  const reqText = () => {
+    if (!props.step.request) return "";
+    return `${props.step.request.method} ${props.step.request.url}`;
+  };
+  const resText = () => {
+    const r = props.step.response;
+    if (!r) return "";
+    try {
+      return JSON.stringify(r.body, null, 2);
+    } catch {
+      return String(r.body);
+    }
+  };
+  return (
+    <div
+      style={{
+        "border-top": "1px solid var(--bd-1)",
+        background: "var(--bg-0)",
+      }}
+    >
+      <div
+        style={{
+          padding: "2px 12px 0",
+          display: "flex",
+          "align-items": "center",
+          "border-bottom": "1px solid var(--bd-1)",
+        }}
+        role="tablist"
+      >
+        <MiniTab
+          label="Request"
+          active={tab() === "request"}
+          onClick={() => setTab("request")}
+        />
+        <MiniTab
+          label="Response"
+          active={tab() === "response"}
+          onClick={() => setTab("response")}
+        />
+        <Show when={props.step.error}>
+          <MiniTab
+            label="Error"
+            active={tab() === "logs"}
+            onClick={() => setTab("logs")}
+          />
+        </Show>
+        <div style={{ flex: 1 }} />
+        <button
+          disabled
+          title="Copy as cURL (M5)"
+          style={{
+            padding: "4px 8px",
+            "font-size": "11px",
+            color: "var(--fg-2)",
+            display: "flex",
+            "align-items": "center",
+            gap: "4px",
+            opacity: 0.5,
+            cursor: "not-allowed",
+          }}
+        >
+          <IconCopy size={10} /> curl
+        </button>
+        <button
+          disabled
+          title="Run only this step (M5)"
+          style={{
+            padding: "4px 8px",
+            "font-size": "11px",
+            color: "var(--ac)",
+            display: "flex",
+            "align-items": "center",
+            gap: "4px",
+            opacity: 0.5,
+            cursor: "not-allowed",
+          }}
+        >
+          <IconPlay size={10} /> Run only
+        </button>
+        <button
+          disabled
+          title="Send via Endpoints (M5)"
+          style={{
+            padding: "4px 8px",
+            "font-size": "11px",
+            color: "var(--fg-2)",
+            display: "flex",
+            "align-items": "center",
+            gap: "4px",
+            opacity: 0.5,
+            cursor: "not-allowed",
+          }}
+        >
+          <IconEndpoints size={10} /> Endpoints
+        </button>
+      </div>
+      <div style={{ padding: "10px 14px" }}>
+        <Show when={tab() === "request"}>
+          <Show
+            when={props.step.request}
+            fallback={
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
+                No request recorded.
+              </div>
+            }
+          >
+            <pre
+              class="mono"
+              style={{
+                margin: 0,
+                "font-size": "12px",
+                "line-height": 1.6,
+                color: "var(--fg-1)",
+              }}
+            >
+              {reqText()}
+            </pre>
+          </Show>
+        </Show>
+        <Show when={tab() === "response"}>
+          <Show
+            when={props.step.response}
+            fallback={
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
+                No response recorded.
+              </div>
+            }
+          >
+            <pre
+              class="mono"
+              style={{
+                margin: 0,
+                "font-size": "12px",
+                "line-height": 1.6,
+                color: "var(--fg-1)",
+                "white-space": "pre-wrap",
+              }}
+            >
+              <JsonPretty text={resText()} />
+            </pre>
+          </Show>
+        </Show>
+        <Show when={tab() === "logs"}>
+          <div
+            class="mono"
+            style={{
+              "font-size": "12px",
+              color: "var(--err)",
+              "white-space": "pre-wrap",
+            }}
+          >
+            {props.step.error}
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function RunHistoryPanel(props: {
+  runs: RunSummary[];
+  diffOpen: boolean;
+  diffA: RunDetail | undefined;
+  diffB: RunDetail | undefined;
+  onPick: (summary: RunSummary, slot: "A" | "B") => void;
+}): JSX.Element {
+  return (
+    <div
+      style={{
+        padding: "14px 16px",
+        display: "flex",
+        "flex-direction": "column",
+        gap: "14px",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            "font-size": "10px",
+            color: "var(--fg-3)",
+            "text-transform": "uppercase",
+            "letter-spacing": "0.08em",
+            "margin-bottom": "6px",
+          }}
+        >
+          History
+        </div>
+        <Show
+          when={props.runs.length > 0}
+          fallback={
+            <div
+              style={{
+                padding: "6px 2px",
+                "font-size": "11px",
+                color: "var(--fg-3)",
+              }}
+            >
+              No runs yet.
+            </div>
+          }
+        >
+          <Show when={props.diffOpen}>
+            <div
+              class="mono"
+              style={{
+                "font-size": "10px",
+                color: "var(--fg-3)",
+                "margin-bottom": "6px",
+              }}
+            >
+              Click a row to set as A (previous), shift-click for B (current).
+            </div>
+          </Show>
+          <div style={{ display: "flex", "flex-direction": "column" }}>
+            <For each={props.runs}>
+              {(r, i) => (
+                <button
+                  type="button"
+                  data-testid={`history-row-${r.id}`}
+                  onClick={(e) => {
+                    if (!props.diffOpen) return;
+                    props.onPick(r, e.shiftKey ? "B" : "A");
+                  }}
+                  style={{
+                    display: "grid",
+                    "grid-template-columns": "10px 1fr 54px",
+                    "align-items": "center",
+                    gap: "8px",
+                    padding: "6px 2px",
+                    "font-size": "11px",
+                    "border-top": i() === 0 ? "none" : "1px solid var(--bd-1)",
+                    "text-align": "left",
+                    background:
+                      props.diffA?.id === r.id
+                        ? "var(--ac-bg)"
+                        : props.diffB?.id === r.id
+                          ? "var(--info-bg)"
+                          : "transparent",
+                    cursor: props.diffOpen ? "pointer" : "default",
+                  }}
+                >
+                  <RunDot state={r.ok ? "pass" : "fail"} size={6} />
+                  <div
+                    style={{
+                      display: "flex",
+                      "flex-direction": "column",
+                      "min-width": 0,
+                    }}
+                  >
+                    <span class="mono" style={{ color: "var(--fg-1)" }}>
+                      {formatRelative(r.timestamp)}
+                    </span>
+                    <span
+                      class="mono"
+                      style={{ "font-size": "10px", color: "var(--fg-3)" }}
+                    >
+                      {r.journeyNames.length > 1
+                        ? `${r.journeyNames.length} journeys`
+                        : "this journey"}
+                    </span>
+                  </div>
+                  <span
+                    class="mono"
+                    style={{
+                      "font-size": "10px",
+                      color:
+                        props.diffA?.id === r.id
+                          ? "var(--ac)"
+                          : props.diffB?.id === r.id
+                            ? "var(--info)"
+                            : "var(--fg-3)",
+                      "text-align": "right",
+                    }}
+                  >
+                    {props.diffA?.id === r.id
+                      ? "A"
+                      : props.diffB?.id === r.id
+                        ? "B"
+                        : ""}
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function DiffSection(props: {
+  a: RunDetail;
+  b: RunDetail;
+  step: number;
+  onStep: (i: number) => void;
+}): JSX.Element {
+  const stepsA = () => props.a.results[0]?.steps ?? [];
+  const stepsB = () => props.b.results[0]?.steps ?? [];
+  const stepNames = () => stepsA().map((s) => s.name);
+  return (
+    <div
+      style={{
+        "border-top": "1px solid var(--bd-1)",
+        padding: "14px 20px",
+        background: "var(--bg-1)",
+      }}
+    >
+      <div
+        style={{
+          "font-size": "10px",
+          color: "var(--fg-3)",
+          "text-transform": "uppercase",
+          "letter-spacing": "0.08em",
+          "margin-bottom": "10px",
+        }}
+      >
+        Response diff · A = {formatRelative(props.a.timestamp)} · B ={" "}
+        {formatRelative(props.b.timestamp)}
+      </div>
+      <Show when={stepNames().length > 0}>
+        <div
+          style={{
+            display: "flex",
+            "flex-wrap": "wrap",
+            gap: "6px",
+            "margin-bottom": "10px",
+          }}
+        >
+          <For each={stepNames()}>
+            {(n, i) => (
+              <button
+                type="button"
+                data-testid={`diff-step-${i()}`}
+                onClick={() => props.onStep(i())}
+                class="mono"
+                style={{
+                  padding: "3px 10px",
+                  "font-size": "11px",
+                  "border-radius": "3px",
+                  background:
+                    props.step === i() ? "var(--ac-bg)" : "var(--bg-2)",
+                  color: props.step === i() ? "var(--ac)" : "var(--fg-2)",
+                  border:
+                    props.step === i()
+                      ? "1px solid var(--ac-bd)"
+                      : "1px solid transparent",
+                }}
+              >
+                {n}
+              </button>
+            )}
+          </For>
+        </div>
+        <JsonDiff
+          left={stepsA()[props.step]?.response?.body}
+          right={stepsB()[props.step]?.response?.body}
+          leftLabel={`A: ${formatRelative(props.a.timestamp)}`}
+          rightLabel={`B: ${formatRelative(props.b.timestamp)}`}
+        />
+      </Show>
+    </div>
+  );
+}
+
+function formatRelative(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "—";
+  const diff = Date.now() - t;
+  if (diff < 0) return "now";
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
