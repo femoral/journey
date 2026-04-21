@@ -52,8 +52,8 @@ describe("EndpointsPage", () => {
     );
 
     render(() => <EndpointsPage />);
-    await waitFor(() => expect(screen.getByTestId("endpoint-list")).toBeTruthy());
-    fireEvent.click(screen.getAllByRole("button")[0]!); // findPetsByStatus
+    const row = await waitFor(() => screen.getByTestId("endpoint-row-findPetsByStatus"));
+    fireEvent.click(row);
 
     const statusInput = await waitFor(() => screen.getByTestId("query-status"));
     fireEvent.input(statusInput, { target: { value: "available" } });
