@@ -1,5 +1,24 @@
-import { createResource, createSignal, For, Show, type Component } from "solid-js";
+import {
+  For,
+  Show,
+  createMemo,
+  createResource,
+  createSignal,
+  type Component,
+  type JSX,
+} from "solid-js";
 import { api, type Environment } from "../api/client";
+import {
+  IconEye,
+  IconEyeOff,
+  IconPlus,
+  IconTrail,
+  IconX,
+  JsonPretty,
+  SegBtn,
+} from "../ui";
+
+type Row = { key: string; value: string };
 
 function isSecretKey(key: string): boolean {
   return /(pass|secret|token|key)/i.test(key);
@@ -8,20 +27,27 @@ function isSecretKey(key: string): boolean {
 export const EnvironmentsPage: Component = () => {
   const [data, { refetch }] = createResource(api.getEnvironments);
   const [selectedName, setSelectedName] = createSignal<string | undefined>(undefined);
-  const [draft, setDraft] = createSignal<Array<[string, string]>>([]);
+  const [draft, setDraft] = createSignal<Row[]>([]);
   const [status, setStatus] = createSignal<string | undefined>(undefined);
+  const [revealed, setRevealed] = createSignal<Record<string, boolean>>({});
+  const [view, setView] = createSignal<"table" | "JSON">("table");
+
+  const selectedEnv = createMemo(() =>
+    data()?.environments.find((e) => e.name === selectedName()),
+  );
 
   const loadDraftFor = (env: Environment) => {
-    setDraft(Object.entries(env.values));
+    setDraft(Object.entries(env.values).map(([key, value]) => ({ key, value })));
     setStatus(undefined);
+    setRevealed({});
   };
 
   const save = async () => {
     const name = selectedName();
     if (!name) return;
     const values: Record<string, string> = {};
-    for (const [k, v] of draft()) {
-      if (k.trim()) values[k] = v;
+    for (const { key, value } of draft()) {
+      if (key.trim()) values[key] = value;
     }
     try {
       await api.saveEnvironment(name, values);
@@ -51,130 +77,469 @@ export const EnvironmentsPage: Component = () => {
     await refetch();
   };
 
+  const updateRow = (i: number, patch: Partial<Row>) => {
+    setDraft(draft().map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  };
+
+  const removeRow = (i: number) => {
+    setDraft(draft().filter((_, idx) => idx !== i));
+  };
+
   return (
-    <div class="grid grid-cols-[20rem_1fr] gap-6">
-      <aside>
-        <div class="flex items-center justify-between mb-3">
-          <h1 class="text-xl font-semibold">Environments</h1>
-          <button
-            type="button"
-            class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sm"
-            onClick={() => void create()}
-            data-testid="new-env"
-          >
-            + New
-          </button>
+    <div
+      style={{ display: "flex", height: "100%", "min-height": 0 }}
+      data-testid="environments-page"
+    >
+      <aside
+        style={{
+          width: "220px",
+          "border-right": "1px solid var(--bd-1)",
+          display: "flex",
+          "flex-direction": "column",
+          background: "var(--bg-0)",
+          "flex-shrink": 0,
+        }}
+      >
+        <div
+          style={{
+            padding: "10px 14px",
+            "font-size": "10px",
+            color: "var(--fg-3)",
+            "text-transform": "uppercase",
+            "letter-spacing": "0.08em",
+            "border-bottom": "1px solid var(--bd-1)",
+          }}
+        >
+          Environments
         </div>
-        <Show when={data()}>
-          {(d) => (
-            <ul class="space-y-0.5" data-testid="env-list">
+        <div
+          style={{ flex: 1, padding: "6px 6px", overflow: "auto" }}
+        >
+          <Show when={data()}>
+            {(d) => (
+              <div data-testid="env-list">
               <For
                 each={d().environments}
-                fallback={<p class="text-slate-500 text-sm">No environments yet.</p>}
+                fallback={
+                  <div
+                    style={{
+                      padding: "14px 10px",
+                      "font-size": "12px",
+                      color: "var(--fg-3)",
+                    }}
+                  >
+                    No environments yet.
+                  </div>
+                }
               >
-                {(env) => (
-                  <li>
+                {(env) => {
+                  const active = () => selectedName() === env.name;
+                  const isDefault = () => env.name === d().defaultEnvironment;
+                  return (
                     <button
                       type="button"
-                      class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-sm"
-                      classList={{ "bg-slate-800": selectedName() === env.name }}
                       onClick={() => {
                         setSelectedName(env.name);
                         loadDraftFor(env);
                       }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        "align-items": "center",
+                        gap: "8px",
+                        padding: "7px 10px",
+                        "border-radius": "4px",
+                        "font-size": "12px",
+                        background: active() ? "var(--bg-3)" : "transparent",
+                        "border-left": active()
+                          ? "2px solid var(--ac)"
+                          : "2px solid transparent",
+                        "text-align": "left",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active())
+                          (e.currentTarget as HTMLElement).style.background =
+                            "var(--bg-1)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active())
+                          (e.currentTarget as HTMLElement).style.background =
+                            "transparent";
+                      }}
                     >
-                      {env.name}
-                      <Show when={env.name === d().defaultEnvironment}>
-                        <span class="text-brand-500 text-xs ml-2">default</span>
-                      </Show>
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          "border-radius": "50%",
+                          background: isDefault()
+                            ? "var(--ac)"
+                            : "var(--fg-3)",
+                        }}
+                      />
+                      <span
+                        class="mono"
+                        style={{ flex: 1, color: "var(--fg-0)" }}
+                      >
+                        {env.name}
+                      </span>
+                      <span
+                        class="mono"
+                        style={{ "font-size": "10px", color: "var(--fg-3)" }}
+                      >
+                        {Object.keys(env.values).length}
+                      </span>
                     </button>
-                  </li>
-                )}
+                  );
+                }}
               </For>
-            </ul>
-          )}
-        </Show>
+              </div>
+            )}
+          </Show>
+          <button
+            type="button"
+            data-testid="new-env"
+            onClick={() => void create()}
+            style={{
+              width: "100%",
+              display: "flex",
+              "align-items": "center",
+              gap: "8px",
+              padding: "7px 10px",
+              "margin-top": "6px",
+              "font-size": "12px",
+              color: "var(--fg-2)",
+              border: "1px dashed var(--bd-2)",
+              "border-radius": "4px",
+            }}
+          >
+            <IconPlus size={11} /> New environment
+          </button>
+        </div>
       </aside>
-      <section class="min-w-0">
+
+      <section
+        style={{
+          flex: 1,
+          "min-width": 0,
+          display: "flex",
+          "flex-direction": "column",
+        }}
+      >
         <Show
           when={selectedName()}
-          fallback={<p class="text-slate-400">Select or create an environment.</p>}
+          fallback={
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                "align-items": "center",
+                "justify-content": "center",
+                color: "var(--fg-3)",
+                "font-size": "13px",
+              }}
+            >
+              Select or create an environment.
+            </div>
+          }
         >
-          <div class="space-y-3">
-            <h2 class="text-lg font-mono" data-testid="env-heading">
-              {selectedName()}
-            </h2>
-            <ul class="space-y-1" data-testid="env-values">
+          <div
+            style={{
+              padding: "14px 20px 12px",
+              "border-bottom": "1px solid var(--bd-1)",
+              display: "flex",
+              "align-items": "center",
+              gap: "10px",
+              "flex-shrink": 0,
+            }}
+          >
+            <div style={{ flex: 1, "min-width": 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "10px",
+                  "margin-bottom": "3px",
+                }}
+              >
+                <h2
+                  class="mono"
+                  style={{
+                    "font-size": "16px",
+                    "font-weight": 600,
+                    margin: 0,
+                  }}
+                  data-testid="env-heading"
+                >
+                  {selectedName()}
+                </h2>
+                <Show when={selectedName() === data()?.defaultEnvironment}>
+                  <span
+                    class="mono"
+                    style={{
+                      "font-size": "10px",
+                      color: "var(--ac)",
+                      background: "var(--ac-bg)",
+                      padding: "1px 6px",
+                      "border-radius": "2px",
+                    }}
+                  >
+                    default
+                  </span>
+                </Show>
+              </div>
+              <div
+                class="mono"
+                style={{ "font-size": "11px", color: "var(--fg-3)" }}
+              >
+                environments/{selectedName()}.json · {draft().length}{" "}
+                {draft().length === 1 ? "variable" : "variables"}
+              </div>
+            </div>
+            <SegBtn<"table" | "JSON">
+              options={["table", "JSON"] as const}
+              value={view()}
+              onChange={setView}
+            />
+          </div>
+
+          <Show when={view() === "table"}>
+            <div style={{ flex: 1, overflow: "auto" }} data-testid="env-values">
+              <div
+                style={{
+                  display: "grid",
+                  "grid-template-columns": "200px 1fr 40px 24px",
+                  gap: "10px",
+                  padding: "8px 20px",
+                  "font-size": "10px",
+                  color: "var(--fg-3)",
+                  "text-transform": "uppercase",
+                  "letter-spacing": "0.08em",
+                  "border-bottom": "1px solid var(--bd-1)",
+                }}
+              >
+                <span>Key</span>
+                <span>Value</span>
+                <span />
+                <span />
+              </div>
               <For each={draft()}>
-                {([k, v], i) => (
-                  <li class="flex gap-2 items-center">
-                    <input
-                      class="bg-slate-900 border border-slate-700 rounded px-2 py-1 w-40 font-mono text-sm"
-                      value={k}
-                      placeholder="KEY"
-                      onInput={(e) => {
-                        const copy = draft().slice();
-                        const current = copy[i()]!;
-                        copy[i()] = [e.currentTarget.value, current[1]];
-                        setDraft(copy);
+                {(row, i) => {
+                  const secret = () => isSecretKey(row.key);
+                  const isRevealed = () => revealed()[row.key] === true;
+                  return (
+                    <div
+                      style={{
+                        display: "grid",
+                        "grid-template-columns": "200px 1fr 40px 24px",
+                        gap: "10px",
+                        padding: "7px 20px",
+                        "align-items": "center",
+                        "border-bottom": "1px solid var(--bd-1)",
+                        "font-size": "12px",
                       }}
-                    />
-                    <input
-                      class="bg-slate-900 border border-slate-700 rounded px-2 py-1 flex-1 font-mono text-sm"
-                      type={isSecretKey(k) ? "password" : "text"}
-                      value={v}
-                      placeholder="value"
-                      onInput={(e) => {
-                        const copy = draft().slice();
-                        const current = copy[i()]!;
-                        copy[i()] = [current[0], e.currentTarget.value];
-                        setDraft(copy);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      class="text-slate-500 hover:text-rose-400 text-sm"
-                      onClick={() => setDraft(draft().filter((_, idx) => idx !== i()))}
+                      class="mono"
                     >
-                      remove
-                    </button>
-                  </li>
-                )}
+                      <div
+                        style={{
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "5px",
+                          "min-width": 0,
+                        }}
+                      >
+                        <input
+                          value={row.key}
+                          placeholder="KEY"
+                          onInput={(e) =>
+                            updateRow(i(), { key: e.currentTarget.value })
+                          }
+                          style={{
+                            flex: 1,
+                            "font-size": "12px",
+                            color: "var(--info)",
+                            width: "100%",
+                            "min-width": 0,
+                          }}
+                        />
+                        <Show when={secret()}>
+                          <IconTrail
+                            size={10}
+                            style={{ color: "var(--warn)", "flex-shrink": 0 }}
+                            title="secret"
+                          />
+                        </Show>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <input
+                          value={row.value}
+                          placeholder="value"
+                          type={secret() && !isRevealed() ? "password" : "text"}
+                          onInput={(e) =>
+                            updateRow(i(), { value: e.currentTarget.value })
+                          }
+                          style={{
+                            flex: 1,
+                            "font-size": "12px",
+                            color:
+                              row.value.startsWith("$")
+                                ? "var(--m-patch)"
+                                : "var(--fg-0)",
+                            width: "100%",
+                          }}
+                        />
+                        <Show when={secret()}>
+                          <button
+                            type="button"
+                            aria-label={
+                              isRevealed() ? "Hide secret" : "Reveal secret"
+                            }
+                            onClick={() =>
+                              setRevealed({
+                                ...revealed(),
+                                [row.key]: !isRevealed(),
+                              })
+                            }
+                            style={{ color: "var(--fg-3)", "flex-shrink": 0 }}
+                          >
+                            <Show when={isRevealed()} fallback={<IconEye size={12} />}>
+                              <IconEyeOff size={12} />
+                            </Show>
+                          </button>
+                        </Show>
+                      </div>
+                      <span />
+                      <button
+                        type="button"
+                        onClick={() => removeRow(i())}
+                        style={{ color: "var(--fg-3)" }}
+                        aria-label={`Remove ${row.key || "row"}`}
+                      >
+                        <IconX size={10} />
+                      </button>
+                    </div>
+                  );
+                }}
               </For>
-            </ul>
-            <div class="flex gap-2">
               <button
                 type="button"
-                class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sm"
-                onClick={() => setDraft([...draft(), ["", ""]])}
                 data-testid="add-row"
+                onClick={() => setDraft([...draft(), { key: "", value: "" }])}
+                style={{
+                  padding: "10px 20px",
+                  "font-size": "12px",
+                  color: "var(--fg-3)",
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "6px",
+                }}
               >
-                + Add row
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 rounded bg-brand-600 hover:bg-brand-700 text-sm text-white"
-                onClick={() => void save()}
-                data-testid="save-env"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 rounded bg-rose-900 hover:bg-rose-800 text-sm text-rose-100"
-                onClick={() => void destroy()}
-              >
-                Delete
+                <IconPlus size={11} /> Add variable
               </button>
             </div>
-            <Show when={status()}>
-              <p class="text-sm text-slate-400" data-testid="env-status">
-                {status()}
-              </p>
-            </Show>
-          </div>
+          </Show>
+
+          <Show when={view() === "JSON"}>
+            <pre
+              class="mono"
+              style={{
+                margin: 0,
+                padding: "16px 22px",
+                "font-size": "12px",
+                "line-height": 1.7,
+                color: "var(--fg-1)",
+                flex: 1,
+                overflow: "auto",
+                background: "var(--bg-0)",
+              }}
+            >
+              <JsonPretty text={jsonFor(draft(), revealed())} />
+            </pre>
+          </Show>
+
+          <FooterBar
+            onSave={() => void save()}
+            onDelete={() => void destroy()}
+            status={status()}
+          />
         </Show>
       </section>
     </div>
   );
 };
+
+function FooterBar(props: {
+  onSave: () => void;
+  onDelete: () => void;
+  status: string | undefined;
+}): JSX.Element {
+  return (
+    <div
+      style={{
+        padding: "10px 20px",
+        "border-top": "1px solid var(--bd-1)",
+        display: "flex",
+        "align-items": "center",
+        gap: "8px",
+        "flex-shrink": 0,
+      }}
+    >
+      <Show when={props.status}>
+        <span
+          class="mono"
+          data-testid="env-status"
+          style={{
+            "font-size": "11px",
+            color: props.status?.startsWith("Saved") ? "var(--ok)" : "var(--err)",
+          }}
+        >
+          {props.status}
+        </span>
+      </Show>
+      <div style={{ flex: 1 }} />
+      <button
+        type="button"
+        onClick={props.onDelete}
+        style={{
+          padding: "6px 12px",
+          border: "1px solid var(--bd-2)",
+          "border-radius": "4px",
+          "font-size": "12px",
+          color: "var(--err)",
+        }}
+      >
+        Delete
+      </button>
+      <button
+        type="button"
+        data-testid="save-env"
+        onClick={props.onSave}
+        style={{
+          padding: "6px 14px",
+          background: "var(--ac)",
+          color: "#1a1200",
+          "border-radius": "4px",
+          "font-size": "12px",
+          "font-weight": 600,
+        }}
+      >
+        Save
+      </button>
+    </div>
+  );
+}
+
+function jsonFor(rows: Row[], revealed: Record<string, boolean>): string {
+  const obj: Record<string, string> = {};
+  for (const { key, value } of rows) {
+    if (!key.trim()) continue;
+    obj[key] = isSecretKey(key) && !revealed[key] ? "•••••" : value;
+  }
+  return JSON.stringify(obj, null, 2);
+}
