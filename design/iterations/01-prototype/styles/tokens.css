@@ -1,0 +1,119 @@
+/* Journey — design tokens */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* surfaces — dark */
+  --bg-0: #0a0c0f;          /* app background */
+  --bg-1: #0f1216;          /* panel */
+  --bg-2: #141820;          /* elevated panel / row hover */
+  --bg-3: #1a1f28;          /* input / active row */
+  --bg-4: #222832;          /* selected */
+
+  /* borders */
+  --bd-1: #1c2128;          /* subtle */
+  --bd-2: #272e38;          /* standard */
+  --bd-3: #343c48;          /* strong */
+
+  /* text */
+  --fg-0: #f2f4f7;          /* primary */
+  --fg-1: #c8cdd5;          /* secondary */
+  --fg-2: #8892a0;          /* tertiary / meta */
+  --fg-3: #5a6372;          /* quaternary / placeholder */
+  --fg-4: #3b424d;          /* disabled */
+
+  /* accent — sharp amber */
+  --ac: oklch(0.78 0.16 75);
+  --ac-dim: oklch(0.68 0.14 75);
+  --ac-bg: oklch(0.78 0.16 75 / 0.12);
+  --ac-bd: oklch(0.78 0.16 75 / 0.35);
+
+  /* semantic */
+  --ok: oklch(0.74 0.15 155);       /* 2xx green */
+  --ok-bg: oklch(0.74 0.15 155 / 0.12);
+  --warn: oklch(0.78 0.15 75);      /* 3xx amber */
+  --warn-bg: oklch(0.78 0.15 75 / 0.12);
+  --err: oklch(0.68 0.2 25);        /* 5xx red */
+  --err-bg: oklch(0.68 0.2 25 / 0.12);
+  --info: oklch(0.72 0.13 230);     /* info blue */
+  --info-bg: oklch(0.72 0.13 230 / 0.12);
+
+  /* http methods */
+  --m-get: oklch(0.74 0.15 155);
+  --m-post: oklch(0.72 0.13 230);
+  --m-put: oklch(0.78 0.15 75);
+  --m-patch: oklch(0.75 0.14 300);
+  --m-del: oklch(0.68 0.2 25);
+
+  /* type */
+  --ff-sans: 'Geist', 'SF Pro Text', -apple-system, sans-serif;
+  --ff-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* rhythm */
+  --r-1: 3px;
+  --r-2: 5px;
+  --r-3: 8px;
+  --r-4: 12px;
+
+  /* sizes */
+  --row-dense: 28px;
+  --row-mid: 32px;
+  --row-comfy: 40px;
+  --sidebar-w: 232px;
+  --topbar-h: 46px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--ff-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+#root { height: 100vh; overflow: hidden; }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+input, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+input::placeholder, textarea::placeholder { color: var(--fg-3); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bd-2);
+  border-radius: 5px;
+  border: 2px solid var(--bg-0);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--bd-3); }
+
+.mono { font-family: var(--ff-mono); font-feature-settings: 'zero', 'ss02'; }
+
+/* focus */
+*:focus-visible { outline: 1px solid var(--ac); outline-offset: 1px; }
+
+/* utility */
+.hairline { background: var(--bd-1); }
+.no-select { user-select: none; }

@@ -1,0 +1,65 @@
+/* Journey — design tokens (ported from design/iterations/01-prototype/styles/tokens.css)
+ *
+ * See design/system/README.md for the full token scale documentation.
+ */
+
+:root {
+  /* surfaces — dark */
+  --bg-0: #0a0c0f;          /* app background */
+  --bg-1: #0f1216;          /* panel */
+  --bg-2: #141820;          /* elevated panel / row hover */
+  --bg-3: #1a1f28;          /* input / active row */
+  --bg-4: #222832;          /* selected */
+
+  /* borders */
+  --bd-1: #1c2128;          /* subtle */
+  --bd-2: #272e38;          /* standard */
+  --bd-3: #343c48;          /* strong */
+
+  /* text */
+  --fg-0: #f2f4f7;          /* primary */
+  --fg-1: #c8cdd5;          /* secondary */
+  --fg-2: #8892a0;          /* tertiary / meta */
+  --fg-3: #5a6372;          /* quaternary / placeholder */
+  --fg-4: #3b424d;          /* disabled */
+
+  /* accent — sharp amber (default; swap via --ac, --ac-dim, --ac-bg, --ac-bd) */
+  --ac: oklch(0.78 0.16 75);
+  --ac-dim: oklch(0.68 0.14 75);
+  --ac-bg: oklch(0.78 0.16 75 / 0.12);
+  --ac-bd: oklch(0.78 0.16 75 / 0.35);
+
+  /* semantic */
+  --ok: oklch(0.74 0.15 155);
+  --ok-bg: oklch(0.74 0.15 155 / 0.12);
+  --warn: oklch(0.78 0.15 75);
+  --warn-bg: oklch(0.78 0.15 75 / 0.12);
+  --err: oklch(0.68 0.2 25);
+  --err-bg: oklch(0.68 0.2 25 / 0.12);
+  --info: oklch(0.72 0.13 230);
+  --info-bg: oklch(0.72 0.13 230 / 0.12);
+
+  /* http methods */
+  --m-get: oklch(0.74 0.15 155);
+  --m-post: oklch(0.72 0.13 230);
+  --m-put: oklch(0.78 0.15 75);
+  --m-patch: oklch(0.75 0.14 300);
+  --m-del: oklch(0.68 0.2 25);
+
+  /* type */
+  --ff-sans: 'Geist', 'SF Pro Text', -apple-system, sans-serif;
+  --ff-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* radius */
+  --r-1: 3px;
+  --r-2: 5px;
+  --r-3: 8px;
+  --r-4: 12px;
+
+  /* sizes */
+  --row-dense: 28px;
+  --row-mid: 32px;
+  --row-comfy: 40px;
+  --sidebar-w: 232px;
+  --topbar-h: 46px;
+}

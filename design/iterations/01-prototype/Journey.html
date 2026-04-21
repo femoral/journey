@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Journey — API testing, local-first</title>
+<link rel="stylesheet" href="styles/tokens.css"/>
+<style>
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .route-wrap { animation: fadeIn 0.2s ease-out; height: 100%; min-height: 0; display: flex; }
+  .route-wrap > * { flex: 1; min-width: 0; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="components/icons.jsx"></script>
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/shell.jsx"></script>
+<script type="text/babel" src="components/pages.jsx"></script>
+<script type="text/babel" src="components/runner.jsx"></script>
+<script type="text/babel" src="components/editor.jsx"></script>
+<script type="text/babel" src="components/console.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "amber",
+  "density": "balanced",
+  "consolePosition": "bottom",
+  "sidebarStyle": "labeled"
+}/*EDITMODE-END*/;
+
+const ACCENT_PRESETS = {
+  amber:  { ac: 'oklch(0.78 0.16 75)',  text: '#1a1200' },
+  lime:   { ac: 'oklch(0.82 0.17 130)', text: '#0a1400' },
+  cyan:   { ac: 'oklch(0.78 0.12 200)', text: '#001418' },
+  violet: { ac: 'oklch(0.72 0.18 300)', text: '#0e0022' },
+};
+
+function App() {
+  const [route, setRoute] = useState(() => localStorage.getItem('jrn:route') || 'journeys');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [currentProjectName, setCurrentProject] = useState('ledger-api');
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleHeight, setConsoleHeight] = useState(300);
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [tweaksMode, setTweaksMode] = useState(false);
+
+  useEffect(() => localStorage.setItem('jrn:route', route), [route]);
+
+  // edit mode protocol
+  useEffect(() => {
+    const onMsg = (e) => {
+      const d = e.data;
+      if (!d || typeof d !== 'object') return;
+      if (d.type === '__activate_edit_mode') setTweaksMode(true);
+      else if (d.type === '__deactivate_edit_mode') setTweaksMode(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  // apply accent
+  useEffect(() => {
+    const p = ACCENT_PRESETS[tweaks.accent] || ACCENT_PRESETS.amber;
+    const root = document.documentElement;
+    root.style.setProperty('--ac', p.ac);
+    root.style.setProperty('--ac-dim', p.ac.replace('0.78', '0.68').replace('0.82', '0.72').replace('0.72', '0.62'));
+    root.style.setProperty('--ac-bg', p.ac.replace(')', ' / 0.12)'));
+    root.style.setProperty('--ac-bd', p.ac.replace(')', ' / 0.35)'));
+  }, [tweaks.accent]);
+
+  const setTweakKey = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  const project = PROJECTS.find(p => p.name === currentProjectName) || PROJECTS[0];
+  const counts = { endpoints: LEDGER_ENDPOINTS.length, journeys: LEDGER_JOURNEYS.length, envs: LEDGER_ENVS.length };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-0)' }}>
+      <TopBar
+        project={project}
+        onOpenSwitcher={() => setSwitcherOpen(true)}
+        onToggleConsole={() => setConsoleOpen(o => !o)}
+        consoleOpen={consoleOpen}
+        onOpenTweaks={() => setTweaksMode(m => !m)}
+      />
+      <ProjectSwitcher
+        open={switcherOpen}
+        onClose={() => setSwitcherOpen(false)}
+        projects={PROJECTS}
+        currentName={currentProjectName}
+        onSwitch={setCurrentProject}
+      />
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <Sidebar route={route} setRoute={setRoute} counts={counts}/>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <div className="route-wrap" key={route}>
+              {route === 'overview'     && <PageOverview onNavigate={setRoute} onRunJourney={() => { setRoute('journeys'); setConsoleOpen(true); }}/>}
+              {route === 'endpoints'    && <PageEndpoints onSendRequest={() => setConsoleOpen(true)} onSaveToJourney={() => setRoute('journeys')}/>}
+              {route === 'journeys'     && <PageJourneys onRunJourney={() => setConsoleOpen(true)} onOpenConsole={() => setConsoleOpen(true)}/>}
+              {route === 'editor'       && <PageEditor/>}
+              {route === 'files'        && <PageFiles/>}
+              {route === 'environments' && <PageEnvironments/>}
+              {!['overview','endpoints','journeys','editor','files','environments'].includes(route) && <PagePlaceholder route={route}/>}
+            </div>
+          </div>
+          <ConsoleDock
+            open={consoleOpen}
+            height={consoleHeight}
+            onSetHeight={setConsoleHeight}
+            onClose={() => setConsoleOpen(false)}
+          />
+        </div>
+      </div>
+
+      {tweaksMode && <TweaksPanel tweaks={tweaks} setTweakKey={setTweakKey} onClose={() => setTweaksMode(false)}/>}
+    </div>
+  );
+}
+
+function PagePlaceholder({ route }) {
+  const labels = {
+    editor: ['Editor', 'Drag-drop step list with inspector. Coming in this design pass.'],
+    files: ['Files', 'Project tree: journeys/, environments/, generated/.'],
+    environments: ['Environments', 'Tabular env editor with secret reveal.'],
+    diff: ['Spec diff', '2 endpoints drifted since last generate.'],
+    history: ['Run history', 'All runs across environments.'],
+    mock: ['Mock server', 'Stub endpoints for offline runs.'],
+  };
+  const [title, sub] = labels[route] || [route, ''];
+  return (
+    <div style={{ padding: '40px 32px', height: '100%', background: 'var(--bg-0)' }}>
+      <div style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Not in this pass</div>
+      <h1 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 6px' }}>{title}</h1>
+      <p style={{ color: 'var(--fg-2)', fontSize: 13, maxWidth: 480 }}>{sub}</p>
+      <div style={{ marginTop: 20, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', border: '1px solid var(--bd-1)', borderRadius: 5, fontSize: 12, color: 'var(--fg-3)' }}>
+        <IconLayers size={13}/> Shown in scope: Shell · Endpoints · Journey runner · Console
+      </div>
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, setTweakKey, onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', right: 16, bottom: 16, width: 280, zIndex: 80,
+      background: 'var(--bg-1)', border: '1px solid var(--bd-2)', borderRadius: 6,
+      boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid var(--bd-1)' }}>
+        <IconSettings size={12} style={{ color: 'var(--ac)', marginRight: 7 }}/>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>Tweaks</span>
+        <div style={{ flex: 1 }}/>
+        <button onClick={onClose} style={{ color: 'var(--fg-3)' }}><IconX size={12}/></button>
+      </div>
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TweakGroup label="Accent">
+          <div style={{ display: 'flex', gap: 6 }}>
+            {Object.entries(ACCENT_PRESETS).map(([k, p]) => (
+              <button key={k} onClick={() => setTweakKey('accent', k)} title={k} style={{
+                width: 28, height: 28, borderRadius: 4,
+                background: p.ac,
+                border: tweaks.accent === k ? '2px solid var(--fg-0)' : '2px solid transparent',
+                outline: tweaks.accent === k ? '1px solid var(--bd-2)' : 'none',
+              }}/>
+            ))}
+          </div>
+        </TweakGroup>
+        <TweakGroup label="Density">
+          <SegBtn options={['compact', 'balanced', 'comfortable']} value={tweaks.density} onChange={v => setTweakKey('density', v)}/>
+        </TweakGroup>
+        <TweakGroup label="Console position">
+          <SegBtn options={['bottom', 'right', 'modal']} value={tweaks.consolePosition} onChange={v => setTweakKey('consolePosition', v)}/>
+        </TweakGroup>
+        <TweakGroup label="Sidebar">
+          <SegBtn options={['icons', 'labeled']} value={tweaks.sidebarStyle} onChange={v => setTweakKey('sidebarStyle', v)}/>
+        </TweakGroup>
+      </div>
+    </div>
+  );
+}
+
+function TweakGroup({ label, children }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function SegBtn({ options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, background: 'var(--bg-2)', padding: 2, borderRadius: 4 }}>
+      {options.map(o => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          flex: 1, padding: '4px 8px', fontSize: 11, borderRadius: 3,
+          background: value === o ? 'var(--bg-0)' : 'transparent',
+          color: value === o ? 'var(--fg-0)' : 'var(--fg-2)',
+          border: value === o ? '1px solid var(--bd-2)' : '1px solid transparent',
+          textTransform: 'capitalize',
+        }}>{o}</button>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
