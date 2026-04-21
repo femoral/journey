@@ -3,8 +3,8 @@ import type { JSX } from "solid-js";
 export type StatProps = {
   label: string;
   value: JSX.Element;
-  sub?: JSX.Element;
-  valueColor?: string;
+  sub?: JSX.Element | undefined;
+  valueColor?: string | undefined;
 };
 
 export function Stat(props: StatProps): JSX.Element {

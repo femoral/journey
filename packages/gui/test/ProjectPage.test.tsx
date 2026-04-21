@@ -1,31 +1,112 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@solidjs/testing-library";
+import { Router, Route } from "@solidjs/router";
 import { ProjectPage } from "../src/pages/ProjectPage";
-import type { ProjectSummary } from "../src/api/client";
+import type { ProjectSummary, RunSummary } from "../src/api/client";
 
 const summary: ProjectSummary = {
   projectDir: "/tmp/demo",
-  config: { name: "demo", spec: "openapi.yaml", baseUrl: "https://api.example.com" },
+  config: {
+    name: "demo",
+    spec: "openapi.yaml",
+    baseUrl: "https://api.example.com",
+    defaultEnvironment: "local",
+  },
   counts: { journeys: 1, environments: 2, endpoints: 3 },
 };
 
+const now = new Date("2026-04-21T08:00:00Z").getTime();
+const runs: RunSummary[] = [
+  {
+    id: "r1",
+    timestamp: new Date(now - 2 * 60_000).toISOString(),
+    journeyNames: ["checkout.journey.ts"],
+    ok: true,
+  },
+  {
+    id: "r2",
+    timestamp: new Date(now - 2 * 60 * 60_000).toISOString(),
+    journeyNames: ["signup.journey.ts", "extra.journey.ts"],
+    ok: false,
+  },
+];
+
+function stubFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/project")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(summary), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (url.includes("/api/runs")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(runs), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("{}", { status: 404 }));
+    }) as typeof fetch,
+  );
+}
+
+function renderInRouter() {
+  return render(() => (
+    <Router>
+      <Route path="*" component={ProjectPage} />
+    </Router>
+  ));
+}
+
 describe("ProjectPage", () => {
-  it("renders counts and config from the API", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(summary), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
-    );
-    render(() => <ProjectPage />);
+  beforeEach(() => {
+    vi.setSystemTime(now);
+    stubFetch();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders project name, counts, and recent runs", async () => {
+    renderInRouter();
     await waitFor(() => {
       expect(screen.getByTestId("project-name").textContent).toBe("demo");
     });
     expect(screen.getByTestId("endpoint-count").textContent).toBe("3");
-    vi.unstubAllGlobals();
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("recent-run-row").length).toBe(2);
+    });
+    expect(screen.getByText("checkout.journey.ts")).toBeDefined();
+    expect(screen.getByText("+1")).toBeDefined();
   });
 
+  it("shows empty-state when there are no runs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/project")) {
+          return Promise.resolve(
+            new Response(JSON.stringify(summary), { status: 200 }),
+          );
+        }
+        return Promise.resolve(
+          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+        );
+      }) as typeof fetch,
+    );
+    renderInRouter();
+    await waitFor(() => {
+      expect(screen.getByText("No runs yet.")).toBeDefined();
+    });
+  });
 });
