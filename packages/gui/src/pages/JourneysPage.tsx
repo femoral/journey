@@ -4,6 +4,7 @@ import {
   createMemo,
   createResource,
   createSignal,
+  onCleanup,
   type Component,
   type JSX,
 } from "solid-js";
@@ -14,6 +15,8 @@ import {
   type RunSummary,
   type StepResult,
 } from "../api/client";
+import { runEvents } from "../api/runEvents";
+import { useConsole } from "../shell/consoleContext";
 import { JsonDiff } from "../components/JsonDiff";
 import {
   IconCheck,
@@ -40,6 +43,7 @@ import {
 type UiRunState = "idle" | "running" | "done";
 
 export const JourneysPage: Component = () => {
+  const cons = useConsole();
   const [list, { refetch: refetchList }] = createResource(api.getJourneys);
   const [selected, setSelected] = createSignal<string | undefined>(undefined);
   const [results, setResults] = createSignal<JourneyResult[] | undefined>(undefined);
@@ -52,6 +56,10 @@ export const JourneysPage: Component = () => {
   const [diffB, setDiffB] = createSignal<RunDetail | undefined>(undefined);
   const [diffStep, setDiffStep] = createSignal<number>(0);
   const [showDiff, setShowDiff] = createSignal(false);
+
+  // Active SSE subscription — aborted on unmount or on a fresh run kickoff.
+  let activeSub: { close: () => void } | undefined;
+  onCleanup(() => activeSub?.close());
 
   const filteredFiles = createMemo(() => {
     const q = filter().toLowerCase();
@@ -82,12 +90,73 @@ export const JourneysPage: Component = () => {
     setRunState("running");
     setError(undefined);
     setResults(undefined);
+    activeSub?.close();
+
+    // Local scratch updated from SSE events; copied to the results signal on
+    // every mutation so the step timeline rerenders as steps complete.
+    const liveSteps: StepResult[] = [];
+    let journeyName = file.replace(/\.journey\.ts$/, "");
+    const publish = (ok: boolean, durationMs: number) => {
+      setResults([
+        {
+          name: journeyName,
+          ok,
+          steps: liveSteps.map((s) => ({ ...s })),
+          durationMs,
+        },
+      ]);
+    };
+
     try {
-      const res = await api.runJourney(file);
-      setResults(res.results);
-      setRunState("done");
-      await refetchRuns();
-      await refetchList();
+      const { runId } = await api.startJourneyRun(file);
+      activeSub = runEvents.subscribe(runId, (event) => {
+        cons.ingest(event);
+        switch (event.kind) {
+          case "step:start":
+            journeyName = event.journeyName;
+            liveSteps.push({ name: event.name, ok: false, durationMs: 0 });
+            publish(false, 0);
+            break;
+          case "request": {
+            const s = liveSteps[event.stepIdx];
+            if (s) s.request = { method: event.method, url: event.url };
+            publish(false, 0);
+            break;
+          }
+          case "response": {
+            const s = liveSteps[event.stepIdx];
+            if (s)
+              s.response = {
+                status: event.status,
+                headers: event.headers,
+                body: event.body,
+              };
+            publish(false, 0);
+            break;
+          }
+          case "step:end": {
+            const s = liveSteps[event.stepIdx];
+            if (s) {
+              s.ok = event.ok;
+              s.durationMs = event.durationMs;
+              if (event.error !== undefined) s.error = event.error;
+            }
+            publish(false, 0);
+            break;
+          }
+          case "run:end":
+            publish(event.ok, event.durationMs);
+            setRunState("done");
+            activeSub?.close();
+            activeSub = undefined;
+            void refetchRuns();
+            void refetchList();
+            break;
+          case "error":
+            setError(event.message);
+            break;
+        }
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRunState("idle");

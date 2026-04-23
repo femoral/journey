@@ -89,7 +89,13 @@ export interface JourneyResult {
 }
 
 export interface RunJourneyResponse {
+  runId: string;
   results: JourneyResult[];
+}
+
+/** Streaming start — server returns immediately with the allocated runId. */
+export interface StartJourneyRunResponse {
+  runId: string;
 }
 
 export interface Environment {
@@ -131,6 +137,17 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(env ? { env } : {}),
+    }),
+  /**
+   * Non-blocking run kickoff. Server returns 202 with the allocated runId
+   * immediately; subscribe to /api/runs/:runId/events (via runEvents.ts) to
+   * receive live step events. Use with the console store for streaming UX.
+   */
+  startJourneyRun: (file: string, env?: string) =>
+    req<StartJourneyRunResponse>(`/api/journeys/${encodeURIComponent(file)}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ stream: true, ...(env ? { env } : {}) }),
     }),
   getEnvironments: () => req<EnvironmentsResponse>("/api/environments"),
   saveEnvironment: (name: string, values: Record<string, string>) =>

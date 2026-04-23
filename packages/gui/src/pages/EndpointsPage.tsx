@@ -13,6 +13,7 @@ import {
   type ParameterInfo,
   type ProxyResponse,
 } from "../api/client";
+import { useConsole } from "../shell/consoleContext";
 import {
   Field,
   IconCopy,
@@ -31,6 +32,7 @@ type ConfigTab = "params" | "headers" | "auth" | "body" | "scripts" | "docs";
 type ParamRow = { name: string; enabled: boolean; value: string; info: ParameterInfo };
 
 export const EndpointsPage: Component = () => {
+  const cons = useConsole();
   const [list] = createResource(api.getEndpoints);
   const [selected, setSelected] = createSignal<EndpointSummary | undefined>(undefined);
   const [filter, setFilter] = createSignal("");
@@ -100,13 +102,55 @@ export const EndpointsPage: Component = () => {
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
         .join("&");
       const url = `${base}${path}${query ? `?${query}` : ""}`;
-      const res = await api.sendRequest({
+      // Synthesize a one-step run in the console so Endpoints "Send" traffic
+      // lives in the same ledger as journey-run traffic.
+      const runId = `oneoff-${Date.now()}`;
+      cons.ingestSynthetic({
+        runId,
+        stepIdx: 0,
+        stepName: ep.name,
         method: ep.method,
         url,
-        headers: headerObj,
-        ...(bodyVal !== undefined ? { body: bodyVal } : {}),
+        requestHeaders: headerObj,
+        ...(bodyVal !== undefined ? { requestBody: bodyVal } : {}),
+        state: "running",
       });
-      setResponse(res);
+      try {
+        const res = await api.sendRequest({
+          method: ep.method,
+          url,
+          headers: headerObj,
+          ...(bodyVal !== undefined ? { body: bodyVal } : {}),
+        });
+        setResponse(res);
+        cons.ingestSynthetic({
+          runId,
+          stepIdx: 0,
+          stepName: ep.name,
+          method: ep.method,
+          url,
+          requestHeaders: headerObj,
+          ...(bodyVal !== undefined ? { requestBody: bodyVal } : {}),
+          status: res.status,
+          durationMs: res.durationMs,
+          responseHeaders: res.headers,
+          responseBody: res.body,
+          state: res.status >= 200 && res.status < 400 ? "pass" : "fail",
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        cons.ingestSynthetic({
+          runId,
+          stepIdx: 0,
+          stepName: ep.name,
+          method: ep.method,
+          url,
+          requestHeaders: headerObj,
+          state: "fail",
+          error: msg,
+        });
+        throw e;
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
