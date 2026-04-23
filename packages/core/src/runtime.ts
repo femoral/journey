@@ -4,6 +4,12 @@ import { buildRequest, execute, type HttpContext, type HttpResponse } from "./ht
 /** Caller-supplied run metadata. runId is forwarded to every lifecycle event. */
 export interface RunMeta {
   runId?: string;
+  /**
+   * Absolute (monotonic across journey boundaries) stepIdx to stop after. The
+   * run still emits `run:end` cleanly; journeys/steps past this index are not
+   * collected or executed. Use for "run only up to this step" in the GUI.
+   */
+  upToStepIdx?: number;
 }
 
 type Lazy<T> = T | (() => T | Promise<T>);
@@ -93,7 +99,12 @@ async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
 export async function runJourney(
   def: JourneyDef,
   ctx: HttpContext,
-  opts: { runId?: string; journeyIdx?: number; stepIdxOffset?: number } = {},
+  opts: {
+    runId?: string;
+    journeyIdx?: number;
+    stepIdxOffset?: number;
+    upToStepIdx?: number;
+  } = {},
 ): Promise<JourneyResult> {
   const steps: StepDef[] = [];
   const prev = state.collecting;
@@ -115,6 +126,7 @@ export async function runJourney(
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i]!;
     const stepIdx = stepIdxOffset + i;
+    if (opts.upToStepIdx !== undefined && stepIdx > opts.upToStepIdx) break;
     const start = Date.now();
     ctx.logger?.onStepStart?.({
       runId,
@@ -192,10 +204,17 @@ export async function runAllRegistered(
   let stepIdxOffset = 0;
   for (let journeyIdx = 0; journeyIdx < defs.length; journeyIdx++) {
     const def = defs[journeyIdx]!;
-    const result = await runJourney(def, ctx, { runId, journeyIdx, stepIdxOffset });
+    const result = await runJourney(def, ctx, {
+      runId,
+      journeyIdx,
+      stepIdxOffset,
+      ...(opts.upToStepIdx !== undefined ? { upToStepIdx: opts.upToStepIdx } : {}),
+    });
     results.push(result);
     if (!result.ok) ok = false;
     stepIdxOffset += result.steps.length;
+    // Early-exit once the caller-requested cap is reached.
+    if (opts.upToStepIdx !== undefined && stepIdxOffset > opts.upToStepIdx) break;
   }
   ctx.logger?.onRunEnd?.({
     runId,

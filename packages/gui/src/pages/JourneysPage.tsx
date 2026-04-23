@@ -16,6 +16,7 @@ import {
   type StepResult,
 } from "../api/client";
 import { runEvents } from "../api/runEvents";
+import { useNavigate } from "@solidjs/router";
 import { useConsole } from "../shell/consoleContext";
 import { JsonDiff } from "../components/JsonDiff";
 import {
@@ -44,6 +45,7 @@ type UiRunState = "idle" | "running" | "done";
 
 export const JourneysPage: Component = () => {
   const cons = useConsole();
+  const navigate = useNavigate();
   const [list, { refetch: refetchList }] = createResource(api.getJourneys);
   const [selected, setSelected] = createSignal<string | undefined>(undefined);
   const [results, setResults] = createSignal<JourneyResult[] | undefined>(undefined);
@@ -84,7 +86,7 @@ export const JourneysPage: Component = () => {
     setShowDiff(false);
   };
 
-  const run = async () => {
+  const run = async (opts: { upToStepIdx?: number } = {}) => {
     const file = selected();
     if (!file) return;
     setRunState("running");
@@ -108,7 +110,7 @@ export const JourneysPage: Component = () => {
     };
 
     try {
-      const { runId } = await api.startJourneyRun(file);
+      const { runId } = await api.startJourneyRun(file, opts);
       activeSub = runEvents.subscribe(runId, (event) => {
         cons.ingest(event);
         switch (event.kind) {
@@ -322,6 +324,13 @@ export const JourneysPage: Component = () => {
                   <StepTimeline
                     runState={runState()}
                     results={results()}
+                    onRunOnly={(stepIdx) => void run({ upToStepIdx: stepIdx })}
+                    onSendViaEndpoints={(step) => {
+                      if (!step.request) return;
+                      navigate(
+                        `/endpoints?method=${encodeURIComponent(step.request.method)}&url=${encodeURIComponent(step.request.url)}`,
+                      );
+                    }}
                   />
                   <RunHistoryPanel
                     runs={runsForSelected()}
@@ -557,6 +566,8 @@ function JourneyHeader(props: {
 function StepTimeline(props: {
   runState: UiRunState;
   results: JourneyResult[] | undefined;
+  onRunOnly: (stepIdx: number) => void;
+  onSendViaEndpoints: (step: StepResult) => void;
 }): JSX.Element {
   const allSteps = createMemo<StepResult[]>(() => {
     const rs = props.results ?? [];
@@ -633,7 +644,13 @@ function StepTimeline(props: {
           />
           <For each={allSteps()}>
             {(step, i) => (
-              <StepCard step={step} index={i()} defaultExpanded={!step.ok} />
+              <StepCard
+                step={step}
+                index={i()}
+                defaultExpanded={!step.ok}
+                onRunOnly={() => props.onRunOnly(i())}
+                onSendViaEndpoints={() => props.onSendViaEndpoints(step)}
+              />
             )}
           </For>
         </div>
@@ -646,6 +663,8 @@ function StepCard(props: {
   step: StepResult;
   index: number;
   defaultExpanded: boolean;
+  onRunOnly: () => void;
+  onSendViaEndpoints: () => void;
 }): JSX.Element {
   const [expanded, setExpanded] = createSignal(props.defaultExpanded);
   const state = (): RunState => (props.step.ok ? "pass" : "fail");
@@ -751,7 +770,11 @@ function StepCard(props: {
           />
         </button>
         <Show when={expanded()}>
-          <StepDetail step={props.step} />
+          <StepDetail
+            step={props.step}
+            onRunOnly={props.onRunOnly}
+            onSendViaEndpoints={props.onSendViaEndpoints}
+          />
         </Show>
       </div>
     </div>
@@ -824,7 +847,11 @@ function StepIcon(props: { state: RunState; index: number }): JSX.Element {
 
 type DetailTab = "request" | "response" | "logs";
 
-function StepDetail(props: { step: StepResult }): JSX.Element {
+function StepDetail(props: {
+  step: StepResult;
+  onRunOnly: () => void;
+  onSendViaEndpoints: () => void;
+}): JSX.Element {
   const [tab, setTab] = createSignal<DetailTab>(
     props.step.ok ? "response" : "response",
   );
@@ -879,8 +906,14 @@ function StepDetail(props: { step: StepResult }): JSX.Element {
         </Show>
         <div style={{ flex: 1 }} />
         <button
-          disabled
-          title="Copy as cURL (M5)"
+          type="button"
+          data-testid={`step-copy-curl-${props.step.name}`}
+          onClick={() => {
+            if (!props.step.request) return;
+            const text = `curl -X ${props.step.request.method} '${props.step.request.url}'`;
+            void navigator.clipboard.writeText(text).catch(() => {});
+          }}
+          title="Copy as cURL (method + URL only; full curl on Console rows)"
           style={{
             padding: "4px 8px",
             "font-size": "11px",
@@ -888,15 +921,15 @@ function StepDetail(props: { step: StepResult }): JSX.Element {
             display: "flex",
             "align-items": "center",
             gap: "4px",
-            opacity: 0.5,
-            cursor: "not-allowed",
           }}
         >
           <IconCopy size={10} /> curl
         </button>
         <button
-          disabled
-          title="Run only this step (M5)"
+          type="button"
+          data-testid={`step-run-only-${props.step.name}`}
+          onClick={props.onRunOnly}
+          title="Rerun the journey up to and including this step"
           style={{
             padding: "4px 8px",
             "font-size": "11px",
@@ -904,15 +937,16 @@ function StepDetail(props: { step: StepResult }): JSX.Element {
             display: "flex",
             "align-items": "center",
             gap: "4px",
-            opacity: 0.5,
-            cursor: "not-allowed",
           }}
         >
           <IconPlay size={10} /> Run only
         </button>
         <button
-          disabled
-          title="Send via Endpoints (M5)"
+          type="button"
+          data-testid={`step-send-endpoints-${props.step.name}`}
+          onClick={props.onSendViaEndpoints}
+          disabled={!props.step.request}
+          title="Open this request in the Endpoints page"
           style={{
             padding: "4px 8px",
             "font-size": "11px",
@@ -920,8 +954,8 @@ function StepDetail(props: { step: StepResult }): JSX.Element {
             display: "flex",
             "align-items": "center",
             gap: "4px",
-            opacity: 0.5,
-            cursor: "not-allowed",
+            opacity: props.step.request ? 1 : 0.5,
+            cursor: props.step.request ? "pointer" : "not-allowed",
           }}
         >
           <IconEndpoints size={10} /> Endpoints

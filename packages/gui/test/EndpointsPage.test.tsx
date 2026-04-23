@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { Router, Route } from "@solidjs/router";
 import { EndpointsPage } from "../src/pages/EndpointsPage";
 import { ConsoleContext } from "../src/shell/consoleContext";
 import { createConsoleStore } from "../src/shell/consoleStore";
@@ -56,7 +57,9 @@ describe("EndpointsPage", () => {
     const store = createConsoleStore();
     render(() => (
       <ConsoleContext.Provider value={store}>
-        <EndpointsPage />
+        <Router>
+          <Route path="*" component={EndpointsPage} />
+        </Router>
       </ConsoleContext.Provider>
     ));
     const row = await waitFor(() => screen.getByTestId("endpoint-row-findPetsByStatus"));

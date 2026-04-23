@@ -32,6 +32,8 @@ export interface RunJourneyFileOptions {
   logger?: JourneyLogger;
   /** Forwarded to runAllRegistered so lifecycle events carry this runId. */
   runId?: string;
+  /** Stop after the Nth absolute step (across journey boundaries). */
+  upToStepIdx?: number;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -58,10 +60,12 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
   let results;
   try {
-    results = await runAllRegistered(
-      ctx,
-      opts.runId !== undefined ? { runId: opts.runId } : {},
-    );
+    results = await runAllRegistered(ctx, {
+      ...(opts.runId !== undefined ? { runId: opts.runId } : {}),
+      ...(opts.upToStepIdx !== undefined
+        ? { upToStepIdx: opts.upToStepIdx }
+        : {}),
+    });
   } finally {
     unpatchConsole();
   }

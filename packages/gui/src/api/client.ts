@@ -144,12 +144,24 @@ export const api = {
    * Non-blocking run kickoff. Server returns 202 with the allocated runId
    * immediately; subscribe to /api/runs/:runId/events (via runEvents.ts) to
    * receive live step events. Use with the console store for streaming UX.
+   *
+   * Pass `upToStepIdx` to stop after the Nth absolute step — used by the
+   * "Run only this step" affordance in the Journeys timeline.
    */
-  startJourneyRun: (file: string, env?: string) =>
+  startJourneyRun: (
+    file: string,
+    opts: { env?: string; upToStepIdx?: number } = {},
+  ) =>
     req<StartJourneyRunResponse>(`/api/journeys/${encodeURIComponent(file)}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ stream: true, ...(env ? { env } : {}) }),
+      body: JSON.stringify({
+        stream: true,
+        ...(opts.env !== undefined ? { env: opts.env } : {}),
+        ...(opts.upToStepIdx !== undefined
+          ? { upToStepIdx: opts.upToStepIdx }
+          : {}),
+      }),
     }),
   getEnvironments: () => req<EnvironmentsResponse>("/api/environments"),
   saveEnvironment: (name: string, values: Record<string, string>) =>

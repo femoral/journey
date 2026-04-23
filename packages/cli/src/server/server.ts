@@ -407,6 +407,7 @@ async function route(
       const body = ((await readRequestBody(req)) ?? {}) as {
         env?: string;
         stream?: boolean;
+        upToStepIdx?: number;
       };
       const loaded = await loadConfig(projectDir);
       const { journeysDir, environmentsDir } = resolveConfigPaths(loaded);
@@ -420,6 +421,9 @@ async function route(
         runId,
         logger: broadcaster.toLogger(),
         ...(body.env !== undefined ? { env: body.env } : {}),
+        ...(typeof body.upToStepIdx === "number"
+          ? { upToStepIdx: body.upToStepIdx }
+          : {}),
         ...(debug ? { debug: true } : {}),
       });
       if (body.stream) {

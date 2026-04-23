@@ -13,6 +13,8 @@ import {
   type ParameterInfo,
   type ProxyResponse,
 } from "../api/client";
+import { useSearchParams } from "@solidjs/router";
+import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
 import {
   Field,
@@ -35,6 +37,7 @@ type ParamRow = { name: string; enabled: boolean; value: string; info: Parameter
 
 export const EndpointsPage: Component = () => {
   const cons = useConsole();
+  const [params] = useSearchParams<{ method?: string; url?: string }>();
   const [list] = createResource(api.getEndpoints);
   const [selected, setSelected] = createSignal<EndpointSummary | undefined>(undefined);
   const [filter, setFilter] = createSignal("");
@@ -48,6 +51,24 @@ export const EndpointsPage: Component = () => {
   const [response, setResponse] = createSignal<ProxyResponse | undefined>(undefined);
   const [error, setError] = createSignal<string | undefined>(undefined);
   const [busy, setBusy] = createSignal(false);
+
+  // "Send via Endpoints" from the Journeys step card deep-links with method +
+  // url params; match an endpoint whose (method, base+path) matches and select
+  // it. Falls back silently if no match is found (the user can still pick one).
+  let appliedDeepLink = false;
+  createEffect(() => {
+    if (appliedDeepLink) return;
+    const m = params.method;
+    const u = params.url;
+    const l = list();
+    if (!m || !u || !l) return;
+    appliedDeepLink = true;
+    const base = l.baseUrl?.replace(/\/$/, "") ?? "";
+    const ep = l.endpoints.find(
+      (e) => e.method.toUpperCase() === m.toUpperCase() && matchesUrl(u, base, e.path),
+    );
+    if (ep) pickEndpoint(ep);
+  });
 
   const groups = createMemo(() => {
     const endpoints = list()?.endpoints ?? [];
@@ -1135,6 +1156,20 @@ function Placeholder(props: { label: string }): JSX.Element {
       {props.label}
     </div>
   );
+}
+
+/**
+ * Does the resolved URL from a past run match the (baseUrl + templated path)
+ * of an endpoint? We treat each `{param}` in the template as a greedy-but-
+ * segment-bounded wildcard (no slashes), which handles the common cases.
+ */
+function matchesUrl(fullUrl: string, baseUrl: string, pathTemplate: string): boolean {
+  const expected = `${baseUrl}${pathTemplate}`;
+  if (fullUrl === expected) return true;
+  const escaped = expected.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  const pattern = escaped.replace(/\\\{[^}]+\\\}/g, "[^/]+");
+  // Allow trailing query string on the captured URL.
+  return new RegExp(`^${pattern}(?:\\?.*)?$`).test(fullUrl);
 }
 
 function interpolate(path: string, params: Record<string, string>): string {

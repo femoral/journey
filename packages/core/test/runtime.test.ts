@@ -153,6 +153,28 @@ describe("runtime", () => {
     expect(starts).toEqual([0, 1, 2]);
   });
 
+  it("stops after upToStepIdx even when more steps are registered", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    journey("three-step", () => {
+      step("a", { endpoint: { method: "GET", path: "/a", operationId: "a" } });
+      step("b", { endpoint: { method: "GET", path: "/b", operationId: "b" } });
+      step("c", { endpoint: { method: "GET", path: "/c", operationId: "c" } });
+    });
+
+    const [result] = await runAllRegistered(
+      { baseUrl: "https://x", fetchImpl },
+      { upToStepIdx: 1 },
+    );
+    expect(result!.steps.map((s) => s.name)).toEqual(["a", "b"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("halts on first failing step", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: false }), {

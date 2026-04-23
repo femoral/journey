@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { Router, Route } from "@solidjs/router";
 import { JourneysPage } from "../src/pages/JourneysPage";
 import { ConsoleContext } from "../src/shell/consoleContext";
 import { createConsoleStore } from "../src/shell/consoleStore";
@@ -97,7 +98,9 @@ function renderWithConsole() {
     store,
     result: render(() => (
       <ConsoleContext.Provider value={store}>
-        <JourneysPage />
+        <Router>
+          <Route path="*" component={JourneysPage} />
+        </Router>
       </ConsoleContext.Provider>
     )),
   };
