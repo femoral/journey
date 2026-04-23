@@ -250,6 +250,47 @@ journey("smoke", () => {
     }
   });
 
+  it("reports spec drift and regenerates on POST /api/generate", async () => {
+    type Drift = {
+      added: Array<{ method: string; path: string; operationId: string }>;
+      removed: Array<{ method: string; path: string; operationId: string }>;
+      count: number;
+      hasGenerated: boolean;
+      hasSpec: boolean;
+    };
+
+    // Fixture: spec has getPet + listPets, generated/endpoints.ts has getPet +
+    // deletePet. So listPets is added-in-spec, deletePet is removed-from-spec.
+    const generatedEndpoints = `// AUTO-GENERATED
+import type { EndpointRef } from "@journey/core";
+export const endpoints = {
+  getPet: { method: "GET", path: "/pets/{id}", operationId: "getPet" } as unknown as EndpointRef<unknown>,
+  deletePet: { method: "DELETE", path: "/pets/{id}", operationId: "deletePet" } as unknown as EndpointRef<unknown>,
+} as const;
+`;
+    const { writeFile: wf } = await import("node:fs/promises");
+    await wf(join(projectDir, "generated", "endpoints.ts"), generatedEndpoints);
+
+    const drift = (await (await fetch(`${srv.url}/api/spec/drift`)).json()) as Drift;
+    expect(drift.hasSpec).toBe(true);
+    expect(drift.hasGenerated).toBe(true);
+    expect(drift.added.map((e) => `${e.method} ${e.path}`).sort()).toEqual([
+      "GET /pets",
+    ]);
+    expect(drift.removed.map((e) => `${e.method} ${e.path}`).sort()).toEqual([
+      "DELETE /pets/{id}",
+    ]);
+    expect(drift.count).toBe(2);
+
+    const regen = await fetch(`${srv.url}/api/generate`, { method: "POST" });
+    expect(regen.status).toBe(200);
+    const regenBody = (await regen.json()) as { operationCount: number };
+    expect(regenBody.operationCount).toBe(2);
+
+    const afterDrift = (await (await fetch(`${srv.url}/api/spec/drift`)).json()) as Drift;
+    expect(afterDrift.count).toBe(0);
+  });
+
   it("proxies a request and returns status + body", async () => {
     // Stand up a throwaway target server.
     const { createServer } = await import("node:http");

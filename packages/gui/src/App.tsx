@@ -1,5 +1,6 @@
 import { Router, Route } from "@solidjs/router";
 import type { Component } from "solid-js";
+import { DiffPage } from "./pages/DiffPage";
 import { EndpointsPage } from "./pages/EndpointsPage";
 import { EnvironmentsPage } from "./pages/EnvironmentsPage";
 import { FilesPage } from "./pages/FilesPage";
@@ -16,5 +17,6 @@ export const App: Component = () => (
     <Route path="/journeys" component={JourneysPage} />
     <Route path="/environments" component={EnvironmentsPage} />
     <Route path="/editor" component={JourneyEditorPage} />
+    <Route path="/diff" component={DiffPage} />
   </Router>
 );

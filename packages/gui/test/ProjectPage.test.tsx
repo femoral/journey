@@ -52,6 +52,20 @@ function stubFetch() {
           }),
         );
       }
+      if (url.includes("/api/spec/drift")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              added: [],
+              removed: [],
+              count: 0,
+              hasGenerated: true,
+              hasSpec: true,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }
       return Promise.resolve(new Response("{}", { status: 404 }));
     }) as typeof fetch,
   );
@@ -97,6 +111,20 @@ describe("ProjectPage", () => {
         if (url.includes("/api/project")) {
           return Promise.resolve(
             new Response(JSON.stringify(summary), { status: 200 }),
+          );
+        }
+        if (url.includes("/api/spec/drift")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                added: [],
+                removed: [],
+                count: 0,
+                hasGenerated: true,
+                hasSpec: true,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
           );
         }
         return Promise.resolve(

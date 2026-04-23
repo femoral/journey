@@ -7,7 +7,12 @@ import {
   type Component,
 } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { api, type ProjectSummary, type RunSummary } from "../api/client";
+import {
+  api,
+  type DriftEndpoint,
+  type ProjectSummary,
+  type RunSummary,
+} from "../api/client";
 import {
   DriftRow,
   IconChevron,
@@ -26,6 +31,7 @@ export const ProjectPage: Component = () => {
   const navigate = useNavigate();
   const [project] = createResource(api.getProject);
   const [runs] = createResource(api.listRuns);
+  const [drift] = createResource(api.getSpecDrift);
 
   const recentRuns = createMemo(() => (runs() ?? []).slice(0, 6));
   const last24h = createMemo(() => {
@@ -228,20 +234,99 @@ export const ProjectPage: Component = () => {
                     </div>
                   </Panel>
 
-                  <Panel title="Spec drift" badge="soon">
-                    <div
-                      style={{
-                        padding: "2px 12px 10px",
-                        opacity: 0.7,
-                        "pointer-events": "none",
-                      }}
-                    >
-                      <DriftRow
-                        method="POST"
-                        path="—"
-                        change="drift detection"
-                        detail="ships in M5a"
-                      />
+                  <Panel
+                    title="Spec drift"
+                    badge={
+                      drift()?.count ? String(drift()!.count) : undefined
+                    }
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => navigate("/diff")}
+                        style={{
+                          color: "var(--fg-2)",
+                          "font-size": "12px",
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "3px",
+                        }}
+                      >
+                        View all <IconChevron size={10} />
+                      </button>
+                    }
+                  >
+                    <div style={{ padding: "2px 12px 10px" }}>
+                      <Show
+                        when={drift()}
+                        fallback={
+                          <div
+                            style={{
+                              padding: "6px 0",
+                              "font-size": "11px",
+                              color: "var(--fg-3)",
+                            }}
+                          >
+                            Checking drift…
+                          </div>
+                        }
+                      >
+                        {(d) => (
+                          <Show
+                            when={d().count > 0}
+                            fallback={
+                              <div
+                                style={{
+                                  padding: "6px 0",
+                                  "font-size": "11px",
+                                  color: "var(--fg-3)",
+                                }}
+                              >
+                                In sync with generated/endpoints.ts.
+                              </div>
+                            }
+                          >
+                            <For
+                              each={[
+                                ...d().added.slice(0, 3).map(
+                                  (e: DriftEndpoint) => ({
+                                    e,
+                                    change: "+ added in spec",
+                                  }),
+                                ),
+                                ...d().removed.slice(0, 3).map(
+                                  (e: DriftEndpoint) => ({
+                                    e,
+                                    change: "− removed from spec",
+                                  }),
+                                ),
+                              ].slice(0, 4)}
+                            >
+                              {({ e, change }) => (
+                                <DriftRow
+                                  method={e.method}
+                                  path={e.path}
+                                  change={change}
+                                  detail={e.operationId}
+                                />
+                              )}
+                            </For>
+                            <button
+                              onClick={() => navigate("/diff")}
+                              style={{
+                                "margin-top": "6px",
+                                "font-size": "11px",
+                                color: "var(--ac)",
+                                display: "flex",
+                                "align-items": "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <IconRefresh size={11} /> Run{" "}
+                              <span class="mono">journey generate</span>
+                            </button>
+                          </Show>
+                        )}
+                      </Show>
                     </div>
                   </Panel>
                 </div>

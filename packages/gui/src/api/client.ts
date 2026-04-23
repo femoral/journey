@@ -174,4 +174,24 @@ export const api = {
     }),
   listRuns: () => req<RunSummary[]>("/api/runs"),
   getRun: (id: string) => req<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
+  getSpecDrift: () => req<SpecDrift>("/api/spec/drift"),
+  regenerate: () =>
+    req<{ operationCount: number; modelsPath: string; endpointsPath: string }>(
+      "/api/generate",
+      { method: "POST" },
+    ),
 };
+
+export interface DriftEndpoint {
+  method: string;
+  path: string;
+  operationId: string;
+}
+
+export interface SpecDrift {
+  added: DriftEndpoint[];
+  removed: DriftEndpoint[];
+  hasGenerated: boolean;
+  hasSpec: boolean;
+  count: number;
+}

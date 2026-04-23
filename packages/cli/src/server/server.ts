@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { listRuns, loadConfig, listEnvironments, readRun, resolveConfigPaths, type LoadedConfig } from "@journey/core";
-import { collectOperations, loadSpec, operationName } from "@journey/codegen";
+import { collectOperations, generate, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
+import { computeSpecDrift } from "./specDrift.js";
 import {
   getBroadcaster,
   newRunId,
@@ -462,6 +463,29 @@ async function route(
       const record = await readRun(cacheDir, id);
       if (!record) { send(res, 404, { error: "run not found" }); return; }
       send(res, 200, record);
+      return;
+    }
+    if (url.pathname === "/api/spec/drift" && req.method === "GET") {
+      const loaded = await loadConfig(projectDir);
+      const { specPath, generatedDir } = resolveConfigPaths(loaded);
+      send(res, 200, await computeSpecDrift(specPath, generatedDir));
+      return;
+    }
+    if (url.pathname === "/api/generate" && req.method === "POST") {
+      const loaded = await loadConfig(projectDir);
+      const { specPath, generatedDir } = resolveConfigPaths(loaded);
+      try {
+        const result = await generate({ specPath, outDir: generatedDir });
+        send(res, 200, {
+          operationCount: result.operationCount,
+          endpointsPath: result.endpointsPath,
+          modelsPath: result.modelsPath,
+        });
+      } catch (err) {
+        send(res, 500, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       return;
     }
     if (url.pathname === "/api/health") {

@@ -18,6 +18,7 @@ import { ConsoleContext } from "./consoleContext";
 
 export function Shell(props: { children?: JSX.Element }): JSX.Element {
   const [project] = createResource(() => api.getProject());
+  const [drift] = createResource(() => api.getSpecDrift());
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
   const [consoleOpen, setConsoleOpen] = createSignal(false);
   const [recents, setRecents] = createSignal<RecentProject[]>(loadRecentProjects());
@@ -88,6 +89,7 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
               endpoints: project()?.counts?.endpoints,
               journeys: project()?.counts?.journeys,
               envs: project()?.counts?.environments,
+              drift: drift()?.count,
             }}
           />
           <div

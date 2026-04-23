@@ -19,6 +19,8 @@ export type SidebarCounts = {
   endpoints?: number | undefined;
   journeys?: number | undefined;
   envs?: number | undefined;
+  /** Spec-drift count — surfaces as a badge on the Spec diff tool. */
+  drift?: number | undefined;
 };
 
 export type SidebarFooterInfo = {
@@ -70,8 +72,14 @@ export function Sidebar(props: SidebarProps): JSX.Element {
     },
   ];
 
-  const toolItems: NavItem[] = [
-    { id: "diff", href: "/diff", label: "Spec diff", icon: IconDiff, badge: null, dim: true },
+  const toolItems = (): NavItem[] => [
+    {
+      id: "diff",
+      href: "/diff",
+      label: "Spec diff",
+      icon: IconDiff,
+      badge: props.counts.drift && props.counts.drift > 0 ? props.counts.drift : null,
+    },
     { id: "history", href: "/history", label: "Run history", icon: IconClock, badge: null, dim: true },
     { id: "mock", href: "/mock", label: "Mock server", icon: IconLayers, badge: null, dim: true },
   ];
@@ -93,7 +101,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       </SidebarSection>
 
       <SidebarSection label="Tools">
-        <For each={toolItems}>{(n) => <SidebarItem item={n} />}</For>
+        <For each={toolItems()}>{(n) => <SidebarItem item={n} />}</For>
       </SidebarSection>
 
       <div style={{ flex: 1 }} />
