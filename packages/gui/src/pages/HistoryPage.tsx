@@ -33,8 +33,17 @@ export const HistoryPage: Component = () => {
   const [compareId, setCompareId] = createSignal<string | undefined>(undefined);
   const [pickingCompare, setPickingCompare] = createSignal(false);
 
-  const [selectedDetail] = createResource(selectedId, (id) => api.getRun(id));
-  const [compareDetail] = createResource(compareId, (id) => api.getRun(id));
+  // `mutate` is pulled so we can explicitly clear the resource when the source
+  // flips back to undefined — Solid keeps the previously-resolved value
+  // otherwise, and the Close-diff / unpick-run buttons want a clean slate.
+  const [selectedDetail, { mutate: mutateSelectedDetail }] = createResource(
+    selectedId,
+    (id) => api.getRun(id),
+  );
+  const [compareDetail, { mutate: mutateCompareDetail }] = createResource(
+    compareId,
+    (id) => api.getRun(id),
+  );
 
   const filtered = createMemo(() => {
     const q = filter().toLowerCase();
@@ -67,8 +76,12 @@ export const HistoryPage: Component = () => {
       setPickingCompare(false);
       return;
     }
+    // Swapping the selected run mustn't flash the previous detail — drop it
+    // so the pane shows a loader (or blank) until the new fetch resolves.
+    if (r.id !== selectedId()) mutateSelectedDetail(undefined);
     setSelectedId(r.id);
     setCompareId(undefined);
+    mutateCompareDetail(undefined);
     setPickingCompare(false);
   };
 
@@ -288,6 +301,7 @@ export const HistoryPage: Component = () => {
                 onStartCompare={() => setPickingCompare(true)}
                 onCancelCompare={() => {
                   setCompareId(undefined);
+                  mutateCompareDetail(undefined);
                   setPickingCompare(false);
                 }}
               />
