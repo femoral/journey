@@ -14,6 +14,7 @@ export * from "./primitives/TableInput";
 export * from "./primitives/KVTable";
 export * from "./primitives/JsonPretty";
 export * from "./primitives/TsHighlight";
+export * from "./primitives/MarkupHighlight";
 export * from "./primitives/TimingBreakdown";
 export * from "./primitives/Sparkline";
 export * from "./primitives/KVLine";

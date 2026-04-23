@@ -68,6 +68,25 @@ describe("EndpointsPage", () => {
 
     await waitFor(() => expect(screen.getByTestId("response-status").textContent).toBe("200"));
     expect(captured.url).toBe("https://api.example.com/pet/findByStatus?status=available");
+
+    // Response pane chips + Pretty/Raw/Headers tabs.
+    expect(screen.getByTestId("response-duration").textContent).toContain("ms");
+    expect(screen.getByTestId("response-size")).toBeTruthy();
+
+    // Two "Headers" tabs on the page (request config tabs + response tabs);
+    // click the response one via the panel-scoped query.
+    const responsePanel = screen.getByTestId("response-panel");
+    const { getByText } = await import("@solidjs/testing-library").then((m) => ({
+      getByText: (t: string) => m.within(responsePanel).getByText(t),
+    }));
+    fireEvent.click(getByText("Headers"));
+    await waitFor(() => expect(screen.getByTestId("response-headers")).toBeTruthy());
+
+    fireEvent.click(getByText("Raw"));
+    await waitFor(() =>
+      expect(screen.getByTestId("response-body-raw").textContent).toContain('"id"'),
+    );
+
     vi.unstubAllGlobals();
   });
 });

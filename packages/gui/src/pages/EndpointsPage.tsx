@@ -21,7 +21,9 @@ import {
   IconPlus,
   IconSearch,
   JsonPretty,
+  MarkupHighlight,
   MethodBadge,
+  MiniTab,
   StatusPill,
   TabButton,
   type HttpMethod,
@@ -882,18 +884,49 @@ function TabDocs(props: { endpoint: EndpointSummary }): JSX.Element {
   );
 }
 
+type ResponseTab = "Pretty" | "Raw" | "Headers";
+
 function ResponsePane(props: {
   busy: boolean;
   response: ProxyResponse | undefined;
   error: string | undefined;
 }): JSX.Element {
-  const bodyText = () => {
+  const [tab, setTab] = createSignal<ResponseTab>("Pretty");
+  const rawText = () => {
     const r = props.response;
     if (!r) return "";
+    if (typeof r.body === "string") return r.body;
     try {
       return JSON.stringify(r.body, null, 2);
     } catch {
       return String(r.body);
+    }
+  };
+  const contentType = (): string => {
+    const r = props.response;
+    if (!r) return "";
+    const ct = r.headers["content-type"] ?? r.headers["Content-Type"] ?? "";
+    return ct.toLowerCase();
+  };
+  const kind = (): "json" | "xml" | "html" | "text" => {
+    const ct = contentType();
+    if (ct.includes("json")) return "json";
+    if (ct.includes("html")) return "html";
+    if (ct.includes("xml")) return "xml";
+    // Stringified JSON bodies frequently come back from fetch even when the
+    // header was dropped — sniff the first non-whitespace char.
+    const t = rawText().trimStart();
+    if (t.startsWith("{") || t.startsWith("[")) return "json";
+    if (t.startsWith("<")) return "xml";
+    return "text";
+  };
+  const sizeBytes = (): number | undefined => {
+    const r = props.response;
+    if (!r) return undefined;
+    try {
+      return new TextEncoder().encode(rawText()).byteLength;
+    } catch {
+      return undefined;
     }
   };
   return (
@@ -914,6 +947,7 @@ function ResponsePane(props: {
           padding: "8px 16px",
           "border-bottom": "1px solid var(--bd-1)",
           "flex-shrink": 0,
+          "flex-wrap": "wrap",
         }}
       >
         <Show
@@ -932,13 +966,62 @@ function ResponsePane(props: {
               <span
                 class="mono"
                 style={{ "font-size": "11px", color: "var(--fg-2)" }}
+                title="Total elapsed time for the proxied request"
+                data-testid="response-duration"
               >
                 {r().durationMs}ms
               </span>
+              <Show when={sizeBytes() !== undefined}>
+                <span class="mono" style={{ color: "var(--fg-3)" }}>·</span>
+                <span
+                  class="mono"
+                  style={{ "font-size": "11px", color: "var(--fg-2)" }}
+                  data-testid="response-size"
+                >
+                  {formatBytes(sizeBytes()!)}
+                </span>
+              </Show>
+              <Show when={contentType()}>
+                <span class="mono" style={{ color: "var(--fg-3)" }}>·</span>
+                <span
+                  class="mono"
+                  style={{ "font-size": "11px", color: "var(--fg-2)" }}
+                >
+                  {contentType()}
+                </span>
+              </Show>
             </>
           )}
         </Show>
       </div>
+      <Show when={props.response}>
+        <div
+          style={{
+            display: "flex",
+            "align-items": "center",
+            "padding-left": "10px",
+            "border-bottom": "1px solid var(--bd-1)",
+            "flex-shrink": 0,
+          }}
+          role="tablist"
+        >
+          <MiniTab
+            active={tab() === "Pretty"}
+            onClick={() => setTab("Pretty")}
+            label="Pretty"
+          />
+          <MiniTab
+            active={tab() === "Raw"}
+            onClick={() => setTab("Raw")}
+            label="Raw"
+          />
+          <MiniTab
+            active={tab() === "Headers"}
+            onClick={() => setTab("Headers")}
+            label="Headers"
+          />
+        </div>
+      </Show>
       <div style={{ flex: 1, overflow: "auto" }}>
         <Show when={props.error}>
           <p
@@ -954,25 +1037,87 @@ function ResponsePane(props: {
           </p>
         </Show>
         <Show when={props.response}>
-          <pre
-            data-testid="response-body"
-            class="mono"
-            style={{
-              margin: 0,
-              padding: "14px 16px",
-              "font-size": "12px",
-              "line-height": 1.7,
-              color: "var(--fg-1)",
-              "white-space": "pre-wrap",
-              "word-break": "break-word",
-            }}
-          >
-            <JsonPretty text={bodyText()} />
-          </pre>
+          <Show when={tab() === "Pretty"}>
+            <pre
+              data-testid="response-body"
+              class="mono"
+              style={{
+                margin: 0,
+                padding: "14px 16px",
+                "font-size": "12px",
+                "line-height": 1.7,
+                color: "var(--fg-1)",
+                "white-space": "pre-wrap",
+                "word-break": "break-word",
+              }}
+            >
+              <Show when={kind() === "json"}>
+                <JsonPretty text={rawText()} />
+              </Show>
+              <Show when={kind() === "xml" || kind() === "html"}>
+                <MarkupHighlight text={rawText()} />
+              </Show>
+              <Show when={kind() === "text"}>{rawText()}</Show>
+            </pre>
+          </Show>
+          <Show when={tab() === "Raw"}>
+            <pre
+              data-testid="response-body-raw"
+              class="mono"
+              style={{
+                margin: 0,
+                padding: "14px 16px",
+                "font-size": "12px",
+                "line-height": 1.6,
+                color: "var(--fg-2)",
+                "white-space": "pre-wrap",
+                "word-break": "break-word",
+              }}
+            >
+              {rawText()}
+            </pre>
+          </Show>
+          <Show when={tab() === "Headers"}>
+            <ResponseHeaders headers={props.response!.headers} />
+          </Show>
         </Show>
       </div>
     </div>
   );
+}
+
+function ResponseHeaders(props: { headers: Record<string, string> }): JSX.Element {
+  const entries = () =>
+    Object.entries(props.headers).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <div style={{ padding: "8px 0" }} data-testid="response-headers">
+      <For each={entries()}>
+        {([k, v]) => (
+          <div
+            class="mono"
+            style={{
+              display: "grid",
+              "grid-template-columns": "220px 1fr",
+              gap: "12px",
+              padding: "4px 16px",
+              "font-size": "11px",
+            }}
+          >
+            <span style={{ color: "var(--info)" }}>{k}</span>
+            <span style={{ color: "var(--fg-1)", "word-break": "break-all" }}>
+              {v}
+            </span>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function Placeholder(props: { label: string }): JSX.Element {

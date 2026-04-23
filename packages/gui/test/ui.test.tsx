@@ -6,6 +6,7 @@ import {
   IconPlus,
   JsonPretty,
   KVTable,
+  MarkupHighlight,
   MethodBadge,
   MiniTab,
   Panel,
@@ -151,6 +152,14 @@ describe("TsHighlight", () => {
   it("preserves the entire input text", () => {
     const src = "import { journey } from '@journey/core'";
     const { container } = render(() => <TsHighlight text={src} />);
+    expect(container.textContent).toBe(src);
+  });
+});
+
+describe("MarkupHighlight", () => {
+  it("preserves the entire input text", () => {
+    const src = '<root attr="x"><child/></root>';
+    const { container } = render(() => <MarkupHighlight text={src} />);
     expect(container.textContent).toBe(src);
   });
 });
