@@ -29,6 +29,8 @@ export interface RunJourneyFileOptions {
   debug?: boolean;
   /** Override the logger entirely (e.g. for tests). */
   logger?: JourneyLogger;
+  /** Forwarded to runAllRegistered so lifecycle events carry this runId. */
+  runId?: string;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -52,7 +54,10 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (opts.loaded.config.baseUrl) ctx.baseUrl = opts.loaded.config.baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
-  const results = await runAllRegistered(ctx);
+  const results = await runAllRegistered(
+    ctx,
+    opts.runId !== undefined ? { runId: opts.runId } : {},
+  );
 
   const cacheDir = join(opts.loaded.projectDir, ".journey", "cache");
   await writeRun(cacheDir, results);

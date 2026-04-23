@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../src/server/server.js";
 
@@ -9,7 +9,13 @@ describe("journey serve — /api/project", () => {
   let projectDir: string;
 
   beforeAll(async () => {
-    projectDir = await mkdtemp(join(tmpdir(), "journey-serve-"));
+    // Colocate the fixture under packages/cli/.test-tmp so the tsx-loaded
+    // journey file can resolve `@journey/core` via the pnpm workspace link
+    // in packages/cli/node_modules. The OS tmpdir has no such link.
+    const cliDir = dirname(dirname(fileURLToPath(import.meta.url)));
+    const base = join(cliDir, ".test-tmp");
+    await mkdir(base, { recursive: true });
+    projectDir = await mkdtemp(join(base, "journey-serve-"));
     await mkdir(join(projectDir, "generated"), { recursive: true });
     await mkdir(join(projectDir, "journeys"), { recursive: true });
     await mkdir(join(projectDir, "environments"), { recursive: true });
@@ -160,6 +166,88 @@ paths:
 
     const del = await fetch(`${srv.url}/api/journeys/${file}`, { method: "DELETE" });
     expect(del.status).toBe(200);
+  });
+
+  it("streams run events over SSE and exposes runId on the sync POST response", async () => {
+    // Stand up a target server the journey will hit.
+    const { createServer } = await import("node:http");
+    const target = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ method: req.method, url: req.url }));
+    });
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
+    const targetAddr = target.address();
+    const targetPort =
+      typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
+
+    // Write a minimal journey file into the fixture's journeys dir.
+    // No operationId — endpoint is treated as a descriptor so its baseUrl
+    // actually takes effect (EndpointRefs read baseUrl from ctx).
+    await writeFile(
+      join(projectDir, "journeys", "smoke.journey.ts"),
+      `import { journey, step } from "@journey/core";
+journey("smoke", () => {
+  step("one", { endpoint: { method: "GET", path: "/a", baseUrl: "http://127.0.0.1:${targetPort}" } });
+  step("two", { endpoint: { method: "GET", path: "/b", baseUrl: "http://127.0.0.1:${targetPort}" } });
+});
+`,
+    );
+
+    try {
+      // stream: true — POST returns { runId } without awaiting results.
+      const post = await fetch(`${srv.url}/api/journeys/smoke.journey.ts/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stream: true }),
+      });
+      expect(post.status).toBe(202);
+      const { runId } = (await post.json()) as { runId: string };
+      expect(runId).toBeTruthy();
+
+      // Subscribe to SSE and collect events until run:end.
+      const evRes = await fetch(`${srv.url}/api/runs/${runId}/events`);
+      expect(evRes.status).toBe(200);
+      expect(evRes.headers.get("content-type")).toMatch(/text\/event-stream/);
+
+      const reader = evRes.body!.getReader();
+      const decoder = new TextDecoder();
+      const events: { kind: string; runId: string }[] = [];
+      let buf = "";
+      let done = false;
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buf += decoder.decode(value, { stream: true });
+        // SSE frames are separated by a blank line.
+        const frames = buf.split("\n\n");
+        buf = frames.pop() ?? "";
+        for (const frame of frames) {
+          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (!dataLine) continue;
+          const parsed = JSON.parse(dataLine.slice(5).trim()) as {
+            kind: string;
+            runId: string;
+          };
+          events.push(parsed);
+          if (parsed.kind === "run:end") {
+            done = true;
+            break;
+          }
+        }
+      }
+
+      const kinds = events.map((e) => e.kind);
+      expect(kinds[0]).toBe("run:start");
+      expect(kinds).toContain("step:start");
+      expect(kinds).toContain("request");
+      expect(kinds).toContain("response");
+      expect(kinds).toContain("step:end");
+      expect(kinds[kinds.length - 1]).toBe("run:end");
+      // All events carry the same runId.
+      for (const e of events) expect(e.runId).toBe(runId);
+    } finally {
+      await new Promise<void>((r) => target.close(() => r()));
+    }
   });
 
   it("proxies a request and returns status + body", async () => {

@@ -4,6 +4,12 @@ import { join } from "node:path";
 import { listRuns, loadConfig, listEnvironments, readRun, resolveConfigPaths, type LoadedConfig } from "@journey/core";
 import { collectOperations, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
+import {
+  getBroadcaster,
+  newRunId,
+  registerBroadcaster,
+  type RunBroadcaster,
+} from "./runBroadcaster.js";
 
 export interface StartServerOptions {
   projectDir: string;
@@ -397,23 +403,56 @@ async function route(
     const runMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)\/run$/);
     if (runMatch && req.method === "POST") {
       const file = decodeURIComponent(runMatch[1]!);
-      const body = ((await readRequestBody(req)) ?? {}) as { env?: string };
+      const body = ((await readRequestBody(req)) ?? {}) as {
+        env?: string;
+        stream?: boolean;
+      };
       const loaded = await loadConfig(projectDir);
       const { journeysDir, environmentsDir } = resolveConfigPaths(loaded);
-      const results = await runJourneyFile({
+      const runId = newRunId();
+      const broadcaster = registerBroadcaster(runId);
+      const runPromise = runJourneyFile({
         loaded,
         journeysDir,
         environmentsDir,
         file,
+        runId,
+        logger: broadcaster.toLogger(),
         ...(body.env !== undefined ? { env: body.env } : {}),
         ...(debug ? { debug: true } : {}),
       });
-      send(res, 200, { results });
+      if (body.stream) {
+        // Fire-and-forget: the broadcaster owns event delivery from here. We
+        // still observe the promise so unhandled rejections are captured.
+        runPromise.catch((err) => {
+          broadcaster.fail(err instanceof Error ? err.message : String(err));
+        });
+        send(res, 202, { runId });
+        return;
+      }
+      try {
+        const results = await runPromise;
+        send(res, 200, { runId, results });
+      } catch (err) {
+        broadcaster.fail(err instanceof Error ? err.message : String(err));
+        send(res, 500, { runId, error: err instanceof Error ? err.message : String(err) });
+      }
       return;
     }
     if (url.pathname === "/api/runs" && req.method === "GET") {
       const cacheDir = join(projectDir, ".journey", "cache");
       send(res, 200, await listRuns(cacheDir));
+      return;
+    }
+    const runEventsMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/events$/);
+    if (runEventsMatch && req.method === "GET") {
+      const id = decodeURIComponent(runEventsMatch[1]!);
+      const broadcaster: RunBroadcaster | undefined = getBroadcaster(id);
+      if (!broadcaster) {
+        send(res, 404, { error: "unknown run (already evicted or never started)" });
+        return;
+      }
+      broadcaster.subscribe(res);
       return;
     }
     const runIdMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
