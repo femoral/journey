@@ -13,6 +13,13 @@ import {
   type ParameterInfo,
   type ProxyResponse,
 } from "../api/client";
+import {
+  contribute as authContribute,
+  defaultPreset,
+  fetchOAuth2Token,
+  type AuthPreset,
+  type AuthPresetKind,
+} from "./auth";
 import { useSearchParams } from "@solidjs/router";
 import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
@@ -51,6 +58,17 @@ export const EndpointsPage: Component = () => {
   const [response, setResponse] = createSignal<ProxyResponse | undefined>(undefined);
   const [error, setError] = createSignal<string | undefined>(undefined);
   const [busy, setBusy] = createSignal(false);
+  const [auth, setAuth] = createSignal<AuthPreset>({ kind: "none" });
+
+  // Active env values feed `{{env.VAR}}` interpolation in auth presets.
+  const [envs] = createResource(() => api.getEnvironments());
+  const activeEnv = createMemo<Record<string, string>>(() => {
+    const data = envs();
+    if (!data) return {};
+    const name = data.defaultEnvironment;
+    const match = data.environments.find((e) => e.name === name);
+    return match?.values ?? {};
+  });
 
   // "Send via Endpoints" from the Journeys step card deep-links with method +
   // url params; match an endpoint whose (method, base+path) matches and select
@@ -109,19 +127,24 @@ export const EndpointsPage: Component = () => {
     setError(undefined);
     setResponse(undefined);
     try {
-      const headerObj = Object.fromEntries(
-        headerRows()
-          .filter((r) => r.enabled && r.name.trim())
-          .map((r) => [r.name.trim(), r.value]),
-      );
+      const authPart = authContribute(auth(), activeEnv());
+      const headerObj = {
+        ...authPart.headers,
+        ...Object.fromEntries(
+          headerRows()
+            .filter((r) => r.enabled && r.name.trim())
+            .map((r) => [r.name.trim(), r.value]),
+        ),
+      };
       let bodyVal: unknown = undefined;
       if (body().trim()) {
         bodyVal = JSON.parse(body());
       }
       const base = l.baseUrl.endsWith("/") ? l.baseUrl : `${l.baseUrl}/`;
       const path = interpolate(ep.path, paramValues()).replace(/^\//, "");
-      const query = Object.entries(queryValues())
-        .filter(([, v]) => v !== "")
+      const mergedQuery = { ...authPart.query, ...queryValues() };
+      const query = Object.entries(mergedQuery)
+        .filter(([, v]) => v !== "" && v !== undefined)
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
         .join("&");
       const url = `${base}${path}${query ? `?${query}` : ""}`;
@@ -393,7 +416,11 @@ export const EndpointsPage: Component = () => {
                     />
                   </Show>
                   <Show when={tab() === "auth"}>
-                    <Placeholder label="Auth presets (Basic / Bearer / API key / OAuth2) ship in M6." />
+                    <TabAuth
+                      value={auth()}
+                      onChange={setAuth}
+                      env={activeEnv()}
+                    />
                   </Show>
                   <Show when={tab() === "body"}>
                     <TabBody value={body()} onInput={setBody} />
@@ -1139,6 +1166,466 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const AUTH_PRESETS: ReadonlyArray<{ id: AuthPresetKind; label: string }> = [
+  { id: "none", label: "None" },
+  { id: "basic", label: "Basic" },
+  { id: "bearer", label: "Bearer token" },
+  { id: "apikey", label: "API key" },
+  { id: "oauth2", label: "OAuth2 client" },
+];
+
+function TabAuth(props: {
+  value: AuthPreset;
+  onChange: (next: AuthPreset) => void;
+  env: Record<string, string>;
+}): JSX.Element {
+  const [busy, setBusy] = createSignal(false);
+  const [tokenErr, setTokenErr] = createSignal<string | undefined>(undefined);
+  const pick = (kind: AuthPresetKind) => {
+    if (kind === props.value.kind) return;
+    props.onChange(defaultPreset(kind));
+  };
+  const refreshToken = async () => {
+    const v = props.value;
+    if (v.kind !== "oauth2") return;
+    setBusy(true);
+    setTokenErr(undefined);
+    try {
+      const next = await fetchOAuth2Token(v, props.env, async (url, body, headers) => {
+        const r = await api.sendRequest({ method: "POST", url, headers, body });
+        return { status: r.status, body: r.body };
+      });
+      props.onChange(next);
+    } catch (e) {
+      setTokenErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ padding: "14px 16px" }} data-testid="auth-tab">
+      <div
+        style={{
+          display: "flex",
+          gap: "4px",
+          "margin-bottom": "16px",
+          background: "var(--bg-2)",
+          padding: "3px",
+          "border-radius": "5px",
+          width: "fit-content",
+        }}
+        role="radiogroup"
+      >
+        <For each={AUTH_PRESETS}>
+          {(p) => (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={props.value.kind === p.id}
+              data-testid={`auth-preset-${p.id}`}
+              onClick={() => pick(p.id)}
+              style={{
+                padding: "4px 12px",
+                "font-size": "12px",
+                "border-radius": "3px",
+                background:
+                  props.value.kind === p.id ? "var(--bg-0)" : "transparent",
+                color:
+                  props.value.kind === p.id ? "var(--fg-0)" : "var(--fg-2)",
+                border:
+                  props.value.kind === p.id
+                    ? "1px solid var(--bd-2)"
+                    : "1px solid transparent",
+              }}
+            >
+              {p.label}
+            </button>
+          )}
+        </For>
+      </div>
+
+      <Show when={props.value.kind === "none"}>
+        <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
+          No authentication will be sent with this request.
+        </div>
+      </Show>
+
+      <Show when={props.value.kind === "basic"}>
+        <div
+          style={{
+            display: "grid",
+            "grid-template-columns": "1fr 1fr",
+            gap: "10px",
+            "max-width": "520px",
+          }}
+        >
+          <Field label="Username">
+            <input
+              data-testid="auth-basic-username"
+              class="mono"
+              style={FIELD_STYLE}
+              value={
+                props.value.kind === "basic" ? props.value.username : ""
+              }
+              onInput={(e) =>
+                props.onChange({
+                  ...(props.value as Extract<AuthPreset, { kind: "basic" }>),
+                  username: e.currentTarget.value,
+                })
+              }
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              data-testid="auth-basic-password"
+              class="mono"
+              type="password"
+              style={FIELD_STYLE}
+              value={
+                props.value.kind === "basic" ? props.value.password : ""
+              }
+              onInput={(e) =>
+                props.onChange({
+                  ...(props.value as Extract<AuthPreset, { kind: "basic" }>),
+                  password: e.currentTarget.value,
+                })
+              }
+            />
+          </Field>
+        </div>
+      </Show>
+
+      <Show when={props.value.kind === "bearer"}>
+        <div
+          style={{
+            display: "flex",
+            "flex-direction": "column",
+            gap: "10px",
+            "max-width": "520px",
+          }}
+        >
+          <Field label="Token">
+            <input
+              data-testid="auth-bearer-token"
+              class="mono"
+              style={FIELD_STYLE}
+              placeholder="{{env.TOKEN}}"
+              value={
+                props.value.kind === "bearer" ? props.value.token : ""
+              }
+              onInput={(e) =>
+                props.onChange({
+                  kind: "bearer",
+                  token: e.currentTarget.value,
+                })
+              }
+            />
+            <div
+              style={{
+                "margin-top": "6px",
+                "font-size": "11px",
+                color: "var(--fg-3)",
+              }}
+            >
+              Supports <span class="mono">{"{{env.VAR}}"}</span> against the
+              active environment.
+            </div>
+          </Field>
+        </div>
+      </Show>
+
+      <Show when={props.value.kind === "apikey"}>
+        <div
+          style={{
+            "max-width": "520px",
+            display: "flex",
+            "flex-direction": "column",
+            gap: "10px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: "4px",
+              width: "fit-content",
+              background: "var(--bg-2)",
+              padding: "3px",
+              "border-radius": "4px",
+            }}
+          >
+            <For each={["header", "query"] as const}>
+              {(where) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    props.onChange({
+                      ...(props.value as Extract<
+                        AuthPreset,
+                        { kind: "apikey" }
+                      >),
+                      where,
+                    })
+                  }
+                  style={{
+                    padding: "3px 10px",
+                    "font-size": "11px",
+                    "border-radius": "3px",
+                    background:
+                      props.value.kind === "apikey" && props.value.where === where
+                        ? "var(--bg-0)"
+                        : "transparent",
+                    color:
+                      props.value.kind === "apikey" && props.value.where === where
+                        ? "var(--fg-0)"
+                        : "var(--fg-2)",
+                    border:
+                      props.value.kind === "apikey" && props.value.where === where
+                        ? "1px solid var(--bd-2)"
+                        : "1px solid transparent",
+                    "text-transform": "capitalize",
+                  }}
+                >
+                  {where}
+                </button>
+              )}
+            </For>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              "grid-template-columns": "1fr 2fr",
+              gap: "10px",
+            }}
+          >
+            <Field label="Key">
+              <input
+                data-testid="auth-apikey-name"
+                class="mono"
+                style={FIELD_STYLE}
+                value={
+                  props.value.kind === "apikey" ? props.value.name : ""
+                }
+                onInput={(e) =>
+                  props.onChange({
+                    ...(props.value as Extract<
+                      AuthPreset,
+                      { kind: "apikey" }
+                    >),
+                    name: e.currentTarget.value,
+                  })
+                }
+              />
+            </Field>
+            <Field label="Value">
+              <input
+                data-testid="auth-apikey-value"
+                class="mono"
+                style={FIELD_STYLE}
+                placeholder="{{env.API_KEY}}"
+                value={
+                  props.value.kind === "apikey" ? props.value.value : ""
+                }
+                onInput={(e) =>
+                  props.onChange({
+                    ...(props.value as Extract<
+                      AuthPreset,
+                      { kind: "apikey" }
+                    >),
+                    value: e.currentTarget.value,
+                  })
+                }
+              />
+            </Field>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={props.value.kind === "oauth2"}>
+        <div
+          style={{
+            display: "flex",
+            "flex-direction": "column",
+            gap: "10px",
+            "max-width": "520px",
+          }}
+        >
+          <Field label="Token URL">
+            <input
+              data-testid="auth-oauth2-url"
+              class="mono"
+              style={FIELD_STYLE}
+              placeholder="https://auth.example.com/token"
+              value={
+                props.value.kind === "oauth2" ? props.value.tokenUrl : ""
+              }
+              onInput={(e) =>
+                props.onChange({
+                  ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
+                  tokenUrl: e.currentTarget.value,
+                })
+              }
+            />
+          </Field>
+          <div
+            style={{
+              display: "grid",
+              "grid-template-columns": "1fr 1fr",
+              gap: "10px",
+            }}
+          >
+            <Field label="Client ID">
+              <input
+                class="mono"
+                style={FIELD_STYLE}
+                value={
+                  props.value.kind === "oauth2" ? props.value.clientId : ""
+                }
+                onInput={(e) =>
+                  props.onChange({
+                    ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
+                    clientId: e.currentTarget.value,
+                  })
+                }
+              />
+            </Field>
+            <Field label="Client secret">
+              <input
+                class="mono"
+                type="password"
+                style={FIELD_STYLE}
+                value={
+                  props.value.kind === "oauth2"
+                    ? props.value.clientSecret
+                    : ""
+                }
+                onInput={(e) =>
+                  props.onChange({
+                    ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
+                    clientSecret: e.currentTarget.value,
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <Field label="Scope">
+            <input
+              class="mono"
+              style={FIELD_STYLE}
+              value={props.value.kind === "oauth2" ? props.value.scope : ""}
+              onInput={(e) =>
+                props.onChange({
+                  ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
+                  scope: e.currentTarget.value,
+                })
+              }
+            />
+          </Field>
+
+          <div
+            style={{
+              "margin-top": "6px",
+              padding: "10px 12px",
+              background: "var(--bg-2)",
+              border: "1px solid var(--bd-1)",
+              "border-radius": "5px",
+              display: "flex",
+              "align-items": "center",
+              gap: "10px",
+            }}
+          >
+            <Show
+              when={
+                props.value.kind === "oauth2" &&
+                props.value.cached &&
+                props.value.cached.expiresAt > Date.now()
+              }
+              fallback={
+                <>
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      "border-radius": "50%",
+                      background: "var(--fg-3)",
+                    }}
+                  />
+                  <div style={{ flex: 1, "font-size": "11px", color: "var(--fg-3)" }}>
+                    No cached token.
+                  </div>
+                </>
+              }
+            >
+              <span
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  "border-radius": "50%",
+                  background: "var(--ok)",
+                }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ "font-size": "12px" }}>Cached token</div>
+                <div
+                  class="mono"
+                  style={{ "font-size": "11px", color: "var(--fg-3)" }}
+                >
+                  expires in{" "}
+                  {props.value.kind === "oauth2" && props.value.cached
+                    ? formatTtl(props.value.cached.expiresAt - Date.now())
+                    : "—"}
+                </div>
+              </div>
+            </Show>
+            <button
+              type="button"
+              onClick={() => void refreshToken()}
+              disabled={busy()}
+              data-testid="auth-oauth2-refresh"
+              style={{
+                "font-size": "11px",
+                color: "var(--fg-1)",
+                padding: "4px 10px",
+                border: "1px solid var(--bd-2)",
+                "border-radius": "4px",
+                opacity: busy() ? 0.6 : 1,
+                cursor: busy() ? "wait" : "pointer",
+              }}
+            >
+              {busy() ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          <Show when={tokenErr()}>
+            <div
+              data-testid="auth-oauth2-error"
+              style={{ "font-size": "11px", color: "var(--err)" }}
+            >
+              {tokenErr()}
+            </div>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+const FIELD_STYLE: JSX.CSSProperties = {
+  width: "100%",
+  padding: "7px 10px",
+  border: "1px solid var(--bd-2)",
+  "border-radius": "4px",
+  background: "var(--bg-0)",
+  "font-size": "12px",
+};
+
+function formatTtl(ms: number): string {
+  if (ms <= 0) return "expired";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 function Placeholder(props: { label: string }): JSX.Element {

@@ -43,6 +43,12 @@ describe("EndpointsPage", () => {
             headers: { "content-type": "application/json" },
           });
         }
+        if (url.endsWith("/api/environments")) {
+          return new Response(
+            JSON.stringify({ environments: [], defaultEnvironment: undefined }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
         if (url.endsWith("/api/request")) {
           captured = JSON.parse(init!.body as string) as { url?: string };
           return new Response(JSON.stringify(proxyResp), {
