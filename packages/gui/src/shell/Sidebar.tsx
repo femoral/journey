@@ -12,7 +12,6 @@ import {
   IconGit,
   IconHome,
   IconJourneys,
-  IconLayers,
 } from "../ui/icons";
 
 export type SidebarCounts = {
@@ -81,7 +80,6 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       badge: props.counts.drift && props.counts.drift > 0 ? props.counts.drift : null,
     },
     { id: "history", href: "/history", label: "Run history", icon: IconClock, badge: null },
-    { id: "mock", href: "/mock", label: "Mock server", icon: IconLayers, badge: null, dim: true },
   ];
 
   return (
