@@ -56,7 +56,7 @@ export const EndpointsPage: Component = () => {
   const [queryValues, setQueryValues] = createSignal<Record<string, string>>({});
   const [paramDisabled, setParamDisabled] = createSignal<Record<string, boolean>>({});
   const [headerRows, setHeaderRows] = createSignal<{ name: string; value: string; enabled: boolean }[]>([]);
-  const [body, setBody] = createSignal("");
+  const [body, setBody] = createSignal<BodyState>({ kind: "none" });
 
   const [response, setResponse] = createSignal<ProxyResponse | undefined>(undefined);
   const [error, setError] = createSignal<string | undefined>(undefined);
@@ -113,7 +113,7 @@ export const EndpointsPage: Component = () => {
     setQueryValues({});
     setParamDisabled({});
     setHeaderRows([]);
-    setBody("");
+    setBody({ kind: "none" });
     setResponse(undefined);
     setError(undefined);
     setTab("params");
@@ -140,10 +140,15 @@ export const EndpointsPage: Component = () => {
             .map((r) => [r.name.trim(), r.value]),
         ),
       };
-      let bodyVal: unknown = undefined;
-      if (body().trim()) {
-        bodyVal = JSON.parse(body());
+      const dispatched = serializeBody(body());
+      if (dispatched.contentType) {
+        // Don't clobber a user-set Content-Type header.
+        const hasCt = Object.keys(headerObj).some(
+          (k) => k.toLowerCase() === "content-type",
+        );
+        if (!hasCt) headerObj["Content-Type"] = dispatched.contentType;
       }
+      const bodyVal = dispatched.payload;
       const base = l.baseUrl.endsWith("/") ? l.baseUrl : `${l.baseUrl}/`;
       // Disabled path params stay templated — let the server surface the
       // missing-param error rather than silently dropping them.
@@ -444,7 +449,7 @@ export const EndpointsPage: Component = () => {
                     />
                   </Show>
                   <Show when={tab() === "body"}>
-                    <TabBody value={body()} onInput={setBody} />
+                    <TabBody value={body()} onChange={setBody} />
                   </Show>
                   <Show when={tab() === "scripts"}>
                     <Placeholder label="Pre- and post-request scripts ship in M6." />
@@ -847,46 +852,433 @@ function TabHeaders(props: {
   );
 }
 
+type BodyKind = BodyState["kind"];
+
+type BodyState =
+  | { kind: "none" }
+  | { kind: "json"; text: string }
+  | {
+      kind: "urlencoded";
+      rows: Array<{ name: string; value: string; enabled: boolean }>;
+    }
+  | { kind: "raw"; text: string; contentType: string };
+
+/**
+ * Build the outgoing payload + matching Content-Type from a BodyState. The
+ * proxy passes strings through untouched and JSON-stringifies objects — so we
+ * hand back an object for JSON mode and a string for urlencoded / raw.
+ */
+function serializeBody(body: BodyState): {
+  payload: unknown;
+  contentType: string | undefined;
+} {
+  if (body.kind === "none") return { payload: undefined, contentType: undefined };
+  if (body.kind === "json") {
+    if (!body.text.trim()) return { payload: undefined, contentType: undefined };
+    try {
+      return { payload: JSON.parse(body.text), contentType: "application/json" };
+    } catch (e) {
+      // Surface the parse error the same way it always has — bubble up from
+      // send() where we already have try/catch with setError.
+      throw new Error(
+        `Body isn't valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+  if (body.kind === "urlencoded") {
+    const params = new URLSearchParams();
+    for (const r of body.rows) {
+      if (r.enabled && r.name.trim()) params.append(r.name.trim(), r.value);
+    }
+    const text = params.toString();
+    if (!text) return { payload: undefined, contentType: undefined };
+    return {
+      payload: text,
+      contentType: "application/x-www-form-urlencoded",
+    };
+  }
+  if (body.kind === "raw") {
+    if (!body.text) return { payload: undefined, contentType: undefined };
+    return {
+      payload: body.text,
+      contentType: body.contentType || "text/plain",
+    };
+  }
+  return { payload: undefined, contentType: undefined };
+}
+
+const BODY_KINDS: Array<{ id: BodyKind; label: string; disabled?: boolean; hint?: string }> = [
+  { id: "none", label: "None" },
+  { id: "json", label: "JSON" },
+  { id: "urlencoded", label: "Urlencoded" },
+  { id: "raw", label: "Raw" },
+  { id: "none", label: "Form", disabled: true, hint: "multipart ships later" },
+  { id: "none", label: "Binary", disabled: true, hint: "multipart ships later" },
+];
+
 function TabBody(props: {
-  value: string;
-  onInput: (v: string) => void;
+  value: BodyState;
+  onChange: (next: BodyState) => void;
 }): JSX.Element {
+  const pick = (kind: BodyKind) => {
+    if (kind === props.value.kind) return;
+    switch (kind) {
+      case "none":
+        props.onChange({ kind: "none" });
+        break;
+      case "json":
+        props.onChange({ kind: "json", text: "" });
+        break;
+      case "urlencoded":
+        props.onChange({
+          kind: "urlencoded",
+          rows: [{ name: "", value: "", enabled: true }],
+        });
+        break;
+      case "raw":
+        props.onChange({ kind: "raw", text: "", contentType: "text/plain" });
+        break;
+    }
+  };
+
   return (
-    <div style={{ display: "flex", "flex-direction": "column", height: "100%" }}>
+    <div
+      style={{ display: "flex", "flex-direction": "column", height: "100%" }}
+      data-testid="body-tab"
+    >
       <div
         style={{
           padding: "8px 16px",
           "border-bottom": "1px solid var(--bd-1)",
           display: "flex",
           "align-items": "center",
+          gap: "4px",
+          "flex-wrap": "wrap",
+        }}
+        role="radiogroup"
+      >
+        <For each={BODY_KINDS}>
+          {(k) => {
+            const active = () => props.value.kind === k.id && !k.disabled;
+            return (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active()}
+                aria-label={k.label}
+                data-testid={`body-kind-${k.label.toLowerCase()}`}
+                title={k.hint ?? k.label}
+                disabled={k.disabled}
+                onClick={() => pick(k.id)}
+                style={{
+                  padding: "3px 10px",
+                  "font-size": "11px",
+                  "border-radius": "3px",
+                  background: active() ? "var(--bg-2)" : "transparent",
+                  color: active() ? "var(--fg-0)" : "var(--fg-2)",
+                  border: active() ? "1px solid var(--bd-2)" : "1px solid transparent",
+                  opacity: k.disabled ? 0.4 : 1,
+                  cursor: k.disabled ? "not-allowed" : "pointer",
+                }}
+              >
+                {k.label}
+              </button>
+            );
+          }}
+        </For>
+      </div>
+
+      <Show when={props.value.kind === "none"}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            color: "var(--fg-3)",
+            "font-size": "12px",
+          }}
+        >
+          No body will be sent.
+        </div>
+      </Show>
+
+      <Show when={props.value.kind === "json"}>
+        <JsonBodyEditor
+          text={props.value.kind === "json" ? props.value.text : ""}
+          onChange={(text) => props.onChange({ kind: "json", text })}
+        />
+      </Show>
+
+      <Show when={props.value.kind === "urlencoded"}>
+        <UrlencodedBodyEditor
+          rows={
+            props.value.kind === "urlencoded" ? props.value.rows : []
+          }
+          onChange={(rows) => props.onChange({ kind: "urlencoded", rows })}
+        />
+      </Show>
+
+      <Show when={props.value.kind === "raw"}>
+        <RawBodyEditor
+          text={props.value.kind === "raw" ? props.value.text : ""}
+          contentType={
+            props.value.kind === "raw"
+              ? props.value.contentType
+              : "text/plain"
+          }
+          onChange={(text, contentType) =>
+            props.onChange({ kind: "raw", text, contentType })
+          }
+        />
+      </Show>
+    </div>
+  );
+}
+
+function JsonBodyEditor(props: {
+  text: string;
+  onChange: (t: string) => void;
+}): JSX.Element {
+  const [err, setErr] = createSignal<string | undefined>(undefined);
+  const format = () => {
+    try {
+      const parsed = JSON.parse(props.text || "null");
+      props.onChange(JSON.stringify(parsed, null, 2));
+      setErr(undefined);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const minify = () => {
+    try {
+      const parsed = JSON.parse(props.text || "null");
+      props.onChange(JSON.stringify(parsed));
+      setErr(undefined);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div style={{ flex: 1, display: "flex", "flex-direction": "column" }}>
+      <div
+        style={{
+          display: "flex",
+          "align-items": "center",
           gap: "8px",
+          padding: "4px 16px",
+          "border-bottom": "1px solid var(--bd-1)",
+          "min-height": "28px",
         }}
       >
         <span
           class="mono"
+          style={{ "font-size": "10px", color: "var(--fg-3)" }}
+        >
+          application/json
+        </span>
+        <div style={{ flex: 1 }} />
+        <Show when={err()}>
+          <span
+            class="mono"
+            data-testid="body-json-error"
+            style={{ "font-size": "11px", color: "var(--err)" }}
+          >
+            {err()}
+          </span>
+        </Show>
+        <button
+          type="button"
+          onClick={format}
+          data-testid="body-json-format"
           style={{
             "font-size": "11px",
             color: "var(--fg-2)",
-            padding: "3px 10px",
-            background: "var(--bg-2)",
-            "border-radius": "3px",
+            padding: "2px 8px",
           }}
         >
-          JSON
-        </span>
-        <span
-          class="mono"
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
+          Format
+        </button>
+        <button
+          type="button"
+          onClick={minify}
+          style={{
+            "font-size": "11px",
+            color: "var(--fg-2)",
+            padding: "2px 8px",
+          }}
         >
-          Form / Urlencoded / Raw / Binary — M6
-        </span>
+          Minify
+        </button>
       </div>
       <textarea
         data-testid="body-input"
-        value={props.value}
-        onInput={(e) => props.onInput(e.currentTarget.value)}
+        value={props.text}
+        onInput={(e) => props.onChange(e.currentTarget.value)}
         class="mono"
         placeholder='{"amount": 12900}'
+        style={{
+          flex: 1,
+          margin: 0,
+          padding: "14px 16px",
+          "font-size": "12px",
+          "line-height": 1.7,
+          color: "var(--fg-1)",
+          background: "var(--bg-0)",
+          resize: "none",
+          width: "100%",
+        }}
+      />
+    </div>
+  );
+}
+
+function UrlencodedBodyEditor(props: {
+  rows: Array<{ name: string; value: string; enabled: boolean }>;
+  onChange: (rows: Array<{ name: string; value: string; enabled: boolean }>) => void;
+}): JSX.Element {
+  const update = (
+    i: number,
+    patch: Partial<{ name: string; value: string; enabled: boolean }>,
+  ) => {
+    props.onChange(
+      props.rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+    );
+  };
+  const remove = (i: number) =>
+    props.onChange(props.rows.filter((_, idx) => idx !== i));
+  const add = () =>
+    props.onChange([...props.rows, { name: "", value: "", enabled: true }]);
+  return (
+    <div style={{ flex: 1, display: "flex", "flex-direction": "column" }}>
+      <div
+        style={{
+          display: "grid",
+          "grid-template-columns": "14px 220px 1fr 24px",
+          padding: "6px 16px",
+          "font-size": "10px",
+          color: "var(--fg-3)",
+          "text-transform": "uppercase",
+          "letter-spacing": "0.08em",
+          "border-bottom": "1px solid var(--bd-1)",
+          gap: "8px",
+        }}
+      >
+        <div />
+        <div>Field</div>
+        <div>Value</div>
+        <div />
+      </div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        <For each={props.rows}>
+          {(r, i) => (
+            <div
+              style={{
+                display: "grid",
+                "grid-template-columns": "14px 220px 1fr 24px",
+                padding: "6px 16px",
+                "align-items": "center",
+                gap: "8px",
+                "border-bottom": "1px solid var(--bd-1)",
+                opacity: r.enabled ? 1 : 0.5,
+              }}
+            >
+              <Checkbox
+                checked={r.enabled}
+                onChange={(v) => update(i(), { enabled: v })}
+                aria-label={`Include field ${r.name || "(unnamed)"}`}
+              />
+              <input
+                value={r.name}
+                placeholder="name"
+                disabled={!r.enabled}
+                class="mono"
+                style={{ "font-size": "12px", width: "100%" }}
+                onInput={(e) => update(i(), { name: e.currentTarget.value })}
+              />
+              <input
+                value={r.value}
+                placeholder="value"
+                disabled={!r.enabled}
+                class="mono"
+                style={{ "font-size": "12px", width: "100%" }}
+                onInput={(e) => update(i(), { value: e.currentTarget.value })}
+              />
+              <button
+                type="button"
+                onClick={() => remove(i())}
+                style={{ color: "var(--fg-3)" }}
+                aria-label="Remove field"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </For>
+        <button
+          type="button"
+          onClick={add}
+          data-testid="body-urlencoded-add"
+          style={{
+            padding: "8px 16px",
+            color: "var(--fg-3)",
+            "font-size": "12px",
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+          }}
+        >
+          <IconPlus size={11} /> Add field
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RawBodyEditor(props: {
+  text: string;
+  contentType: string;
+  onChange: (text: string, contentType: string) => void;
+}): JSX.Element {
+  return (
+    <div style={{ flex: 1, display: "flex", "flex-direction": "column" }}>
+      <div
+        style={{
+          display: "flex",
+          "align-items": "center",
+          gap: "8px",
+          padding: "6px 16px",
+          "border-bottom": "1px solid var(--bd-1)",
+        }}
+      >
+        <span
+          style={{ "font-size": "10px", color: "var(--fg-3)" }}
+          class="mono"
+        >
+          Content-Type
+        </span>
+        <input
+          value={props.contentType}
+          onInput={(e) => props.onChange(props.text, e.currentTarget.value)}
+          class="mono"
+          data-testid="body-raw-content-type"
+          placeholder="text/plain"
+          style={{
+            "font-size": "11px",
+            flex: 1,
+            "max-width": "280px",
+            padding: "3px 6px",
+            border: "1px solid var(--bd-2)",
+            "border-radius": "3px",
+            background: "var(--bg-0)",
+          }}
+        />
+      </div>
+      <textarea
+        data-testid="body-input"
+        value={props.text}
+        onInput={(e) => props.onChange(e.currentTarget.value, props.contentType)}
+        class="mono"
         style={{
           flex: 1,
           margin: 0,
