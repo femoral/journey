@@ -44,6 +44,10 @@ export {
   type JourneyLogger,
   type RequestLog,
   type ResponseLog,
+  type RunStartEvent,
+  type RunEndEvent,
+  type StepStartEvent,
+  type StepEndEvent,
 } from "./logger.js";
 
 export {
@@ -64,6 +68,7 @@ export {
   runJourney,
   step,
   type JourneyResult,
+  type RunMeta,
   type StepOptions,
   type StepResult,
 } from "./runtime.js";

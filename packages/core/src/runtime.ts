@@ -1,6 +1,11 @@
 import type { Endpoint, ResponseOf } from "./endpoint.js";
 import { buildRequest, execute, type HttpContext, type HttpResponse } from "./http.js";
 
+/** Caller-supplied run metadata. runId is forwarded to every lifecycle event. */
+export interface RunMeta {
+  runId?: string;
+}
+
 type Lazy<T> = T | (() => T | Promise<T>);
 
 export interface StepOptions<E extends Endpoint> {
@@ -76,7 +81,20 @@ async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
   return typeof v === "function" ? await (v as () => T | Promise<T>)() : v;
 }
 
-export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<JourneyResult> {
+/**
+ * Runs a single journey. Emits `onStepStart` / `onStepEnd` events for each step
+ * through `ctx.logger`; run-level lifecycle events (`onRunStart` / `onRunEnd`)
+ * are the caller's responsibility — use `runAllRegistered` to get the full set.
+ *
+ * Pass `opts.journeyIdx` (and `opts.runId`) so step events carry the same
+ * correlation identifiers as surrounding `runAllRegistered` invocations would
+ * use; otherwise a fresh runId is minted and journeyIdx defaults to 0.
+ */
+export async function runJourney(
+  def: JourneyDef,
+  ctx: HttpContext,
+  opts: { runId?: string; journeyIdx?: number; stepIdxOffset?: number } = {},
+): Promise<JourneyResult> {
   const steps: StepDef[] = [];
   const prev = state.collecting;
   state.collecting = steps;
@@ -86,12 +104,25 @@ export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<Jou
     state.collecting = prev;
   }
 
+  const runId = opts.runId ?? newRunId();
+  const journeyIdx = opts.journeyIdx ?? 0;
+  const stepIdxOffset = opts.stepIdxOffset ?? 0;
+
   const results: StepResult[] = [];
   const journeyStart = Date.now();
   let ok = true;
 
-  for (const s of steps) {
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i]!;
+    const stepIdx = stepIdxOffset + i;
     const start = Date.now();
+    ctx.logger?.onStepStart?.({
+      runId,
+      journeyIdx,
+      journeyName: def.name,
+      stepIdx,
+      name: s.name,
+    });
     try {
       const headers = await resolveLazy(s.options.headers);
       const query = await resolveLazy(s.options.query);
@@ -111,20 +142,27 @@ export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<Jou
       const response = await execute(req, ctx);
       if (s.options.assert) await s.options.assert(response as HttpResponse<never>);
       if (s.options.after) await s.options.after(response as HttpResponse<never>);
+      const durationMs = Date.now() - start;
       results.push({
         name: s.name,
         ok: true,
         request: { method: req.method, url: req.url },
         response,
-        durationMs: Date.now() - start,
+        durationMs,
       });
+      ctx.logger?.onStepEnd?.({ runId, journeyIdx, stepIdx, ok: true, durationMs });
     } catch (err) {
       ok = false;
-      results.push({
-        name: s.name,
+      const durationMs = Date.now() - start;
+      const error = err instanceof Error ? err.message : String(err);
+      results.push({ name: s.name, ok: false, error, durationMs });
+      ctx.logger?.onStepEnd?.({
+        runId,
+        journeyIdx,
+        stepIdx,
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
-        durationMs: Date.now() - start,
+        durationMs,
+        error,
       });
       break;
     }
@@ -133,12 +171,45 @@ export async function runJourney(def: JourneyDef, ctx: HttpContext): Promise<Jou
   return { name: def.name, ok, steps: results, durationMs: Date.now() - journeyStart };
 }
 
-export async function runAllRegistered(ctx: HttpContext): Promise<JourneyResult[]> {
+/**
+ * Runs every currently-registered journey, clearing the registry first. Emits
+ * `onRunStart` / `onRunEnd` bookends around the set, with each journey's steps
+ * in between sharing the same runId. stepIdx is monotonic across the whole run
+ * so a subscriber can key network/log streams by stepIdx without caring about
+ * journey boundaries.
+ */
+export async function runAllRegistered(
+  ctx: HttpContext,
+  opts: RunMeta = {},
+): Promise<JourneyResult[]> {
   const defs = state.registry.slice();
   clearRegistry();
+  const runId = opts.runId ?? newRunId();
+  ctx.logger?.onRunStart?.({ runId, journeyNames: defs.map((d) => d.name) });
+  const runStart = Date.now();
   const results: JourneyResult[] = [];
-  for (const def of defs) {
-    results.push(await runJourney(def, ctx));
+  let ok = true;
+  let stepIdxOffset = 0;
+  for (let journeyIdx = 0; journeyIdx < defs.length; journeyIdx++) {
+    const def = defs[journeyIdx]!;
+    const result = await runJourney(def, ctx, { runId, journeyIdx, stepIdxOffset });
+    results.push(result);
+    if (!result.ok) ok = false;
+    stepIdxOffset += result.steps.length;
   }
+  ctx.logger?.onRunEnd?.({
+    runId,
+    ok,
+    durationMs: Date.now() - runStart,
+    results: results.map((r) => ({ name: r.name, ok: r.ok })),
+  });
   return results;
+}
+
+function newRunId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID (rare for Node 18+).
+  return `run_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }

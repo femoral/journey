@@ -18,7 +18,53 @@ export interface ResponseLog {
   durationMs: number;
 }
 
+/**
+ * Fired at the top of a run before any step executes. The runtime allocates a
+ * runId if the caller didn't pass one in, so subscribers can correlate later
+ * events back to the run.
+ */
+export interface RunStartEvent {
+  runId: string;
+  journeyNames: string[];
+}
+
+/** Fired once per run after every journey has either completed or halted. */
+export interface RunEndEvent {
+  runId: string;
+  ok: boolean;
+  durationMs: number;
+  results: ReadonlyArray<{ name: string; ok: boolean }>;
+}
+
+/**
+ * Fired when a step starts executing, before any lazy-resolved headers/query/
+ * body are materialized and before `onRequest`. `stepIdx` is monotonic across
+ * the whole run, not just within a journey — this way consumers don't need to
+ * track journey boundaries to correlate events.
+ */
+export interface StepStartEvent {
+  runId: string;
+  journeyIdx: number;
+  journeyName: string;
+  stepIdx: number;
+  name: string;
+}
+
+/** Fired when a step finishes, after `onResponse`/`onError`. */
+export interface StepEndEvent {
+  runId: string;
+  journeyIdx: number;
+  stepIdx: number;
+  ok: boolean;
+  durationMs: number;
+  error?: string;
+}
+
 export interface JourneyLogger {
+  onRunStart?(event: RunStartEvent): void;
+  onRunEnd?(event: RunEndEvent): void;
+  onStepStart?(event: StepStartEvent): void;
+  onStepEnd?(event: StepEndEvent): void;
   onRequest?(req: RequestLog): void;
   onResponse?(req: RequestLog, res: ResponseLog): void;
   onError?(req: RequestLog, error: unknown, durationMs: number): void;
