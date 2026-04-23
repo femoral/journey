@@ -1,6 +1,7 @@
 import {
   For,
   Show,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -27,6 +28,7 @@ import {
   SegBtn,
   TsHighlight,
 } from "../ui";
+import { AddStepDialog, renameStep } from "./AddStepDialog";
 
 const SKELETON = (name: string) => `import { journey, step, expect } from "@journey/core";
 
@@ -198,6 +200,7 @@ export const JourneyEditorPage: Component = () => {
   const [status, setStatus] = createSignal<string | undefined>(undefined);
   const [mode, setMode] = createSignal<ViewMode>("Source");
   const [activeStep, setActiveStep] = createSignal(0);
+  const [addStepOpen, setAddStepOpen] = createSignal(false);
 
   const parsedSteps = createMemo(() => parseSteps(source()));
   const stepIds = () => parsedSteps().map((_, i) => String(i));
@@ -412,11 +415,26 @@ export const JourneyEditorPage: Component = () => {
               active={activeStep()}
               onSelect={setActiveStep}
               onDragEnd={onDragEnd}
+              onAddStep={() => setAddStepOpen(true)}
             />
             <Show when={mode() === "Visual"} fallback={<SourceView source={source()} onInput={setSource} />}>
-              <Inspector step={parsedSteps()[activeStep()]} />
+              <Inspector
+                step={parsedSteps()[activeStep()]}
+                onRename={(newName) => {
+                  const s = parsedSteps()[activeStep()];
+                  if (!s) return;
+                  const next = renameStep(source(), s.name, newName, s.start, s.end);
+                  if (next) setSource(next);
+                }}
+              />
             </Show>
           </div>
+          <AddStepDialog
+            open={addStepOpen()}
+            onClose={() => setAddStepOpen(false)}
+            source={source()}
+            onAppend={(next) => setSource(next)}
+          />
         </Show>
       </section>
     </div>
@@ -539,6 +557,7 @@ function StepListPane(props: {
     draggable: { id: string | number };
     droppable?: { id: string | number } | null;
   }) => void;
+  onAddStep: () => void;
 }): JSX.Element {
   return (
     <div
@@ -573,16 +592,15 @@ function StepListPane(props: {
         <div style={{ flex: 1 }} />
         <button
           type="button"
-          disabled
-          title="Add step (M6)"
+          onClick={props.onAddStep}
+          data-testid="editor-add-step"
+          title="Pick an endpoint and append a step block to this journey"
           style={{
             "font-size": "11px",
-            color: "var(--fg-3)",
+            color: "var(--ac)",
             display: "flex",
             "align-items": "center",
             gap: "4px",
-            opacity: 0.5,
-            cursor: "not-allowed",
           }}
         >
           <IconPlus size={11} /> Add step
@@ -655,8 +673,15 @@ function StepListPane(props: {
 
 type InspectorTab = "Config" | "Assertions" | "Extract" | "Hooks";
 
-function Inspector(props: { step: ParsedStep | undefined }): JSX.Element {
+function Inspector(props: {
+  step: ParsedStep | undefined;
+  onRename: (newName: string) => void;
+}): JSX.Element {
   const [tab, setTab] = createSignal<InspectorTab>("Config");
+  const [draftName, setDraftName] = createSignal("");
+  createEffect(() => {
+    setDraftName(props.step?.name ?? "");
+  });
   return (
     <div
       style={{
@@ -740,11 +765,77 @@ function Inspector(props: { step: ParsedStep | undefined }): JSX.Element {
               }}
             >
               <Show when={tab() === "Config"}>
-                <p style={{ margin: 0 }}>
-                  Inline editing of step config (endpoint, headers, body) ships with the
-                  visual step builder in M6f. For now, switch to{" "}
-                  <span style={{ color: "var(--ac)" }}>Source</span> mode to edit raw TS.
-                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    "flex-direction": "column",
+                    gap: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      "flex-direction": "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <label
+                      style={{
+                        "font-size": "10px",
+                        color: "var(--fg-3)",
+                        "text-transform": "uppercase",
+                        "letter-spacing": "0.08em",
+                      }}
+                    >
+                      Step name
+                    </label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        value={draftName()}
+                        onInput={(e) => setDraftName(e.currentTarget.value)}
+                        data-testid="inspector-step-name"
+                        class="mono"
+                        style={{
+                          flex: 1,
+                          padding: "6px 8px",
+                          border: "1px solid var(--bd-2)",
+                          "border-radius": "4px",
+                          background: "var(--bg-0)",
+                          "font-size": "12px",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        data-testid="inspector-rename"
+                        disabled={
+                          !draftName().trim() ||
+                          draftName() === s().name
+                        }
+                        onClick={() => props.onRename(draftName().trim())}
+                        style={{
+                          padding: "5px 12px",
+                          background: "var(--ac)",
+                          color: "#1a1200",
+                          "border-radius": "4px",
+                          "font-size": "11px",
+                          "font-weight": 600,
+                          opacity:
+                            !draftName().trim() ||
+                            draftName() === s().name
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        Rename
+                      </button>
+                    </div>
+                  </div>
+                  <p style={{ margin: 0, "font-size": "11px" }}>
+                    Inline editing of <span class="mono">endpoint</span>,
+                    headers, and body are still Source-mode-only — this pane
+                    will grow once the scripted form lands.
+                  </p>
+                </div>
               </Show>
               <Show when={tab() === "Assertions"}>
                 <p style={{ margin: 0 }}>
