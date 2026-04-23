@@ -20,6 +20,7 @@ import {
   type AuthPreset,
   type AuthPresetKind,
 } from "./auth";
+import { SaveAsStepDialog, type SaveAsStepPayload } from "./SaveAsStepDialog";
 import { useSearchParams } from "@solidjs/router";
 import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
@@ -62,6 +63,7 @@ export const EndpointsPage: Component = () => {
   const [error, setError] = createSignal<string | undefined>(undefined);
   const [busy, setBusy] = createSignal(false);
   const [auth, setAuth] = createSignal<AuthPreset>({ kind: "none" });
+  const [saveAsStepOpen, setSaveAsStepOpen] = createSignal(false);
 
   // Active env values feed `{{env.VAR}}` interpolation in auth presets.
   const [envs] = createResource(() => api.getEnvironments());
@@ -372,6 +374,18 @@ export const EndpointsPage: Component = () => {
                 baseUrl={list()?.baseUrl}
                 busy={busy()}
                 onSend={send}
+                onSaveAsStep={() => setSaveAsStepOpen(true)}
+              />
+              <SaveAsStepDialog
+                open={saveAsStepOpen()}
+                onClose={() => setSaveAsStepOpen(false)}
+                payload={buildSaveAsStepPayload(
+                  ep(),
+                  paramValues(),
+                  paramDisabled(),
+                  headerRows(),
+                  body(),
+                )}
               />
 
               <div
@@ -473,6 +487,7 @@ function AddressBar(props: {
   baseUrl: string | undefined;
   busy: boolean;
   onSend: () => void;
+  onSaveAsStep: () => void;
 }): JSX.Element {
   return (
     <div
@@ -556,8 +571,9 @@ function AddressBar(props: {
       </button>
       <button
         type="button"
-        title="Save as journey step (M6)"
-        disabled
+        onClick={props.onSaveAsStep}
+        data-testid="save-as-step"
+        title="Append this request as a step in a journey file"
         style={{
           display: "flex",
           "align-items": "center",
@@ -566,9 +582,7 @@ function AddressBar(props: {
           border: "1px solid var(--bd-2)",
           "border-radius": "5px",
           "font-size": "12px",
-          color: "var(--fg-2)",
-          opacity: 0.5,
-          cursor: "not-allowed",
+          color: "var(--fg-1)",
         }}
       >
         <IconPlus size={11} /> Save as step
@@ -2093,6 +2107,43 @@ function matchesUrl(fullUrl: string, baseUrl: string, pathTemplate: string): boo
   const pattern = escaped.replace(/\\\{[^}]+\\\}/g, "[^/]+");
   // Allow trailing query string on the captured URL.
   return new RegExp(`^${pattern}(?:\\?.*)?$`).test(fullUrl);
+}
+
+/**
+ * Collapses the Endpoints form state into the shape SaveAsStepDialog wants:
+ * resolved path (with filled-in params), enabled headers, and the serialized
+ * body payload (object for JSON, string for urlencoded/raw).
+ */
+function buildSaveAsStepPayload(
+  endpoint: EndpointSummary,
+  paramValues: Record<string, string>,
+  paramDisabled: Record<string, boolean>,
+  headerRows: Array<{ name: string; value: string; enabled: boolean }>,
+  body: BodyState,
+): SaveAsStepPayload {
+  const activeParams: Record<string, string> = {};
+  for (const [k, v] of Object.entries(paramValues)) {
+    if (!paramDisabled[`path:${k}`]) activeParams[k] = v;
+  }
+  const path = interpolate(endpoint.path, activeParams);
+  const headers: Record<string, string> = {};
+  for (const r of headerRows) {
+    if (r.enabled && r.name.trim()) headers[r.name.trim()] = r.value;
+  }
+  let serializedBody: unknown = undefined;
+  try {
+    serializedBody = serializeBody(body).payload;
+  } catch {
+    // Invalid JSON — leave body out of the step rather than crashing.
+    serializedBody = undefined;
+  }
+  return {
+    endpoint,
+    method: endpoint.method,
+    path,
+    headers,
+    ...(serializedBody !== undefined ? { body: serializedBody } : {}),
+  };
 }
 
 function interpolate(path: string, params: Record<string, string>): string {
