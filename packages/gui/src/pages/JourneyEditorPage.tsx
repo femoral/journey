@@ -809,10 +809,29 @@ function SourceView(props: {
   source: string;
   onInput: (s: string) => void;
 }): JSX.Element {
+  let preEl: HTMLPreElement | undefined;
+  const syncScroll = (ta: HTMLTextAreaElement) => {
+    if (!preEl) return;
+    preEl.scrollTop = ta.scrollTop;
+    preEl.scrollLeft = ta.scrollLeft;
+  };
+  // Shared layout for both overlay pre and the editable textarea. Any drift here
+  // (padding, font, wrapping) breaks cursor/highlight alignment — keep in sync.
+  const sharedLayout = {
+    margin: 0,
+    padding: "14px 18px",
+    "font-size": "12px",
+    "font-family": "var(--ff-mono)",
+    "line-height": 1.7,
+    "white-space": "pre-wrap",
+    "word-break": "break-word",
+    "tab-size": 2,
+  } as const;
   return (
     <div
       style={{
         flex: 1,
+        "min-width": 0,
         position: "relative",
         display: "flex",
         "flex-direction": "column",
@@ -829,53 +848,51 @@ function SourceView(props: {
           color: "var(--fg-3)",
           "text-transform": "uppercase",
           "letter-spacing": "0.08em",
+          "flex-shrink": 0,
         }}
       >
         <IconLayers size={11} />
         <span>Source</span>
       </div>
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div style={{ flex: 1, position: "relative", "min-height": 0 }}>
         <pre
+          ref={preEl}
           aria-hidden="true"
-          class="mono"
           style={{
+            ...sharedLayout,
             position: "absolute",
             inset: 0,
-            margin: 0,
-            padding: "14px 18px",
-            "font-size": "12px",
-            "line-height": 1.7,
             color: "var(--fg-1)",
             "pointer-events": "none",
-            "white-space": "pre-wrap",
-            "word-break": "break-word",
-            overflow: "auto",
+            overflow: "hidden",
           }}
         >
           <TsHighlight text={props.source} />
+          {/* Trailing newline so the last line scrolls into view like a real editor. */}
+          {"\n"}
         </pre>
         <textarea
           data-testid="source-editor"
           value={props.source}
-          onInput={(e) => props.onInput(e.currentTarget.value)}
+          onInput={(e) => {
+            props.onInput(e.currentTarget.value);
+            syncScroll(e.currentTarget);
+          }}
+          onScroll={(e) => syncScroll(e.currentTarget)}
           spellcheck={false}
-          class="mono"
           style={{
+            ...sharedLayout,
             position: "absolute",
             inset: 0,
             width: "100%",
             height: "100%",
-            margin: 0,
-            padding: "14px 18px",
-            "font-size": "12px",
-            "line-height": 1.7,
             color: "transparent",
             "caret-color": "var(--fg-0)",
             background: "transparent",
             border: "none",
+            outline: "none",
             resize: "none",
-            "white-space": "pre-wrap",
-            "word-break": "break-word",
+            overflow: "auto",
           }}
         />
       </div>
