@@ -24,6 +24,7 @@ import { useSearchParams } from "@solidjs/router";
 import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
 import {
+  Checkbox,
   Field,
   IconCopy,
   IconPlay,
@@ -35,6 +36,7 @@ import {
   MiniTab,
   StatusPill,
   TabButton,
+  TypeHint,
   type HttpMethod,
 } from "../ui";
 
@@ -52,6 +54,7 @@ export const EndpointsPage: Component = () => {
 
   const [paramValues, setParamValues] = createSignal<Record<string, string>>({});
   const [queryValues, setQueryValues] = createSignal<Record<string, string>>({});
+  const [paramDisabled, setParamDisabled] = createSignal<Record<string, boolean>>({});
   const [headerRows, setHeaderRows] = createSignal<{ name: string; value: string; enabled: boolean }[]>([]);
   const [body, setBody] = createSignal("");
 
@@ -108,6 +111,7 @@ export const EndpointsPage: Component = () => {
     setSelected(ep);
     setParamValues({});
     setQueryValues({});
+    setParamDisabled({});
     setHeaderRows([]);
     setBody("");
     setResponse(undefined);
@@ -141,8 +145,18 @@ export const EndpointsPage: Component = () => {
         bodyVal = JSON.parse(body());
       }
       const base = l.baseUrl.endsWith("/") ? l.baseUrl : `${l.baseUrl}/`;
-      const path = interpolate(ep.path, paramValues()).replace(/^\//, "");
-      const mergedQuery = { ...authPart.query, ...queryValues() };
+      // Disabled path params stay templated — let the server surface the
+      // missing-param error rather than silently dropping them.
+      const activePathParams: Record<string, string> = {};
+      for (const [k, v] of Object.entries(paramValues())) {
+        if (!paramDisabled()[`path:${k}`]) activePathParams[k] = v;
+      }
+      const path = interpolate(ep.path, activePathParams).replace(/^\//, "");
+      const activeQueryValues: Record<string, string> = {};
+      for (const [k, v] of Object.entries(queryValues())) {
+        if (!paramDisabled()[`query:${k}`]) activeQueryValues[k] = v;
+      }
+      const mergedQuery = { ...authPart.query, ...activeQueryValues };
       const query = Object.entries(mergedQuery)
         .filter(([, v]) => v !== "" && v !== undefined)
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -401,11 +415,18 @@ export const EndpointsPage: Component = () => {
                       endpoint={ep()}
                       paramValues={paramValues()}
                       queryValues={queryValues()}
+                      disabled={paramDisabled()}
                       onParamInput={(name, v) =>
                         setParamValues({ ...paramValues(), [name]: v })
                       }
                       onQueryInput={(name, v) =>
                         setQueryValues({ ...queryValues(), [name]: v })
+                      }
+                      onToggle={(key, enabled) =>
+                        setParamDisabled({
+                          ...paramDisabled(),
+                          [key]: !enabled,
+                        })
                       }
                     />
                   </Show>
@@ -570,19 +591,23 @@ function AddressBar(props: {
   );
 }
 
+const PARAM_GRID = "14px 50px 160px 100px 1fr";
+
 function TabParams(props: {
   endpoint: EndpointSummary;
   paramValues: Record<string, string>;
   queryValues: Record<string, string>;
+  disabled: Record<string, boolean>;
   onParamInput: (name: string, v: string) => void;
   onQueryInput: (name: string, v: string) => void;
+  onToggle: (key: string, enabled: boolean) => void;
 }): JSX.Element {
   const rows = createMemo<ParamRow[]>(() => {
     const out: ParamRow[] = [];
     for (const info of paramsByLocation(props.endpoint, "path")) {
       out.push({
         name: info.name,
-        enabled: true,
+        enabled: !props.disabled[`path:${info.name}`],
         value: props.paramValues[info.name] ?? "",
         info,
       });
@@ -590,7 +615,7 @@ function TabParams(props: {
     for (const info of paramsByLocation(props.endpoint, "query")) {
       out.push({
         name: info.name,
-        enabled: true,
+        enabled: !props.disabled[`query:${info.name}`],
         value: props.queryValues[info.name] ?? "",
         info,
       });
@@ -603,7 +628,7 @@ function TabParams(props: {
       <div
         style={{
           display: "grid",
-          "grid-template-columns": "60px 160px 100px 1fr",
+          "grid-template-columns": PARAM_GRID,
           padding: "6px 16px",
           "font-size": "10px",
           color: "var(--fg-3)",
@@ -613,6 +638,7 @@ function TabParams(props: {
           gap: "8px",
         }}
       >
+        <div />
         <div>In</div>
         <div>Key</div>
         <div>Type</div>
@@ -633,82 +659,91 @@ function TabParams(props: {
         }
       >
         <For each={rows()}>
-          {(r) => (
-            <div
-              style={{
-                display: "grid",
-                "grid-template-columns": "60px 160px 100px 1fr",
-                padding: "6px 16px",
-                "align-items": "center",
-                gap: "8px",
-                "border-bottom": "1px solid var(--bd-1)",
-              }}
-            >
-              <span
-                class="mono"
-                style={{
-                  "font-size": "11px",
-                  color: r.info.in === "path" ? "var(--info)" : "var(--fg-2)",
-                  "text-transform": "uppercase",
-                }}
-              >
-                {r.info.in}
-              </span>
+          {(r) => {
+            const key = `${r.info.in}:${r.info.name}`;
+            return (
               <div
-                style={{ display: "flex", "align-items": "center", gap: "6px" }}
+                style={{
+                  display: "grid",
+                  "grid-template-columns": PARAM_GRID,
+                  padding: "6px 16px",
+                  "align-items": "center",
+                  gap: "8px",
+                  "border-bottom": "1px solid var(--bd-1)",
+                  opacity: r.enabled ? 1 : 0.5,
+                }}
+                data-testid={`param-row-${r.info.in}-${r.info.name}`}
               >
+                <Checkbox
+                  checked={r.enabled}
+                  onChange={(v) => props.onToggle(key, v)}
+                  aria-label={`Include ${r.info.name}`}
+                />
                 <span
                   class="mono"
                   style={{
-                    "font-size": "12px",
-                    color: "var(--fg-0)",
-                    "font-weight": 500,
+                    "font-size": "11px",
+                    color:
+                      r.info.in === "path" ? "var(--info)" : "var(--fg-2)",
+                    "text-transform": "uppercase",
                   }}
                 >
-                  {r.info.name}
+                  {r.info.in}
                 </span>
-                <Show when={r.info.required}>
+                <div
+                  style={{ display: "flex", "align-items": "center", gap: "6px" }}
+                >
                   <span
-                    title="Required"
+                    class="mono"
                     style={{
-                      width: "4px",
-                      height: "4px",
-                      "border-radius": "50%",
-                      background: "var(--ac)",
+                      "font-size": "12px",
+                      color: "var(--fg-0)",
+                      "font-weight": 500,
                     }}
-                  />
-                </Show>
+                  >
+                    {r.info.name}
+                  </span>
+                  <Show when={r.info.required}>
+                    <span
+                      title="Required"
+                      style={{
+                        width: "4px",
+                        height: "4px",
+                        "border-radius": "50%",
+                        background: "var(--ac)",
+                      }}
+                    />
+                  </Show>
+                </div>
+                <TypeHint t="string" required={r.info.required} />
+                <input
+                  value={r.value}
+                  placeholder={r.info.description ?? "value"}
+                  class="mono"
+                  data-testid={`${r.info.in === "path" ? "param" : "query"}-${r.info.name}`}
+                  disabled={!r.enabled}
+                  onInput={(e) =>
+                    r.info.in === "path"
+                      ? props.onParamInput(r.info.name, e.currentTarget.value)
+                      : props.onQueryInput(r.info.name, e.currentTarget.value)
+                  }
+                  style={{
+                    width: "100%",
+                    "font-size": "12px",
+                    color: "var(--fg-0)",
+                    padding: "3px 0",
+                  }}
+                />
               </div>
-              <span
-                class="mono"
-                style={{ "font-size": "10px", color: "var(--fg-3)" }}
-              >
-                string
-              </span>
-              <input
-                value={r.value}
-                placeholder={r.info.description ?? "value"}
-                class="mono"
-                data-testid={`${r.info.in === "path" ? "param" : "query"}-${r.info.name}`}
-                onInput={(e) =>
-                  r.info.in === "path"
-                    ? props.onParamInput(r.info.name, e.currentTarget.value)
-                    : props.onQueryInput(r.info.name, e.currentTarget.value)
-                }
-                style={{
-                  width: "100%",
-                  "font-size": "12px",
-                  color: "var(--fg-0)",
-                  padding: "3px 0",
-                }}
-              />
-            </div>
-          )}
+            );
+          }}
         </For>
       </Show>
     </div>
   );
 }
+
+const HEADER_GRID = "14px 220px 1fr 24px";
 
 function TabHeaders(props: {
   rows: { name: string; value: string; enabled: boolean }[];
@@ -733,7 +768,7 @@ function TabHeaders(props: {
       <div
         style={{
           display: "grid",
-          "grid-template-columns": "220px 1fr 24px",
+          "grid-template-columns": HEADER_GRID,
           padding: "6px 16px",
           "font-size": "10px",
           color: "var(--fg-3)",
@@ -743,6 +778,7 @@ function TabHeaders(props: {
           gap: "8px",
         }}
       >
+        <div />
         <div>Header</div>
         <div>Value</div>
         <div />
@@ -752,17 +788,24 @@ function TabHeaders(props: {
           <div
             style={{
               display: "grid",
-              "grid-template-columns": "220px 1fr 24px",
+              "grid-template-columns": HEADER_GRID,
               padding: "6px 16px",
               "align-items": "center",
               gap: "8px",
               "border-bottom": "1px solid var(--bd-1)",
+              opacity: r.enabled ? 1 : 0.5,
             }}
           >
+            <Checkbox
+              checked={r.enabled}
+              onChange={(v) => update(i(), { enabled: v })}
+              aria-label={`Include header ${r.name || "(unnamed)"}`}
+            />
             <input
               value={r.name}
               placeholder="Authorization"
               class="mono"
+              disabled={!r.enabled}
               style={{ "font-size": "12px", width: "100%" }}
               onInput={(e) => update(i(), { name: e.currentTarget.value })}
               data-testid={`headers-input`}
@@ -771,6 +814,7 @@ function TabHeaders(props: {
               value={r.value}
               placeholder="Bearer {{env.TOKEN}}"
               class="mono"
+              disabled={!r.enabled}
               style={{ "font-size": "12px", width: "100%" }}
               onInput={(e) => update(i(), { value: e.currentTarget.value })}
             />
