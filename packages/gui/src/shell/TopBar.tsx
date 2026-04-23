@@ -18,6 +18,7 @@ export type TopBarProps = {
   onToggleConsole: () => void;
   consoleOpen: boolean;
   onOpenTweaks?: (() => void) | undefined;
+  onOpenPalette?: (() => void) | undefined;
 };
 
 export function TopBar(props: TopBarProps): JSX.Element {
@@ -124,8 +125,11 @@ export function TopBar(props: TopBarProps): JSX.Element {
       <div style={{ flex: 1 }} />
 
       <button
-        disabled
-        title="Search (coming soon)"
+        type="button"
+        onClick={props.onOpenPalette}
+        disabled={!props.onOpenPalette}
+        title="Command palette"
+        data-testid="open-palette"
         style={{
           display: "flex",
           "align-items": "center",
@@ -136,8 +140,8 @@ export function TopBar(props: TopBarProps): JSX.Element {
           "font-size": "12px",
           color: "var(--fg-2)",
           "min-width": "220px",
-          opacity: 0.6,
-          cursor: "not-allowed",
+          opacity: props.onOpenPalette ? 1 : 0.6,
+          cursor: props.onOpenPalette ? "pointer" : "not-allowed",
         }}
       >
         <IconSearch size={12} />

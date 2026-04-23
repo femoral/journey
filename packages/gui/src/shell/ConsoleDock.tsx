@@ -69,6 +69,48 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
     localStorage.setItem(HEIGHT_KEY, String(height()));
   });
 
+  let filterInputEl: HTMLInputElement | undefined;
+
+  // Keyboard shortcuts active while the console is open. Bail if focus is
+  // inside an input/textarea other than the filter box so the user can still
+  // type freely.
+  const onKey = (e: KeyboardEvent) => {
+    if (!props.open) return;
+    const tgt = e.target as HTMLElement | null;
+    const inFilter = tgt === filterInputEl;
+    const inField =
+      tgt instanceof HTMLInputElement ||
+      tgt instanceof HTMLTextAreaElement ||
+      (tgt?.getAttribute("role") === "textbox");
+    // Esc closes the dock whether or not focus is in an input.
+    if (e.key === "Escape") {
+      props.onClose();
+      return;
+    }
+    if (inField && !inFilter) return;
+    if (inFilter && (e.key === "j" || e.key === "k" || e.key === "c")) return;
+
+    const rows = visible();
+    const curIdx = rows.findIndex((r) => r.id === selectedId());
+    if (e.key === "j" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = rows[Math.min(rows.length - 1, curIdx < 0 ? 0 : curIdx + 1)];
+      if (next) setSelectedId(next.id);
+    } else if (e.key === "k" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next = rows[Math.max(0, curIdx < 0 ? 0 : curIdx - 1)];
+      if (next) setSelectedId(next.id);
+    } else if (e.key === "c" && selected()) {
+      e.preventDefault();
+      void navigator.clipboard.writeText(toCurl(selected()!)).catch(() => {});
+    } else if (e.key === "f") {
+      e.preventDefault();
+      filterInputEl?.focus();
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  onCleanup(() => window.removeEventListener("keydown", onKey));
+
   const visible = createMemo<ConsoleEntry[]>(() => {
     const q = query().toLowerCase();
     return store.entries().filter((e) => {
@@ -192,6 +234,7 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
               >
                 <IconSearch size={11} style={{ color: "var(--fg-3)" }} />
                 <input
+                  ref={filterInputEl}
                   value={query()}
                   onInput={(e) => setQuery(e.currentTarget.value)}
                   placeholder="filter"

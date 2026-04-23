@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { ConsoleDock } from "./ConsoleDock";
+import { CommandPalette, useCmdKHotkey } from "./CommandPalette";
 import {
   loadRecentProjects,
   saveRecentProjects,
@@ -21,7 +22,10 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
   const [drift] = createResource(() => api.getSpecDrift());
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
   const [consoleOpen, setConsoleOpen] = createSignal(false);
+  const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [recents, setRecents] = createSignal<RecentProject[]>(loadRecentProjects());
+
+  useCmdKHotkey(() => setPaletteOpen(true));
 
   const consoleStore = createConsoleStore();
 
@@ -66,6 +70,11 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
           onOpenSwitcher={() => setSwitcherOpen(true)}
           onToggleConsole={() => setConsoleOpen((o) => !o)}
           consoleOpen={consoleOpen()}
+          onOpenPalette={() => setPaletteOpen(true)}
+        />
+        <CommandPalette
+          open={paletteOpen()}
+          onClose={() => setPaletteOpen(false)}
         />
         <ProjectSwitcher
           open={switcherOpen()}
