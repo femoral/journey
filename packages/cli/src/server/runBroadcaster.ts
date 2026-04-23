@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type {
   JourneyLogger,
   JourneyResult,
+  LogEvent,
   RequestLog,
   ResponseLog,
   RunEndEvent,
@@ -50,6 +51,13 @@ export type RunEvent =
       stepIdx: number;
       message: string;
       durationMs: number;
+    }
+  | {
+      kind: "log";
+      runId: string;
+      stepIdx: number;
+      level: "info" | "warn" | "error";
+      text: string;
     }
   | {
       kind: "step:end";
@@ -148,6 +156,15 @@ export class RunBroadcaster {
           stepIdx: this.currentStepIdx,
           message: err instanceof Error ? err.message : String(err),
           durationMs,
+        });
+      },
+      onLog: (e: LogEvent) => {
+        this.emit({
+          kind: "log",
+          runId: this.runId,
+          stepIdx: this.currentStepIdx,
+          level: e.level,
+          text: e.text,
         });
       },
       onStepEnd: (e: StepEndEvent) => {

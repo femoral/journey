@@ -60,6 +60,16 @@ export interface StepEndEvent {
   error?: string;
 }
 
+/**
+ * Fired for `console.log` / `console.warn` / `console.error` calls made from
+ * inside step hooks (e.g. `after(res) { console.log(res.body.id); }`). The
+ * subscriber attaches its own `stepIdx`; core carries only the raw level + text.
+ */
+export interface LogEvent {
+  level: "info" | "warn" | "error";
+  text: string;
+}
+
 export interface JourneyLogger {
   onRunStart?(event: RunStartEvent): void;
   onRunEnd?(event: RunEndEvent): void;
@@ -68,6 +78,12 @@ export interface JourneyLogger {
   onRequest?(req: RequestLog): void;
   onResponse?(req: RequestLog, res: ResponseLog): void;
   onError?(req: RequestLog, error: unknown, durationMs: number): void;
+  /**
+   * Fired for user-code `console.*` calls captured during a run. The runner
+   * installs a shim that forwards each call here and to the original console
+   * so terminal output stays intact.
+   */
+  onLog?(event: LogEvent): void;
   info?(message: string): void;
 }
 

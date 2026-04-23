@@ -130,6 +130,37 @@ describe("consoleStore.ingest", () => {
   });
 });
 
+describe("consoleStore log events", () => {
+  it("appends log events to the logs array with the step name when available", () => {
+    const store = runEvents([
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "j",
+        stepIdx: 0,
+        name: "login",
+      },
+      { kind: "log", runId: "r1", stepIdx: 0, level: "info", text: "got token t" },
+      { kind: "log", runId: "r1", stepIdx: 0, level: "warn", text: "slow" },
+    ]);
+    expect(store.logs()).toHaveLength(2);
+    expect(store.logs()[0]).toMatchObject({
+      level: "info",
+      text: "got token t",
+      stepName: "login",
+    });
+    expect(store.logs()[1]?.level).toBe("warn");
+  });
+
+  it("labels run-scope logs (stepIdx=-1) as (run)", () => {
+    const store = runEvents([
+      { kind: "log", runId: "r1", stepIdx: -1, level: "info", text: "booting" },
+    ]);
+    expect(store.logs()[0]?.stepName).toBe("(run)");
+  });
+});
+
 describe("consoleStore.ingestSynthetic", () => {
   it("adds and updates a one-off entry without SSE events", () => {
     createRoot(() => {

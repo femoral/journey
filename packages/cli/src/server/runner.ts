@@ -16,6 +16,7 @@ import {
   type LoadedConfig,
 } from "@journey/core";
 import { tsImport } from "tsx/esm/api";
+import { patchConsole } from "./consolePatch.js";
 
 export interface RunJourneyFileOptions {
   loaded: LoadedConfig;
@@ -54,10 +55,16 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (opts.loaded.config.baseUrl) ctx.baseUrl = opts.loaded.config.baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
-  const results = await runAllRegistered(
-    ctx,
-    opts.runId !== undefined ? { runId: opts.runId } : {},
-  );
+  const unpatchConsole = logger ? patchConsole(logger) : () => {};
+  let results;
+  try {
+    results = await runAllRegistered(
+      ctx,
+      opts.runId !== undefined ? { runId: opts.runId } : {},
+    );
+  } finally {
+    unpatchConsole();
+  }
 
   const cacheDir = join(opts.loaded.projectDir, ".journey", "cache");
   await writeRun(cacheDir, results);

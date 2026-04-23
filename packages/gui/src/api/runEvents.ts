@@ -47,6 +47,13 @@ export type RunEvent =
       durationMs: number;
     }
   | {
+      kind: "log";
+      runId: string;
+      stepIdx: number;
+      level: "info" | "warn" | "error";
+      text: string;
+    }
+  | {
       kind: "step:end";
       runId: string;
       journeyIdx: number;

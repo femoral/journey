@@ -190,6 +190,28 @@ export function createConsoleStore(): ConsoleStore {
         ]);
         break;
       }
+      case "log": {
+        const idx = index.get(`${event.runId}:${event.stepIdx}`);
+        const stepName =
+          idx !== undefined
+            ? (entries()[idx]?.stepName ?? `step ${event.stepIdx + 1}`)
+            : event.stepIdx < 0
+              ? "(run)"
+              : `step ${event.stepIdx + 1}`;
+        setLogs([
+          ...logs(),
+          {
+            id: `${event.runId}:${event.stepIdx}:log:${logs().length}`,
+            runId: event.runId,
+            stepIdx: event.stepIdx,
+            stepName,
+            level: event.level,
+            text: event.text,
+            timestamp: Date.now(),
+          },
+        ]);
+        break;
+      }
       case "step:end": {
         const id = `${event.runId}:${event.stepIdx}`;
         upsert(

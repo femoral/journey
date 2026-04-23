@@ -44,6 +44,7 @@ export {
   type JourneyLogger,
   type RequestLog,
   type ResponseLog,
+  type LogEvent,
   type RunStartEvent,
   type RunEndEvent,
   type StepStartEvent,
