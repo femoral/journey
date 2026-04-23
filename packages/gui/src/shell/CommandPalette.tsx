@@ -26,6 +26,8 @@ export type CommandPaletteProps = {
   onClose: () => void;
   /** Called after a command is selected so the caller can close the palette. */
   onRun?: () => void;
+  /** Invoked by the "Import from cURL…" command. */
+  onOpenImport?: () => void;
 };
 
 type Command = {
@@ -118,6 +120,17 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
       icon: r.icon,
       run: () => navigate(r.path),
     }));
+    const actionCmds: Command[] = props.onOpenImport
+      ? [
+          {
+            id: "a:import",
+            label: "Import from cURL…",
+            hint: "action",
+            icon: IconEndpoints,
+            run: () => props.onOpenImport?.(),
+          },
+        ]
+      : [];
     const endpointCmds: Command[] = (endpoints()?.endpoints ?? []).map((e) => ({
       id: `ep:${e.name}`,
       label: `${e.method} ${e.path}`,
@@ -137,7 +150,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
       icon: IconJourneys,
       run: () => navigate("/editor"),
     }));
-    return [...routeCmds, ...endpointCmds, ...journeyCmds];
+    return [...actionCmds, ...routeCmds, ...endpointCmds, ...journeyCmds];
   });
 
   const filtered = createMemo<Command[]>(() => {

@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { ConsoleDock } from "./ConsoleDock";
 import { CommandPalette, useCmdKHotkey } from "./CommandPalette";
+import { ImportDialog } from "./ImportDialog";
 import {
   loadRecentProjects,
   saveRecentProjects,
@@ -23,6 +24,7 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
   const [consoleOpen, setConsoleOpen] = createSignal(false);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
+  const [importOpen, setImportOpen] = createSignal(false);
   const [recents, setRecents] = createSignal<RecentProject[]>(loadRecentProjects());
 
   useCmdKHotkey(() => setPaletteOpen(true));
@@ -75,7 +77,12 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
         <CommandPalette
           open={paletteOpen()}
           onClose={() => setPaletteOpen(false)}
+          onOpenImport={() => {
+            setPaletteOpen(false);
+            setImportOpen(true);
+          }}
         />
+        <ImportDialog open={importOpen()} onClose={() => setImportOpen(false)} />
         <ProjectSwitcher
           open={switcherOpen()}
           onClose={() => setSwitcherOpen(false)}
