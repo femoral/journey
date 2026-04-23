@@ -7,7 +7,6 @@ import {
   type JSX,
 } from "solid-js";
 import {
-  IconClock,
   IconConsole,
   IconCopy,
   IconEditor,
@@ -33,7 +32,7 @@ const MIN_H = 200;
 const MAX_H = 700;
 const HEIGHT_KEY = "jrn:consoleHeight";
 
-type Tab = "Network" | "Logs" | "Timing";
+type Tab = "Network" | "Logs";
 type MethodFilter = "all" | "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type StatusFilter = "all" | "2xx" | "3xx" | "4xx" | "5xx";
 
@@ -190,12 +189,6 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
             label="Logs"
             count={store.logs().length}
           />
-          <TabBtn
-            active={tab() === "Timing"}
-            onClick={() => setTab("Timing")}
-            icon={<IconClock size={12} />}
-            label="Timing"
-          />
 
           <div style={{ flex: 1 }} />
 
@@ -282,9 +275,6 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
         </Show>
         <Show when={tab() === "Logs"}>
           <LogsTab logs={store.logs()} />
-        </Show>
-        <Show when={tab() === "Timing"}>
-          <TimingTab entries={store.entries()} />
         </Show>
       </div>
     </Show>
@@ -876,114 +866,6 @@ function LogsTab(props: { logs: Array<{ id: string; level: string; text: string;
                 style={{ color: "var(--fg-1)", "white-space": "pre-wrap" }}
               >
                 {log.text}
-              </span>
-            </div>
-          )}
-        </For>
-      </Show>
-    </div>
-  );
-}
-
-function TimingTab(props: { entries: ConsoleEntry[] }): JSX.Element {
-  const total = createMemo(() =>
-    props.entries.reduce((a, e) => a + (e.durationMs ?? 0), 0),
-  );
-  const sorted = createMemo(() =>
-    [...props.entries].sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)),
-  );
-  return (
-    <div style={{ flex: 1, overflow: "auto", padding: "12px 16px" }}>
-      <Show
-        when={props.entries.length > 0}
-        fallback={
-          <div
-            style={{
-              padding: "12px",
-              "font-size": "12px",
-              color: "var(--fg-3)",
-              "text-align": "center",
-            }}
-          >
-            No timing data yet.
-          </div>
-        }
-      >
-        <div
-          style={{
-            "font-size": "10px",
-            color: "var(--fg-3)",
-            "text-transform": "uppercase",
-            "letter-spacing": "0.08em",
-            "margin-bottom": "8px",
-          }}
-        >
-          Slowest steps · total {total()}ms
-        </div>
-        <For each={sorted()}>
-          {(e) => (
-            <div
-              style={{
-                display: "grid",
-                "grid-template-columns": "42px minmax(0, 1fr) 60px",
-                gap: "10px",
-                "align-items": "center",
-                padding: "4px 0",
-                "font-size": "11px",
-              }}
-            >
-              <Show when={e.method}>
-                <MethodBadge method={e.method as HttpMethod} />
-              </Show>
-              <div
-                style={{
-                  display: "flex",
-                  "align-items": "center",
-                  gap: "8px",
-                  "min-width": 0,
-                }}
-              >
-                <span
-                  class="mono"
-                  style={{
-                    "min-width": 0,
-                    flex: "0 0 auto",
-                    "max-width": "180px",
-                    overflow: "hidden",
-                    "text-overflow": "ellipsis",
-                    "white-space": "nowrap",
-                    color: "var(--fg-1)",
-                  }}
-                >
-                  {e.stepName}
-                </span>
-                <div
-                  style={{
-                    flex: 1,
-                    height: "4px",
-                    background: "var(--bg-2)",
-                    "border-radius": "2px",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${((e.durationMs ?? 0) / (total() || 1)) * 100}%`,
-                      height: "100%",
-                      background: "var(--ac)",
-                    }}
-                  />
-                </div>
-              </div>
-              <span
-                class="mono"
-                style={{
-                  "text-align": "right",
-                  color: "var(--fg-2)",
-                  "font-size": "11px",
-                }}
-              >
-                {e.durationMs ?? 0}ms
               </span>
             </div>
           )}
