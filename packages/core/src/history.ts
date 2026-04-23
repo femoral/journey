@@ -13,6 +13,10 @@ export interface RunSummary {
   timestamp: string;
   journeyNames: string[];
   ok: boolean;
+  /** Sum of durationMs across all journeys in the run. */
+  durationMs: number;
+  /** Total step count across all journeys. */
+  stepCount: number;
 }
 
 function makeId(): { id: string; timestamp: string } {
@@ -53,6 +57,8 @@ export async function listRuns(cacheDir: string): Promise<RunSummary[]> {
         timestamp: record.timestamp,
         journeyNames: record.results.map((r) => r.name),
         ok: record.results.every((r) => r.ok),
+        durationMs: record.results.reduce((a, r) => a + (r.durationMs ?? 0), 0),
+        stepCount: record.results.reduce((a, r) => a + r.steps.length, 0),
       });
     } catch {
       // corrupt file; skip

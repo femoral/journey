@@ -113,6 +113,8 @@ export interface RunSummary {
   timestamp: string;
   journeyNames: string[];
   ok: boolean;
+  durationMs: number;
+  stepCount: number;
 }
 
 export interface RunDetail {

@@ -22,12 +22,16 @@ const runs: RunSummary[] = [
     timestamp: new Date(now - 2 * 60_000).toISOString(),
     journeyNames: ["checkout.journey.ts"],
     ok: true,
+    durationMs: 820,
+    stepCount: 4,
   },
   {
     id: "r2",
     timestamp: new Date(now - 2 * 60 * 60_000).toISOString(),
     journeyNames: ["signup.journey.ts", "extra.journey.ts"],
     ok: false,
+    durationMs: 1100,
+    stepCount: 6,
   },
 ];
 

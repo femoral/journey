@@ -80,7 +80,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       icon: IconDiff,
       badge: props.counts.drift && props.counts.drift > 0 ? props.counts.drift : null,
     },
-    { id: "history", href: "/history", label: "Run history", icon: IconClock, badge: null, dim: true },
+    { id: "history", href: "/history", label: "Run history", icon: IconClock, badge: null },
     { id: "mock", href: "/mock", label: "Mock server", icon: IconLayers, badge: null, dim: true },
   ];
 

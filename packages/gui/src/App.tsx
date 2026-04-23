@@ -4,6 +4,7 @@ import { DiffPage } from "./pages/DiffPage";
 import { EndpointsPage } from "./pages/EndpointsPage";
 import { EnvironmentsPage } from "./pages/EnvironmentsPage";
 import { FilesPage } from "./pages/FilesPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { JourneyEditorPage } from "./pages/JourneyEditorPage";
 import { JourneysPage } from "./pages/JourneysPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -18,5 +19,6 @@ export const App: Component = () => (
     <Route path="/environments" component={EnvironmentsPage} />
     <Route path="/editor" component={JourneyEditorPage} />
     <Route path="/diff" component={DiffPage} />
+    <Route path="/history" component={HistoryPage} />
   </Router>
 );
