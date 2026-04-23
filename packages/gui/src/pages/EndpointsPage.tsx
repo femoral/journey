@@ -21,6 +21,7 @@ import {
   type AuthPresetKind,
 } from "./auth";
 import { SaveAsStepDialog, type SaveAsStepPayload } from "./SaveAsStepDialog";
+import { runPostScript, runPreScript } from "./scripts";
 import { useSearchParams } from "@solidjs/router";
 import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
@@ -63,6 +64,8 @@ export const EndpointsPage: Component = () => {
   const [error, setError] = createSignal<string | undefined>(undefined);
   const [busy, setBusy] = createSignal(false);
   const [auth, setAuth] = createSignal<AuthPreset>({ kind: "none" });
+  const [preScript, setPreScript] = createSignal("");
+  const [postScript, setPostScript] = createSignal("");
   const [saveAsStepOpen, setSaveAsStepOpen] = createSignal(false);
 
   // Active env values feed `{{env.VAR}}` interpolation in auth presets.
@@ -118,6 +121,8 @@ export const EndpointsPage: Component = () => {
     setBody({ kind: "none" });
     setResponse(undefined);
     setError(undefined);
+    setPreScript("");
+    setPostScript("");
     setTab("params");
   };
 
@@ -150,7 +155,8 @@ export const EndpointsPage: Component = () => {
         );
         if (!hasCt) headerObj["Content-Type"] = dispatched.contentType;
       }
-      const bodyVal = dispatched.payload;
+      let bodyVal = dispatched.payload;
+
       const base = l.baseUrl.endsWith("/") ? l.baseUrl : `${l.baseUrl}/`;
       // Disabled path params stay templated — let the server surface the
       // missing-param error rather than silently dropping them.
@@ -158,11 +164,34 @@ export const EndpointsPage: Component = () => {
       for (const [k, v] of Object.entries(paramValues())) {
         if (!paramDisabled()[`path:${k}`]) activePathParams[k] = v;
       }
-      const path = interpolate(ep.path, activePathParams).replace(/^\//, "");
       const activeQueryValues: Record<string, string> = {};
       for (const [k, v] of Object.entries(queryValues())) {
         if (!paramDisabled()[`query:${k}`]) activeQueryValues[k] = v;
       }
+
+      // Run pre-request script — can mutate headers / body / query.
+      const preCtx = {
+        headers: headerObj,
+        query: activeQueryValues,
+        body: bodyVal,
+        env: activeEnv(),
+      };
+      const preResult = await runPreScript(preScript(), preCtx);
+      const oneoffRunId = `oneoff-${Date.now()}`;
+      for (const log of preResult.logs) {
+        cons.ingest({
+          kind: "log",
+          runId: oneoffRunId,
+          stepIdx: -1,
+          level: log.level,
+          text: `[pre] ${log.text}`,
+        });
+      }
+      if (!preResult.ok) {
+        throw new Error(`pre-request script: ${preResult.error ?? "failed"}`);
+      }
+      bodyVal = preCtx.body;
+      const path = interpolate(ep.path, activePathParams).replace(/^\//, "");
       const mergedQuery = { ...authPart.query, ...activeQueryValues };
       const query = Object.entries(mergedQuery)
         .filter(([, v]) => v !== "" && v !== undefined)
@@ -171,7 +200,7 @@ export const EndpointsPage: Component = () => {
       const url = `${base}${path}${query ? `?${query}` : ""}`;
       // Synthesize a one-step run in the console so Endpoints "Send" traffic
       // lives in the same ledger as journey-run traffic.
-      const runId = `oneoff-${Date.now()}`;
+      const runId = oneoffRunId;
       cons.ingestSynthetic({
         runId,
         stepIdx: 0,
@@ -190,6 +219,24 @@ export const EndpointsPage: Component = () => {
           ...(bodyVal !== undefined ? { body: bodyVal } : {}),
         });
         setResponse(res);
+
+        const postResult = await runPostScript(postScript(), preCtx, {
+          status: res.status,
+          headers: res.headers,
+          body: res.body,
+        });
+        for (const log of postResult.logs) {
+          cons.ingest({
+            kind: "log",
+            runId: oneoffRunId,
+            stepIdx: -1,
+            level: log.level,
+            text: `[post] ${log.text}`,
+          });
+        }
+        if (!postResult.ok) {
+          setError(`post-response script: ${postResult.error ?? "failed"}`);
+        }
         cons.ingestSynthetic({
           runId,
           stepIdx: 0,
@@ -466,7 +513,12 @@ export const EndpointsPage: Component = () => {
                     <TabBody value={body()} onChange={setBody} />
                   </Show>
                   <Show when={tab() === "scripts"}>
-                    <Placeholder label="Pre- and post-request scripts ship in M6." />
+                    <TabScripts
+                      pre={preScript()}
+                      post={postScript()}
+                      onPreChange={setPreScript}
+                      onPostChange={setPostScript}
+                    />
                   </Show>
                   <Show when={tab() === "docs"}>
                     <TabDocs endpoint={ep()} />
@@ -2076,6 +2128,112 @@ function formatTtl(ms: number): string {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function TabScripts(props: {
+  pre: string;
+  post: string;
+  onPreChange: (s: string) => void;
+  onPostChange: (s: string) => void;
+}): JSX.Element {
+  return (
+    <div
+      style={{
+        display: "grid",
+        "grid-template-rows": "1fr 1fr",
+        height: "100%",
+        "min-height": 0,
+      }}
+      data-testid="scripts-tab"
+    >
+      <ScriptBox
+        title="Pre-request"
+        hint={'Runs before the request. ctx = { headers, query, body, env, log() }'}
+        value={props.pre}
+        onChange={props.onPreChange}
+        testId="script-pre"
+      />
+      <ScriptBox
+        title="Post-response"
+        hint={'Runs after the response. res = { status, headers, body }; expect() available.'}
+        value={props.post}
+        onChange={props.onPostChange}
+        testId="script-post"
+        borderTop
+      />
+    </div>
+  );
+}
+
+function ScriptBox(props: {
+  title: string;
+  hint: string;
+  value: string;
+  onChange: (s: string) => void;
+  testId: string;
+  borderTop?: boolean;
+}): JSX.Element {
+  return (
+    <div
+      style={{
+        display: "flex",
+        "flex-direction": "column",
+        "border-top": props.borderTop ? "1px solid var(--bd-1)" : "none",
+      }}
+    >
+      <div
+        style={{
+          padding: "6px 14px",
+          "border-bottom": "1px solid var(--bd-1)",
+          display: "flex",
+          "align-items": "center",
+          gap: "10px",
+        }}
+      >
+        <span
+          style={{
+            "font-size": "11px",
+            color: "var(--fg-2)",
+            "text-transform": "uppercase",
+            "letter-spacing": "0.06em",
+          }}
+        >
+          {props.title}
+        </span>
+        <span
+          class="mono"
+          style={{ "font-size": "10px", color: "var(--fg-3)" }}
+        >
+          {props.hint}
+        </span>
+      </div>
+      <textarea
+        data-testid={props.testId}
+        value={props.value}
+        onInput={(e) => props.onChange(e.currentTarget.value)}
+        class="mono"
+        placeholder={
+          props.title === "Pre-request"
+            ? "// headers['X-Request-Id'] = crypto.randomUUID();\n// log('sending with', body);"
+            : "// expect(res.status).toBe(200);\n// log('got', res.body);"
+        }
+        spellcheck={false}
+        style={{
+          flex: 1,
+          margin: 0,
+          padding: "10px 16px",
+          "font-size": "12px",
+          "line-height": 1.6,
+          color: "var(--fg-1)",
+          background: "var(--bg-0)",
+          resize: "none",
+          width: "100%",
+          border: "none",
+          outline: "none",
+        }}
+      />
+    </div>
+  );
 }
 
 function Placeholder(props: { label: string }): JSX.Element {
