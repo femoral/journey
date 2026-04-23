@@ -22,7 +22,6 @@ import {
   JsonPretty,
   Panel,
   RunDot,
-  Sparkline,
   StatusPill,
   type RunState,
 } from "../ui";
@@ -61,13 +60,6 @@ export const HistoryPage: Component = () => {
       avgMs: list.length ? Math.round(totalMs / list.length) : 0,
     };
   });
-
-  // Sparkline expects oldest → newest so the line reads left-to-right.
-  const durationSeries = createMemo(() =>
-    [...(runs() ?? [])]
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-      .map((r) => r.durationMs),
-  );
 
   const pickRun = (r: RunSummary) => {
     if (pickingCompare() && r.id !== selectedId()) {
@@ -269,28 +261,6 @@ export const HistoryPage: Component = () => {
           overflow: "auto",
         }}
       >
-        <Show when={durationSeries().length > 1}>
-          <div
-            style={{
-              padding: "14px 20px",
-              "border-bottom": "1px solid var(--bd-1)",
-            }}
-          >
-            <div
-              style={{
-                "font-size": "10px",
-                color: "var(--fg-3)",
-                "text-transform": "uppercase",
-                "letter-spacing": "0.08em",
-                "margin-bottom": "6px",
-              }}
-            >
-              Run duration over time
-            </div>
-            <Sparkline values={durationSeries()} height={50} />
-          </div>
-        </Show>
-
         <Show
           when={selectedDetail()}
           fallback={

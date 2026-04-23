@@ -11,20 +11,17 @@ import {
 import {
   api,
   type JourneyResult,
-  type RunDetail,
   type RunSummary,
   type StepResult,
 } from "../api/client";
 import { runEvents } from "../api/runEvents";
 import { useNavigate } from "@solidjs/router";
 import { useConsole } from "../shell/consoleContext";
-import { JsonDiff } from "../components/JsonDiff";
 import {
   IconCheck,
   IconChevron,
   IconClock,
   IconCopy,
-  IconDiff,
   IconEditor,
   IconEndpoints,
   IconPlay,
@@ -53,11 +50,9 @@ export const JourneysPage: Component = () => {
   const [runState, setRunState] = createSignal<UiRunState>("idle");
   const [filter, setFilter] = createSignal("");
 
+  // /api/runs is loaded solely to annotate the left-side journey list with a
+  // relative "last run" timestamp; comparison + full history live on /history.
   const [runs, { refetch: refetchRuns }] = createResource(api.listRuns);
-  const [diffA, setDiffA] = createSignal<RunDetail | undefined>(undefined);
-  const [diffB, setDiffB] = createSignal<RunDetail | undefined>(undefined);
-  const [diffStep, setDiffStep] = createSignal<number>(0);
-  const [showDiff, setShowDiff] = createSignal(false);
 
   // Active SSE subscription — aborted on unmount or on a fresh run kickoff.
   let activeSub: { close: () => void } | undefined;
@@ -69,21 +64,11 @@ export const JourneysPage: Component = () => {
     return q ? files.filter((f) => f.toLowerCase().includes(q)) : files;
   });
 
-  const runsForSelected = createMemo(() => {
-    const s = selected();
-    if (!s) return [];
-    return (runs() ?? []).filter((r) => r.journeyNames.includes(s));
-  });
-
   const pickJourney = (file: string) => {
     setSelected(file);
     setResults(undefined);
     setError(undefined);
     setRunState("idle");
-    setDiffA(undefined);
-    setDiffB(undefined);
-    setDiffStep(0);
-    setShowDiff(false);
   };
 
   const run = async (opts: { upToStepIdx?: number } = {}) => {
@@ -163,12 +148,6 @@ export const JourneysPage: Component = () => {
       setError(e instanceof Error ? e.message : String(e));
       setRunState("idle");
     }
-  };
-
-  const loadForDiff = async (summary: RunSummary, slot: "A" | "B") => {
-    const detail = await api.getRun(summary.id);
-    if (slot === "A") setDiffA(detail);
-    else setDiffB(detail);
   };
 
   return (
@@ -294,8 +273,7 @@ export const JourneysPage: Component = () => {
                 steps={results()?.[0]?.steps.length ?? 0}
                 runState={runState()}
                 onRun={() => void run()}
-                onToggleDiff={() => setShowDiff((v) => !v)}
-                diffOpen={showDiff()}
+                onViewHistory={() => navigate("/history")}
               />
 
               <Show when={error()}>
@@ -314,41 +292,17 @@ export const JourneysPage: Component = () => {
               </Show>
 
               <div style={{ flex: 1, overflow: "auto" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    "grid-template-columns": "minmax(0, 1fr) 280px",
-                    "min-height": "100%",
+                <StepTimeline
+                  runState={runState()}
+                  results={results()}
+                  onRunOnly={(stepIdx) => void run({ upToStepIdx: stepIdx })}
+                  onSendViaEndpoints={(step) => {
+                    if (!step.request) return;
+                    navigate(
+                      `/endpoints?method=${encodeURIComponent(step.request.method)}&url=${encodeURIComponent(step.request.url)}`,
+                    );
                   }}
-                >
-                  <StepTimeline
-                    runState={runState()}
-                    results={results()}
-                    onRunOnly={(stepIdx) => void run({ upToStepIdx: stepIdx })}
-                    onSendViaEndpoints={(step) => {
-                      if (!step.request) return;
-                      navigate(
-                        `/endpoints?method=${encodeURIComponent(step.request.method)}&url=${encodeURIComponent(step.request.url)}`,
-                      );
-                    }}
-                  />
-                  <RunHistoryPanel
-                    runs={runsForSelected()}
-                    diffOpen={showDiff()}
-                    diffA={diffA()}
-                    diffB={diffB()}
-                    onPick={(r, slot) => void loadForDiff(r, slot)}
-                  />
-                </div>
-
-                <Show when={showDiff() && diffA() && diffB()}>
-                  <DiffSection
-                    a={diffA()!}
-                    b={diffB()!}
-                    step={diffStep()}
-                    onStep={setDiffStep}
-                  />
-                </Show>
+                />
               </div>
             </>
           )}
@@ -444,8 +398,7 @@ function JourneyHeader(props: {
   steps: number;
   runState: UiRunState;
   onRun: () => void;
-  onToggleDiff: () => void;
-  diffOpen: boolean;
+  onViewHistory: () => void;
 }): JSX.Element {
   const name = () => props.file.replace(/\.journey\.ts$/, "");
   return (
@@ -491,22 +444,21 @@ function JourneyHeader(props: {
           </div>
         </div>
         <button
-          title="Diff against another run"
-          onClick={props.onToggleDiff}
-          aria-pressed={props.diffOpen}
+          type="button"
+          onClick={props.onViewHistory}
+          title="Open the run history page"
           style={{
             display: "flex",
             "align-items": "center",
             gap: "6px",
             padding: "6px 10px",
-            border: props.diffOpen ? "1px solid var(--ac-bd)" : "1px solid var(--bd-2)",
+            border: "1px solid var(--bd-2)",
             "border-radius": "4px",
             "font-size": "12px",
-            color: props.diffOpen ? "var(--ac)" : "var(--fg-1)",
-            background: props.diffOpen ? "var(--ac-bg)" : "transparent",
+            color: "var(--fg-1)",
           }}
         >
-          <IconDiff size={12} />
+          <IconClock size={12} /> History
         </button>
         <button
           title="Open in editor (M6)"
@@ -1020,211 +972,6 @@ function StepDetail(props: {
           </div>
         </Show>
       </div>
-    </div>
-  );
-}
-
-function RunHistoryPanel(props: {
-  runs: RunSummary[];
-  diffOpen: boolean;
-  diffA: RunDetail | undefined;
-  diffB: RunDetail | undefined;
-  onPick: (summary: RunSummary, slot: "A" | "B") => void;
-}): JSX.Element {
-  return (
-    <div
-      style={{
-        padding: "14px 16px",
-        display: "flex",
-        "flex-direction": "column",
-        gap: "14px",
-      }}
-    >
-      <div>
-        <div
-          style={{
-            "font-size": "10px",
-            color: "var(--fg-3)",
-            "text-transform": "uppercase",
-            "letter-spacing": "0.08em",
-            "margin-bottom": "6px",
-          }}
-        >
-          History
-        </div>
-        <Show
-          when={props.runs.length > 0}
-          fallback={
-            <div
-              style={{
-                padding: "6px 2px",
-                "font-size": "11px",
-                color: "var(--fg-3)",
-              }}
-            >
-              No runs yet.
-            </div>
-          }
-        >
-          <Show when={props.diffOpen}>
-            <div
-              class="mono"
-              style={{
-                "font-size": "10px",
-                color: "var(--fg-3)",
-                "margin-bottom": "6px",
-              }}
-            >
-              Click a row to set as A (previous), shift-click for B (current).
-            </div>
-          </Show>
-          <div style={{ display: "flex", "flex-direction": "column" }}>
-            <For each={props.runs}>
-              {(r, i) => (
-                <button
-                  type="button"
-                  data-testid={`history-row-${r.id}`}
-                  onClick={(e) => {
-                    if (!props.diffOpen) return;
-                    props.onPick(r, e.shiftKey ? "B" : "A");
-                  }}
-                  style={{
-                    display: "grid",
-                    "grid-template-columns": "10px 1fr 54px",
-                    "align-items": "center",
-                    gap: "8px",
-                    padding: "6px 2px",
-                    "font-size": "11px",
-                    "border-top": i() === 0 ? "none" : "1px solid var(--bd-1)",
-                    "text-align": "left",
-                    background:
-                      props.diffA?.id === r.id
-                        ? "var(--ac-bg)"
-                        : props.diffB?.id === r.id
-                          ? "var(--info-bg)"
-                          : "transparent",
-                    cursor: props.diffOpen ? "pointer" : "default",
-                  }}
-                >
-                  <RunDot state={r.ok ? "pass" : "fail"} size={6} />
-                  <div
-                    style={{
-                      display: "flex",
-                      "flex-direction": "column",
-                      "min-width": 0,
-                    }}
-                  >
-                    <span class="mono" style={{ color: "var(--fg-1)" }}>
-                      {formatRelative(r.timestamp)}
-                    </span>
-                    <span
-                      class="mono"
-                      style={{ "font-size": "10px", color: "var(--fg-3)" }}
-                    >
-                      {r.journeyNames.length > 1
-                        ? `${r.journeyNames.length} journeys`
-                        : "this journey"}
-                    </span>
-                  </div>
-                  <span
-                    class="mono"
-                    style={{
-                      "font-size": "10px",
-                      color:
-                        props.diffA?.id === r.id
-                          ? "var(--ac)"
-                          : props.diffB?.id === r.id
-                            ? "var(--info)"
-                            : "var(--fg-3)",
-                      "text-align": "right",
-                    }}
-                  >
-                    {props.diffA?.id === r.id
-                      ? "A"
-                      : props.diffB?.id === r.id
-                        ? "B"
-                        : ""}
-                  </span>
-                </button>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
-function DiffSection(props: {
-  a: RunDetail;
-  b: RunDetail;
-  step: number;
-  onStep: (i: number) => void;
-}): JSX.Element {
-  const stepsA = () => props.a.results[0]?.steps ?? [];
-  const stepsB = () => props.b.results[0]?.steps ?? [];
-  const stepNames = () => stepsA().map((s) => s.name);
-  return (
-    <div
-      style={{
-        "border-top": "1px solid var(--bd-1)",
-        padding: "14px 20px",
-        background: "var(--bg-1)",
-      }}
-    >
-      <div
-        style={{
-          "font-size": "10px",
-          color: "var(--fg-3)",
-          "text-transform": "uppercase",
-          "letter-spacing": "0.08em",
-          "margin-bottom": "10px",
-        }}
-      >
-        Response diff · A = {formatRelative(props.a.timestamp)} · B ={" "}
-        {formatRelative(props.b.timestamp)}
-      </div>
-      <Show when={stepNames().length > 0}>
-        <div
-          style={{
-            display: "flex",
-            "flex-wrap": "wrap",
-            gap: "6px",
-            "margin-bottom": "10px",
-          }}
-        >
-          <For each={stepNames()}>
-            {(n, i) => (
-              <button
-                type="button"
-                data-testid={`diff-step-${i()}`}
-                onClick={() => props.onStep(i())}
-                class="mono"
-                style={{
-                  padding: "3px 10px",
-                  "font-size": "11px",
-                  "border-radius": "3px",
-                  background:
-                    props.step === i() ? "var(--ac-bg)" : "var(--bg-2)",
-                  color: props.step === i() ? "var(--ac)" : "var(--fg-2)",
-                  border:
-                    props.step === i()
-                      ? "1px solid var(--ac-bd)"
-                      : "1px solid transparent",
-                }}
-              >
-                {n}
-              </button>
-            )}
-          </For>
-        </div>
-        <JsonDiff
-          left={stepsA()[props.step]?.response?.body}
-          right={stepsB()[props.step]?.response?.body}
-          leftLabel={`A: ${formatRelative(props.a.timestamp)}`}
-          rightLabel={`B: ${formatRelative(props.b.timestamp)}`}
-        />
-      </Show>
     </div>
   );
 }
