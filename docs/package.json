@@ -1,0 +1,18 @@
+{
+  "name": "@journey/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview",
+    "sources:gen": "tsx ../scripts/gen-doc-sources.ts",
+    "sources:check": "tsx ../scripts/gen-doc-sources.ts --check"
+  },
+  "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "tsx": "^4.21.0",
+    "vitepress": "^1.5.0"
+  }
+}
