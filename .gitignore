@@ -152,3 +152,5 @@ packages/*/playwright-report/
 
 # Windows NTFS alternate data streams that WSL surfaces for files copied from Windows
 *:Zone.Identifier
+
+.direnv/
