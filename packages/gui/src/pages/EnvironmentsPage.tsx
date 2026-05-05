@@ -9,10 +9,7 @@ import {
 } from "solid-js";
 import { api, type Environment } from "../api/client";
 import {
-  IconEye,
-  IconEyeOff,
   IconPlus,
-  IconTrail,
   IconX,
   JsonPretty,
   SegBtn,
@@ -20,16 +17,12 @@ import {
 
 type Row = { key: string; value: string };
 
-function isSecretKey(key: string): boolean {
-  return /(pass|secret|token|key)/i.test(key);
-}
 
 export const EnvironmentsPage: Component = () => {
   const [data, { refetch }] = createResource(api.getEnvironments);
   const [selectedName, setSelectedName] = createSignal<string | undefined>(undefined);
   const [draft, setDraft] = createSignal<Row[]>([]);
   const [status, setStatus] = createSignal<string | undefined>(undefined);
-  const [revealed, setRevealed] = createSignal<Record<string, boolean>>({});
   const [view, setView] = createSignal<"table" | "JSON">("table");
 
   const selectedEnv = createMemo(() =>
@@ -39,7 +32,6 @@ export const EnvironmentsPage: Component = () => {
   const loadDraftFor = (env: Environment) => {
     setDraft(Object.entries(env.values).map(([key, value]) => ({ key, value })));
     setStatus(undefined);
-    setRevealed({});
   };
 
   const save = async () => {
@@ -325,8 +317,6 @@ export const EnvironmentsPage: Component = () => {
               </div>
               <For each={draft()}>
                 {(row, i) => {
-                  const secret = () => isSecretKey(row.key);
-                  const isRevealed = () => revealed()[row.key] === true;
                   return (
                     <div
                       style={{
@@ -362,13 +352,6 @@ export const EnvironmentsPage: Component = () => {
                             "min-width": 0,
                           }}
                         />
-                        <Show when={secret()}>
-                          <IconTrail
-                            size={10}
-                            style={{ color: "var(--warn)", "flex-shrink": 0 }}
-                            title="secret"
-                          />
-                        </Show>
                       </div>
                       <div
                         style={{
@@ -380,7 +363,7 @@ export const EnvironmentsPage: Component = () => {
                         <input
                           value={row.value}
                           placeholder="value"
-                          type={secret() && !isRevealed() ? "password" : "text"}
+                          type="text"
                           onInput={(e) =>
                             updateRow(i(), { value: e.currentTarget.value })
                           }
@@ -394,25 +377,6 @@ export const EnvironmentsPage: Component = () => {
                             width: "100%",
                           }}
                         />
-                        <Show when={secret()}>
-                          <button
-                            type="button"
-                            aria-label={
-                              isRevealed() ? "Hide secret" : "Reveal secret"
-                            }
-                            onClick={() =>
-                              setRevealed({
-                                ...revealed(),
-                                [row.key]: !isRevealed(),
-                              })
-                            }
-                            style={{ color: "var(--fg-3)", "flex-shrink": 0 }}
-                          >
-                            <Show when={isRevealed()} fallback={<IconEye size={12} />}>
-                              <IconEyeOff size={12} />
-                            </Show>
-                          </button>
-                        </Show>
                       </div>
                       <span />
                       <button
@@ -459,7 +423,7 @@ export const EnvironmentsPage: Component = () => {
                 background: "var(--bg-0)",
               }}
             >
-              <JsonPretty text={jsonFor(draft(), revealed())} />
+              <JsonPretty text={jsonFor(draft())} />
             </pre>
           </Show>
 
@@ -535,11 +499,11 @@ function FooterBar(props: {
   );
 }
 
-function jsonFor(rows: Row[], revealed: Record<string, boolean>): string {
+function jsonFor(rows: Row[]): string {
   const obj: Record<string, string> = {};
   for (const { key, value } of rows) {
     if (!key.trim()) continue;
-    obj[key] = isSecretKey(key) && !revealed[key] ? "•••••" : value;
+    obj[key] = value;
   }
   return JSON.stringify(obj, null, 2);
 }
