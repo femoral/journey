@@ -56,7 +56,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **Commits**: `<type>(<scope>): <subject>` — `feat|fix|chore|docs|refactor`, scopes `core|cli|codegen|gui|k6|dev|docs`. Prefix milestone tag (`M5b`, `M6g`, …) when relevant; tags appear in commit subjects, not as gh milestones.
 - **Workflow**: one gh issue per task → implement on `main` → typecheck/test/build the touched packages → one commit with `Closes #N` in the body → push `main` → close issue. Default branch on the remote is `master` but active development lives on `main`. Full details in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **Co-author footer** on Claude-authored commits: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
-- **Issue labels in use**: `area:core|cli|codegen|gui|k6`, `type:feat|chore|docs`, `bug`.
+- **Issue labels in use**: `area:core|cli|codegen|gui|k6`, `type:feat|chore`, `bug`.
 
 ## Invariants — do not violate
 

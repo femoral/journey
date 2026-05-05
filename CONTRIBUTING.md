@@ -31,7 +31,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 - **Scopes**: `core`, `cli`, `codegen`, `gui`, `k6`, `dev`, `docs`.
 - **Milestone prefix** (e.g. `M5b`, `M6g`) goes inside the subject when the commit is part of a tracked feature batch: `feat(gui): M6g import from cURL`.
 - **Co-author footer** on Claude-authored commits — see the system prompt for the canonical line.
-- **Labels in use**: `area:core`, `area:cli`, `area:codegen`, `area:gui`, `area:k6`, `type:feat`, `type:chore`, `type:docs`, `bug`.
+- **Labels in use**: `area:core`, `area:cli`, `area:codegen`, `area:gui`, `area:k6`, `type:feat`, `type:chore`, `bug`.
 
 ## Codegen — one-way
 
@@ -57,7 +57,7 @@ Use `nix-shell` (preferred — see [`shell.nix`](shell.nix) for the full pin) or
 - k6 (for `@journey/k6-adapter` integration testing)
 - Playwright browsers (auto-pinned via `PLAYWRIGHT_BROWSERS_PATH` in the Nix shell)
 
-**WSLg / HiDPI tuning** — Tauri's WebView doesn't read Windows DPI from WSLg. `shell.nix` sets `GDK_BACKEND=x11`, `GDK_SCALE=1`, `GDK_DPI_SCALE=1` by default (good for 1080p). For HiDPI, run `GDK_SCALE=2 pnpm dev:tauri` or override the env in your shell. Without the X11 backend, GTK ignores `GDK_SCALE` on Wayland and you get blurry text.
+**WSLg / HiDPI tuning** — Tauri's WebView doesn't read Windows DPI from WSLg. `shell.nix` sets `GDK_BACKEND=x11`, `GDK_SCALE=2`, `GDK_DPI_SCALE=1` by default (good for HiDPI). For 1080p, run `GDK_SCALE=1 pnpm dev:tauri` or override the env in your shell. Without the X11 backend, GTK ignores `GDK_SCALE` on Wayland and you get blurry text.
 
 ## Test prerequisites
 

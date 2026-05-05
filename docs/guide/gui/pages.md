@@ -61,7 +61,7 @@ Read-only file tree over the project directory. Select a file to see its content
 
 Pick an env from the list, edit as a table or as raw JSON.
 
-- **Table view** — key/value rows with per-row secret masking (auto-detects `pass|secret|token|key` substrings) and a reveal toggle.
+- **Table view** — key/value rows.
 - **JSON view** — raw editor for the whole file.
 
 Save writes back to `environments/<name>.json`. Create new envs from a prompt.
