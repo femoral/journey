@@ -13,6 +13,7 @@ import {
   IconHome,
   IconJourneys,
 } from "../ui/icons";
+import { experimentalEnabled } from "../experimental";
 
 export type SidebarCounts = {
   endpoints?: number | undefined;
@@ -44,32 +45,39 @@ type NavItem = {
 };
 
 export function Sidebar(props: SidebarProps): JSX.Element {
-  const navItems = (): NavItem[] => [
-    { id: "overview", href: "/", label: "Overview", icon: IconHome, badge: null },
-    {
-      id: "endpoints",
-      href: "/endpoints",
-      label: "Endpoints",
-      icon: IconEndpoints,
-      badge: props.counts.endpoints ?? null,
-    },
-    {
-      id: "journeys",
-      href: "/journeys",
-      label: "Journeys",
-      icon: IconJourneys,
-      badge: props.counts.journeys ?? null,
-    },
-    { id: "editor", href: "/editor", label: "Editor", icon: IconEditor, badge: null },
-    { id: "files", href: "/files", label: "Files", icon: IconFiles, badge: null },
-    {
-      id: "environments",
-      href: "/environments",
-      label: "Environments",
-      icon: IconEnv,
-      badge: props.counts.envs ?? null,
-    },
-  ];
+  const navItems = (): NavItem[] => {
+    const items: NavItem[] = [
+      { id: "overview", href: "/", label: "Overview", icon: IconHome, badge: null },
+      {
+        id: "endpoints",
+        href: "/endpoints",
+        label: "Endpoints",
+        icon: IconEndpoints,
+        badge: props.counts.endpoints ?? null,
+      },
+      {
+        id: "journeys",
+        href: "/journeys",
+        label: "Journeys",
+        icon: IconJourneys,
+        badge: props.counts.journeys ?? null,
+      },
+    ];
+    if (experimentalEnabled()) {
+      items.push({ id: "editor", href: "/editor", label: "Editor", icon: IconEditor, badge: null });
+    }
+    items.push(
+      { id: "files", href: "/files", label: "Files", icon: IconFiles, badge: null },
+      {
+        id: "environments",
+        href: "/environments",
+        label: "Environments",
+        icon: IconEnv,
+        badge: props.counts.envs ?? null,
+      },
+    );
+    return items;
+  };
 
   const toolItems = (): NavItem[] => [
     {
@@ -213,11 +221,7 @@ function SidebarItem(props: { item: NavItem }): JSX.Element {
         padding: "6px 8px",
         "border-radius": "4px",
         background: active() ? "var(--bg-3)" : "transparent",
-        color: props.item.dim
-          ? "var(--fg-3)"
-          : active()
-            ? "var(--fg-0)"
-            : "var(--fg-1)",
+        color: props.item.dim ? "var(--fg-3)" : active() ? "var(--fg-0)" : "var(--fg-1)",
         "font-size": "13px",
         width: "100%",
         "text-align": "left",
@@ -225,12 +229,10 @@ function SidebarItem(props: { item: NavItem }): JSX.Element {
         "text-decoration": "none",
       }}
       onMouseEnter={(e) => {
-        if (!active())
-          (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
+        if (!active()) (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
       }}
       onMouseLeave={(e) => {
-        if (!active())
-          (e.currentTarget as HTMLElement).style.background = "transparent";
+        if (!active()) (e.currentTarget as HTMLElement).style.background = "transparent";
       }}
     >
       <Show when={active()}>

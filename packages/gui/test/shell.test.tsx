@@ -72,12 +72,28 @@ describe("Sidebar", () => {
     expect(screen.getByText("Overview")).toBeDefined();
     expect(screen.getByText("Endpoints")).toBeDefined();
     expect(screen.getByText("Journeys")).toBeDefined();
-    expect(screen.getByText("Editor")).toBeDefined();
     expect(screen.getByText("Files")).toBeDefined();
     expect(screen.getByText("Environments")).toBeDefined();
     expect(screen.getByText("12")).toBeDefined();
     expect(screen.getByText("3")).toBeDefined();
     expect(screen.getByText("2")).toBeDefined();
+    // Editor is gated behind VITE_JOURNEY_EXPERIMENTAL.
+    expect(screen.queryByText("Editor")).toBeNull();
+  });
+
+  it("surfaces the Editor entry when the experimental flag is on", () => {
+    const prev = import.meta.env.VITE_JOURNEY_EXPERIMENTAL;
+    import.meta.env.VITE_JOURNEY_EXPERIMENTAL = "1";
+    try {
+      render(() => (
+        <Router>
+          <Route path="*" component={() => <Sidebar counts={{}} />} />
+        </Router>
+      ));
+      expect(screen.getByText("Editor")).toBeDefined();
+    } finally {
+      import.meta.env.VITE_JOURNEY_EXPERIMENTAL = prev;
+    }
   });
 });
 

@@ -1,18 +1,6 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createResource,
-  type Accessor,
-  type Component,
-} from "solid-js";
+import { For, Show, createMemo, createResource, type Accessor, type Component } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import {
-  api,
-  type DriftEndpoint,
-  type ProjectSummary,
-  type RunSummary,
-} from "../api/client";
+import { api, type DriftEndpoint, type ProjectSummary, type RunSummary } from "../api/client";
 import {
   DriftRow,
   IconChevron,
@@ -26,6 +14,7 @@ import {
   Stat,
   type RunState,
 } from "../ui";
+import { experimentalEnabled } from "../experimental";
 
 export const ProjectPage: Component = () => {
   const navigate = useNavigate();
@@ -86,10 +75,7 @@ export const ProjectPage: Component = () => {
                 >
                   {displayName()}
                 </h1>
-                <span
-                  class="mono"
-                  style={{ color: "var(--fg-3)", "font-size": "12px" }}
-                >
+                <span class="mono" style={{ color: "var(--fg-3)", "font-size": "12px" }}>
                   {p().projectDir}
                 </span>
               </div>
@@ -180,7 +166,11 @@ export const ProjectPage: Component = () => {
                 >
                   <Show
                     when={recentRuns().length > 0}
-                    fallback={<EmptyRuns onCreate={() => navigate("/editor")} />}
+                    fallback={
+                      <EmptyRuns
+                        onCreate={experimentalEnabled() ? () => navigate("/editor") : undefined}
+                      />
+                    }
                   >
                     <For each={recentRuns()}>
                       {(r, i) => <RecentRunRow run={r} isFirst={i() === 0} />}
@@ -220,25 +210,21 @@ export const ProjectPage: Component = () => {
                         sub="endpoints"
                         onClick={() => navigate("/endpoints")}
                       />
-                      <QAButton
-                        icon={IconRefresh}
-                        label="Regenerate"
-                        sub="from openapi"
-                      />
-                      <QAButton
-                        icon={IconPlus}
-                        label="New journey"
-                        sub="from skeleton"
-                        onClick={() => navigate("/editor")}
-                      />
+                      <QAButton icon={IconRefresh} label="Regenerate" sub="from openapi" />
+                      <Show when={experimentalEnabled()}>
+                        <QAButton
+                          icon={IconPlus}
+                          label="New journey"
+                          sub="from skeleton"
+                          onClick={() => navigate("/editor")}
+                        />
+                      </Show>
                     </div>
                   </Panel>
 
                   <Panel
                     title="Spec drift"
-                    badge={
-                      drift()?.count ? String(drift()!.count) : undefined
-                    }
+                    badge={drift()?.count ? String(drift()!.count) : undefined}
                     action={
                       <button
                         type="button"
@@ -287,18 +273,18 @@ export const ProjectPage: Component = () => {
                           >
                             <For
                               each={[
-                                ...d().added.slice(0, 3).map(
-                                  (e: DriftEndpoint) => ({
+                                ...d()
+                                  .added.slice(0, 3)
+                                  .map((e: DriftEndpoint) => ({
                                     e,
                                     change: "+ added in spec",
-                                  }),
-                                ),
-                                ...d().removed.slice(0, 3).map(
-                                  (e: DriftEndpoint) => ({
+                                  })),
+                                ...d()
+                                  .removed.slice(0, 3)
+                                  .map((e: DriftEndpoint) => ({
                                     e,
                                     change: "− removed from spec",
-                                  }),
-                                ),
+                                  })),
                               ].slice(0, 4)}
                             >
                               {({ e, change }) => (
@@ -405,7 +391,7 @@ function RecentRunRow(props: { run: RunSummary; isFirst: boolean }): ReturnType<
   );
 }
 
-function EmptyRuns(props: { onCreate: () => void }): ReturnType<Component> {
+function EmptyRuns(props: { onCreate?: (() => void) | undefined }): ReturnType<Component> {
   return (
     <div
       style={{
@@ -416,18 +402,20 @@ function EmptyRuns(props: { onCreate: () => void }): ReturnType<Component> {
       }}
     >
       <div style={{ "margin-bottom": "10px" }}>No runs yet.</div>
-      <button
-        onClick={props.onCreate}
-        style={{
-          display: "inline-flex",
-          "align-items": "center",
-          gap: "5px",
-          "font-size": "11px",
-          color: "var(--ac)",
-        }}
-      >
-        <IconPlus size={11} /> Create a journey to start running
-      </button>
+      <Show when={props.onCreate}>
+        <button
+          onClick={props.onCreate}
+          style={{
+            display: "inline-flex",
+            "align-items": "center",
+            gap: "5px",
+            "font-size": "11px",
+            color: "var(--ac)",
+          }}
+        >
+          <IconPlus size={11} /> Create a journey to start running
+        </button>
+      </Show>
     </div>
   );
 }

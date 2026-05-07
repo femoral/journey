@@ -7,12 +7,7 @@ import {
   type Component,
   type JSX,
 } from "solid-js";
-import {
-  api,
-  type EndpointSummary,
-  type ParameterInfo,
-  type ProxyResponse,
-} from "../api/client";
+import { api, type EndpointSummary, type ParameterInfo, type ProxyResponse } from "../api/client";
 import {
   contribute as authContribute,
   defaultPreset,
@@ -41,6 +36,7 @@ import {
   TypeHint,
   type HttpMethod,
 } from "../ui";
+import { experimentalEnabled } from "../experimental";
 
 type ConfigTab = "params" | "headers" | "auth" | "body" | "scripts" | "docs";
 
@@ -57,7 +53,9 @@ export const EndpointsPage: Component = () => {
   const [paramValues, setParamValues] = createSignal<Record<string, string>>({});
   const [queryValues, setQueryValues] = createSignal<Record<string, string>>({});
   const [paramDisabled, setParamDisabled] = createSignal<Record<string, boolean>>({});
-  const [headerRows, setHeaderRows] = createSignal<{ name: string; value: string; enabled: boolean }[]>([]);
+  const [headerRows, setHeaderRows] = createSignal<
+    { name: string; value: string; enabled: boolean }[]
+  >([]);
   const [body, setBody] = createSignal<BodyState>({ kind: "none" });
 
   const [response, setResponse] = createSignal<ProxyResponse | undefined>(undefined);
@@ -100,7 +98,9 @@ export const EndpointsPage: Component = () => {
     const endpoints = list()?.endpoints ?? [];
     const q = filter().toLowerCase();
     const visible = q
-      ? endpoints.filter((e) => e.path.toLowerCase().includes(q) || e.name.toLowerCase().includes(q))
+      ? endpoints.filter(
+          (e) => e.path.toLowerCase().includes(q) || e.name.toLowerCase().includes(q),
+        )
       : endpoints;
     const byTag = new Map<string, EndpointSummary[]>();
     for (const e of visible) {
@@ -150,9 +150,7 @@ export const EndpointsPage: Component = () => {
       const dispatched = serializeBody(body());
       if (dispatched.contentType) {
         // Don't clobber a user-set Content-Type header.
-        const hasCt = Object.keys(headerObj).some(
-          (k) => k.toLowerCase() === "content-type",
-        );
+        const hasCt = Object.keys(headerObj).some((k) => k.toLowerCase() === "content-type");
         if (!hasCt) headerObj["Content-Type"] = dispatched.contentType;
       }
       let bodyVal = dispatched.payload;
@@ -273,10 +271,7 @@ export const EndpointsPage: Component = () => {
   };
 
   return (
-    <div
-      style={{ display: "flex", height: "100%", "min-height": 0 }}
-      data-testid="endpoints-page"
-    >
+    <div style={{ display: "flex", height: "100%", "min-height": 0 }} data-testid="endpoints-page">
       <aside
         style={{
           width: "280px",
@@ -315,10 +310,7 @@ export const EndpointsPage: Component = () => {
             />
           </div>
         </div>
-        <div
-          style={{ flex: 1, overflow: "auto", padding: "4px 0" }}
-          data-testid="endpoint-list"
-        >
+        <div style={{ flex: 1, overflow: "auto", padding: "4px 0" }} data-testid="endpoint-list">
           <Show when={list()}>
             <For each={groups()}>
               {([tagName, items]) => (
@@ -346,8 +338,7 @@ export const EndpointsPage: Component = () => {
                           "align-items": "center",
                           gap: "8px",
                           padding: "4px 14px",
-                          background:
-                            selected()?.name === ep.name ? "var(--bg-3)" : "transparent",
+                          background: selected()?.name === ep.name ? "var(--bg-3)" : "transparent",
                           "border-left":
                             selected()?.name === ep.name
                               ? "2px solid var(--ac)"
@@ -358,13 +349,11 @@ export const EndpointsPage: Component = () => {
                         }}
                         onMouseEnter={(e) => {
                           if (selected()?.name !== ep.name)
-                            (e.currentTarget as HTMLElement).style.background =
-                              "var(--bg-1)";
+                            (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
                         }}
                         onMouseLeave={(e) => {
                           if (selected()?.name !== ep.name)
-                            (e.currentTarget as HTMLElement).style.background =
-                              "transparent";
+                            (e.currentTarget as HTMLElement).style.background = "transparent";
                         }}
                       >
                         <MethodBadge method={ep.method as HttpMethod} />
@@ -421,19 +410,21 @@ export const EndpointsPage: Component = () => {
                 baseUrl={list()?.baseUrl}
                 busy={busy()}
                 onSend={send}
-                onSaveAsStep={() => setSaveAsStepOpen(true)}
+                onSaveAsStep={experimentalEnabled() ? () => setSaveAsStepOpen(true) : undefined}
               />
-              <SaveAsStepDialog
-                open={saveAsStepOpen()}
-                onClose={() => setSaveAsStepOpen(false)}
-                payload={buildSaveAsStepPayload(
-                  ep(),
-                  paramValues(),
-                  paramDisabled(),
-                  headerRows(),
-                  body(),
-                )}
-              />
+              <Show when={experimentalEnabled()}>
+                <SaveAsStepDialog
+                  open={saveAsStepOpen()}
+                  onClose={() => setSaveAsStepOpen(false)}
+                  payload={buildSaveAsStepPayload(
+                    ep(),
+                    paramValues(),
+                    paramDisabled(),
+                    headerRows(),
+                    body(),
+                  )}
+                />
+              </Show>
 
               <div
                 style={{
@@ -454,11 +445,7 @@ export const EndpointsPage: Component = () => {
                     ["docs", "Docs"],
                   ] as const
                 ).map(([id, label]) => (
-                  <TabButton
-                    active={tab() === id}
-                    onClick={() => setTab(id)}
-                    label={label}
-                  />
+                  <TabButton active={tab() === id} onClick={() => setTab(id)} label={label} />
                 ))}
               </div>
 
@@ -482,12 +469,8 @@ export const EndpointsPage: Component = () => {
                       paramValues={paramValues()}
                       queryValues={queryValues()}
                       disabled={paramDisabled()}
-                      onParamInput={(name, v) =>
-                        setParamValues({ ...paramValues(), [name]: v })
-                      }
-                      onQueryInput={(name, v) =>
-                        setQueryValues({ ...queryValues(), [name]: v })
-                      }
+                      onParamInput={(name, v) => setParamValues({ ...paramValues(), [name]: v })}
+                      onQueryInput={(name, v) => setQueryValues({ ...queryValues(), [name]: v })}
                       onToggle={(key, enabled) =>
                         setParamDisabled({
                           ...paramDisabled(),
@@ -497,17 +480,10 @@ export const EndpointsPage: Component = () => {
                     />
                   </Show>
                   <Show when={tab() === "headers"}>
-                    <TabHeaders
-                      rows={headerRows()}
-                      onChange={setHeaderRows}
-                    />
+                    <TabHeaders rows={headerRows()} onChange={setHeaderRows} />
                   </Show>
                   <Show when={tab() === "auth"}>
-                    <TabAuth
-                      value={auth()}
-                      onChange={setAuth}
-                      env={activeEnv()}
-                    />
+                    <TabAuth value={auth()} onChange={setAuth} env={activeEnv()} />
                   </Show>
                   <Show when={tab() === "body"}>
                     <TabBody value={body()} onChange={setBody} />
@@ -539,7 +515,7 @@ function AddressBar(props: {
   baseUrl: string | undefined;
   busy: boolean;
   onSend: () => void;
-  onSaveAsStep: () => void;
+  onSaveAsStep?: (() => void) | undefined;
 }): JSX.Element {
   return (
     <div
@@ -592,10 +568,7 @@ function AddressBar(props: {
         </span>
         <div style={{ flex: 1 }} />
         <Show when={props.endpoint.operationId}>
-          <span
-            class="mono"
-            style={{ "font-size": "11px", color: "var(--fg-3)" }}
-          >
+          <span class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
             {props.endpoint.operationId}
           </span>
         </Show>
@@ -621,24 +594,26 @@ function AddressBar(props: {
       >
         <IconPlay size={11} /> {props.busy ? "Sending…" : "Send"}
       </button>
-      <button
-        type="button"
-        onClick={props.onSaveAsStep}
-        data-testid="save-as-step"
-        title="Append this request as a step in a journey file"
-        style={{
-          display: "flex",
-          "align-items": "center",
-          gap: "6px",
-          padding: "7px 12px",
-          border: "1px solid var(--bd-2)",
-          "border-radius": "5px",
-          "font-size": "12px",
-          color: "var(--fg-1)",
-        }}
-      >
-        <IconPlus size={11} /> Save as step
-      </button>
+      <Show when={props.onSaveAsStep}>
+        <button
+          type="button"
+          onClick={props.onSaveAsStep}
+          data-testid="save-as-step"
+          title="Append this request as a step in a journey file"
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+            padding: "7px 12px",
+            border: "1px solid var(--bd-2)",
+            "border-radius": "5px",
+            "font-size": "12px",
+            color: "var(--fg-1)",
+          }}
+        >
+          <IconPlus size={11} /> Save as step
+        </button>
+      </Show>
       <button
         type="button"
         title="Copy as cURL (M5)"
@@ -754,16 +729,13 @@ function TabParams(props: {
                   class="mono"
                   style={{
                     "font-size": "11px",
-                    color:
-                      r.info.in === "path" ? "var(--info)" : "var(--fg-2)",
+                    color: r.info.in === "path" ? "var(--info)" : "var(--fg-2)",
                     "text-transform": "uppercase",
                   }}
                 >
                   {r.info.in}
                 </span>
-                <div
-                  style={{ display: "flex", "align-items": "center", gap: "6px" }}
-                >
+                <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
                   <span
                     class="mono"
                     style={{
@@ -820,19 +792,12 @@ function TabHeaders(props: {
   rows: { name: string; value: string; enabled: boolean }[];
   onChange: (rows: { name: string; value: string; enabled: boolean }[]) => void;
 }): JSX.Element {
-  const addRow = () =>
-    props.onChange([...props.rows, { name: "", value: "", enabled: true }]);
+  const addRow = () => props.onChange([...props.rows, { name: "", value: "", enabled: true }]);
 
-  const update = (
-    i: number,
-    patch: Partial<{ name: string; value: string; enabled: boolean }>,
-  ) => {
-    props.onChange(
-      props.rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
-    );
+  const update = (i: number, patch: Partial<{ name: string; value: string; enabled: boolean }>) => {
+    props.onChange(props.rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   };
-  const remove = (i: number) =>
-    props.onChange(props.rows.filter((_, idx) => idx !== i));
+  const remove = (i: number) => props.onChange(props.rows.filter((_, idx) => idx !== i));
 
   return (
     <div>
@@ -946,9 +911,7 @@ function serializeBody(body: BodyState): {
     } catch (e) {
       // Surface the parse error the same way it always has — bubble up from
       // send() where we already have try/catch with setError.
-      throw new Error(
-        `Body isn't valid JSON: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      throw new Error(`Body isn't valid JSON: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   if (body.kind === "urlencoded") {
@@ -982,10 +945,7 @@ const BODY_KINDS: Array<{ id: BodyKind; label: string; disabled?: boolean; hint?
   { id: "none", label: "Binary", disabled: true, hint: "multipart ships later" },
 ];
 
-function TabBody(props: {
-  value: BodyState;
-  onChange: (next: BodyState) => void;
-}): JSX.Element {
+function TabBody(props: { value: BodyState; onChange: (next: BodyState) => void }): JSX.Element {
   const pick = (kind: BodyKind) => {
     if (kind === props.value.kind) return;
     switch (kind) {
@@ -1078,9 +1038,7 @@ function TabBody(props: {
 
       <Show when={props.value.kind === "urlencoded"}>
         <UrlencodedBodyEditor
-          rows={
-            props.value.kind === "urlencoded" ? props.value.rows : []
-          }
+          rows={props.value.kind === "urlencoded" ? props.value.rows : []}
           onChange={(rows) => props.onChange({ kind: "urlencoded", rows })}
         />
       </Show>
@@ -1088,24 +1046,15 @@ function TabBody(props: {
       <Show when={props.value.kind === "raw"}>
         <RawBodyEditor
           text={props.value.kind === "raw" ? props.value.text : ""}
-          contentType={
-            props.value.kind === "raw"
-              ? props.value.contentType
-              : "text/plain"
-          }
-          onChange={(text, contentType) =>
-            props.onChange({ kind: "raw", text, contentType })
-          }
+          contentType={props.value.kind === "raw" ? props.value.contentType : "text/plain"}
+          onChange={(text, contentType) => props.onChange({ kind: "raw", text, contentType })}
         />
       </Show>
     </div>
   );
 }
 
-function JsonBodyEditor(props: {
-  text: string;
-  onChange: (t: string) => void;
-}): JSX.Element {
+function JsonBodyEditor(props: { text: string; onChange: (t: string) => void }): JSX.Element {
   const [err, setErr] = createSignal<string | undefined>(undefined);
   const format = () => {
     try {
@@ -1137,10 +1086,7 @@ function JsonBodyEditor(props: {
           "min-height": "28px",
         }}
       >
-        <span
-          class="mono"
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
-        >
+        <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
           application/json
         </span>
         <div style={{ flex: 1 }} />
@@ -1203,18 +1149,11 @@ function UrlencodedBodyEditor(props: {
   rows: Array<{ name: string; value: string; enabled: boolean }>;
   onChange: (rows: Array<{ name: string; value: string; enabled: boolean }>) => void;
 }): JSX.Element {
-  const update = (
-    i: number,
-    patch: Partial<{ name: string; value: string; enabled: boolean }>,
-  ) => {
-    props.onChange(
-      props.rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
-    );
+  const update = (i: number, patch: Partial<{ name: string; value: string; enabled: boolean }>) => {
+    props.onChange(props.rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   };
-  const remove = (i: number) =>
-    props.onChange(props.rows.filter((_, idx) => idx !== i));
-  const add = () =>
-    props.onChange([...props.rows, { name: "", value: "", enabled: true }]);
+  const remove = (i: number) => props.onChange(props.rows.filter((_, idx) => idx !== i));
+  const add = () => props.onChange([...props.rows, { name: "", value: "", enabled: true }]);
   return (
     <div style={{ flex: 1, display: "flex", "flex-direction": "column" }}>
       <div
@@ -1317,10 +1256,7 @@ function RawBodyEditor(props: {
           "border-bottom": "1px solid var(--bd-1)",
         }}
       >
-        <span
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
-          class="mono"
-        >
+        <span style={{ "font-size": "10px", color: "var(--fg-3)" }} class="mono">
           Content-Type
         </span>
         <input
@@ -1363,9 +1299,7 @@ function RawBodyEditor(props: {
 
 function TabDocs(props: { endpoint: EndpointSummary }): JSX.Element {
   return (
-    <div
-      style={{ padding: "18px 20px", "max-width": "680px", "font-size": "12px" }}
-    >
+    <div style={{ padding: "18px 20px", "max-width": "680px", "font-size": "12px" }}>
       <div
         style={{
           display: "flex",
@@ -1386,11 +1320,7 @@ function TabDocs(props: { endpoint: EndpointSummary }): JSX.Element {
       </Show>
       <Show
         when={props.endpoint.parameters.length > 0}
-        fallback={
-          <p style={{ color: "var(--fg-2)", margin: 0 }}>
-            No declared parameters.
-          </p>
-        }
+        fallback={<p style={{ color: "var(--fg-2)", margin: 0 }}>No declared parameters.</p>}
       >
         <p style={{ color: "var(--fg-2)", margin: "0 0 10px" }}>Parameters:</p>
         <ul
@@ -1412,11 +1342,7 @@ function TabDocs(props: { endpoint: EndpointSummary }): JSX.Element {
                   color: "var(--fg-1)",
                 }}
               >
-                <span
-                  style={{ color: "var(--info)", "text-transform": "uppercase" }}
-                >
-                  {p.in}
-                </span>
+                <span style={{ color: "var(--info)", "text-transform": "uppercase" }}>{p.in}</span>
                 {" · "}
                 <span style={{ color: "var(--fg-0)" }}>{p.name}</span>
                 <Show when={p.required}>
@@ -1522,7 +1448,9 @@ function ResponsePane(props: {
                 {r().durationMs}ms
               </span>
               <Show when={sizeBytes() !== undefined}>
-                <span class="mono" style={{ color: "var(--fg-3)" }}>·</span>
+                <span class="mono" style={{ color: "var(--fg-3)" }}>
+                  ·
+                </span>
                 <span
                   class="mono"
                   style={{ "font-size": "11px", color: "var(--fg-2)" }}
@@ -1532,11 +1460,10 @@ function ResponsePane(props: {
                 </span>
               </Show>
               <Show when={contentType()}>
-                <span class="mono" style={{ color: "var(--fg-3)" }}>·</span>
-                <span
-                  class="mono"
-                  style={{ "font-size": "11px", color: "var(--fg-2)" }}
-                >
+                <span class="mono" style={{ color: "var(--fg-3)" }}>
+                  ·
+                </span>
+                <span class="mono" style={{ "font-size": "11px", color: "var(--fg-2)" }}>
                   {contentType()}
                 </span>
               </Show>
@@ -1555,21 +1482,9 @@ function ResponsePane(props: {
           }}
           role="tablist"
         >
-          <MiniTab
-            active={tab() === "Pretty"}
-            onClick={() => setTab("Pretty")}
-            label="Pretty"
-          />
-          <MiniTab
-            active={tab() === "Raw"}
-            onClick={() => setTab("Raw")}
-            label="Raw"
-          />
-          <MiniTab
-            active={tab() === "Headers"}
-            onClick={() => setTab("Headers")}
-            label="Headers"
-          />
+          <MiniTab active={tab() === "Pretty"} onClick={() => setTab("Pretty")} label="Pretty" />
+          <MiniTab active={tab() === "Raw"} onClick={() => setTab("Raw")} label="Raw" />
+          <MiniTab active={tab() === "Headers"} onClick={() => setTab("Headers")} label="Headers" />
         </div>
       </Show>
       <div style={{ flex: 1, overflow: "auto" }}>
@@ -1637,8 +1552,7 @@ function ResponsePane(props: {
 }
 
 function ResponseHeaders(props: { headers: Record<string, string> }): JSX.Element {
-  const entries = () =>
-    Object.entries(props.headers).sort(([a], [b]) => a.localeCompare(b));
+  const entries = () => Object.entries(props.headers).sort(([a], [b]) => a.localeCompare(b));
   return (
     <div style={{ padding: "8px 0" }} data-testid="response-headers">
       <For each={entries()}>
@@ -1654,9 +1568,7 @@ function ResponseHeaders(props: { headers: Record<string, string> }): JSX.Elemen
             }}
           >
             <span style={{ color: "var(--info)" }}>{k}</span>
-            <span style={{ color: "var(--fg-1)", "word-break": "break-all" }}>
-              {v}
-            </span>
+            <span style={{ color: "var(--fg-1)", "word-break": "break-all" }}>{v}</span>
           </div>
         )}
       </For>
@@ -1732,14 +1644,10 @@ function TabAuth(props: {
                 padding: "4px 12px",
                 "font-size": "12px",
                 "border-radius": "3px",
-                background:
-                  props.value.kind === p.id ? "var(--bg-0)" : "transparent",
-                color:
-                  props.value.kind === p.id ? "var(--fg-0)" : "var(--fg-2)",
+                background: props.value.kind === p.id ? "var(--bg-0)" : "transparent",
+                color: props.value.kind === p.id ? "var(--fg-0)" : "var(--fg-2)",
                 border:
-                  props.value.kind === p.id
-                    ? "1px solid var(--bd-2)"
-                    : "1px solid transparent",
+                  props.value.kind === p.id ? "1px solid var(--bd-2)" : "1px solid transparent",
               }}
             >
               {p.label}
@@ -1768,9 +1676,7 @@ function TabAuth(props: {
               data-testid="auth-basic-username"
               class="mono"
               style={FIELD_STYLE}
-              value={
-                props.value.kind === "basic" ? props.value.username : ""
-              }
+              value={props.value.kind === "basic" ? props.value.username : ""}
               onInput={(e) =>
                 props.onChange({
                   ...(props.value as Extract<AuthPreset, { kind: "basic" }>),
@@ -1785,9 +1691,7 @@ function TabAuth(props: {
               class="mono"
               type="password"
               style={FIELD_STYLE}
-              value={
-                props.value.kind === "basic" ? props.value.password : ""
-              }
+              value={props.value.kind === "basic" ? props.value.password : ""}
               onInput={(e) =>
                 props.onChange({
                   ...(props.value as Extract<AuthPreset, { kind: "basic" }>),
@@ -1814,9 +1718,7 @@ function TabAuth(props: {
               class="mono"
               style={FIELD_STYLE}
               placeholder="{{env.TOKEN}}"
-              value={
-                props.value.kind === "bearer" ? props.value.token : ""
-              }
+              value={props.value.kind === "bearer" ? props.value.token : ""}
               onInput={(e) =>
                 props.onChange({
                   kind: "bearer",
@@ -1831,8 +1733,7 @@ function TabAuth(props: {
                 color: "var(--fg-3)",
               }}
             >
-              Supports <span class="mono">{"{{env.VAR}}"}</span> against the
-              active environment.
+              Supports <span class="mono">{"{{env.VAR}}"}</span> against the active environment.
             </div>
           </Field>
         </div>
@@ -1863,10 +1764,7 @@ function TabAuth(props: {
                   type="button"
                   onClick={() =>
                     props.onChange({
-                      ...(props.value as Extract<
-                        AuthPreset,
-                        { kind: "apikey" }
-                      >),
+                      ...(props.value as Extract<AuthPreset, { kind: "apikey" }>),
                       where,
                     })
                   }
@@ -1906,15 +1804,10 @@ function TabAuth(props: {
                 data-testid="auth-apikey-name"
                 class="mono"
                 style={FIELD_STYLE}
-                value={
-                  props.value.kind === "apikey" ? props.value.name : ""
-                }
+                value={props.value.kind === "apikey" ? props.value.name : ""}
                 onInput={(e) =>
                   props.onChange({
-                    ...(props.value as Extract<
-                      AuthPreset,
-                      { kind: "apikey" }
-                    >),
+                    ...(props.value as Extract<AuthPreset, { kind: "apikey" }>),
                     name: e.currentTarget.value,
                   })
                 }
@@ -1926,15 +1819,10 @@ function TabAuth(props: {
                 class="mono"
                 style={FIELD_STYLE}
                 placeholder="{{env.API_KEY}}"
-                value={
-                  props.value.kind === "apikey" ? props.value.value : ""
-                }
+                value={props.value.kind === "apikey" ? props.value.value : ""}
                 onInput={(e) =>
                   props.onChange({
-                    ...(props.value as Extract<
-                      AuthPreset,
-                      { kind: "apikey" }
-                    >),
+                    ...(props.value as Extract<AuthPreset, { kind: "apikey" }>),
                     value: e.currentTarget.value,
                   })
                 }
@@ -1959,9 +1847,7 @@ function TabAuth(props: {
               class="mono"
               style={FIELD_STYLE}
               placeholder="https://auth.example.com/token"
-              value={
-                props.value.kind === "oauth2" ? props.value.tokenUrl : ""
-              }
+              value={props.value.kind === "oauth2" ? props.value.tokenUrl : ""}
               onInput={(e) =>
                 props.onChange({
                   ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
@@ -1981,9 +1867,7 @@ function TabAuth(props: {
               <input
                 class="mono"
                 style={FIELD_STYLE}
-                value={
-                  props.value.kind === "oauth2" ? props.value.clientId : ""
-                }
+                value={props.value.kind === "oauth2" ? props.value.clientId : ""}
                 onInput={(e) =>
                   props.onChange({
                     ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
@@ -1997,11 +1881,7 @@ function TabAuth(props: {
                 class="mono"
                 type="password"
                 style={FIELD_STYLE}
-                value={
-                  props.value.kind === "oauth2"
-                    ? props.value.clientSecret
-                    : ""
-                }
+                value={props.value.kind === "oauth2" ? props.value.clientSecret : ""}
                 onInput={(e) =>
                   props.onChange({
                     ...(props.value as Extract<AuthPreset, { kind: "oauth2" }>),
@@ -2069,10 +1949,7 @@ function TabAuth(props: {
               />
               <div style={{ flex: 1 }}>
                 <div style={{ "font-size": "12px" }}>Cached token</div>
-                <div
-                  class="mono"
-                  style={{ "font-size": "11px", color: "var(--fg-3)" }}
-                >
+                <div class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
                   expires in{" "}
                   {props.value.kind === "oauth2" && props.value.cached
                     ? formatTtl(props.value.cached.expiresAt - Date.now())
@@ -2148,14 +2025,14 @@ function TabScripts(props: {
     >
       <ScriptBox
         title="Pre-request"
-        hint={'Runs before the request. ctx = { headers, query, body, env, log() }'}
+        hint={"Runs before the request. ctx = { headers, query, body, env, log() }"}
         value={props.pre}
         onChange={props.onPreChange}
         testId="script-pre"
       />
       <ScriptBox
         title="Post-response"
-        hint={'Runs after the response. res = { status, headers, body }; expect() available.'}
+        hint={"Runs after the response. res = { status, headers, body }; expect() available."}
         value={props.post}
         onChange={props.onPostChange}
         testId="script-post"
@@ -2200,10 +2077,7 @@ function ScriptBox(props: {
         >
           {props.title}
         </span>
-        <span
-          class="mono"
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
-        >
+        <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
           {props.hint}
         </span>
       </div>
@@ -2312,10 +2186,7 @@ function interpolate(path: string, params: Record<string, string>): string {
   return out;
 }
 
-function paramsByLocation(
-  endpoint: EndpointSummary,
-  loc: ParameterInfo["in"],
-): ParameterInfo[] {
+function paramsByLocation(endpoint: EndpointSummary, loc: ParameterInfo["in"]): ParameterInfo[] {
   if (loc === "path") {
     const declared = endpoint.parameters.filter((p) => p.in === "path");
     const declaredNames = new Set(declared.map((p) => p.name));

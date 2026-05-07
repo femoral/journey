@@ -1,10 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { createSignal } from "solid-js";
 import { CommandPalette } from "../src/shell/CommandPalette";
@@ -31,10 +26,10 @@ function stubFetch() {
         );
       }
       if (url.endsWith("/api/journeys")) {
-        return new Response(
-          JSON.stringify({ journeysDir: "/j", files: ["x.journey.ts"] }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ journeysDir: "/j", files: ["x.journey.ts"] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       return new Response("{}", { status: 200 });
     }),
@@ -51,9 +46,7 @@ describe("CommandPalette", () => {
       <Router>
         <Route
           path="*"
-          component={() => (
-            <CommandPalette open={open()} onClose={() => setOpen(false)} />
-          )}
+          component={() => <CommandPalette open={open()} onClose={() => setOpen(false)} />}
         />
       </Router>
     ));
@@ -74,20 +67,32 @@ describe("CommandPalette", () => {
   });
 
   it("shows endpoints and journeys once loaded", async () => {
+    const prev = import.meta.env.VITE_JOURNEY_EXPERIMENTAL;
+    import.meta.env.VITE_JOURNEY_EXPERIMENTAL = "1";
+    try {
+      const [open] = createSignal(true);
+      render(() => (
+        <Router>
+          <Route path="*" component={() => <CommandPalette open={open()} onClose={() => {}} />} />
+        </Router>
+      ));
+      await waitFor(() => expect(screen.getByTestId("command-ep:getPet")).toBeTruthy());
+      // Journey commands open the editor, so they're gated on the experimental flag.
+      expect(screen.getByTestId("command-jr:x.journey.ts")).toBeTruthy();
+    } finally {
+      import.meta.env.VITE_JOURNEY_EXPERIMENTAL = prev;
+    }
+  });
+
+  it("hides the editor route and journey commands by default", async () => {
     const [open] = createSignal(true);
     render(() => (
       <Router>
-        <Route
-          path="*"
-          component={() => (
-            <CommandPalette open={open()} onClose={() => {}} />
-          )}
-        />
+        <Route path="*" component={() => <CommandPalette open={open()} onClose={() => {}} />} />
       </Router>
     ));
-    await waitFor(() =>
-      expect(screen.getByTestId("command-ep:getPet")).toBeTruthy(),
-    );
-    expect(screen.getByTestId("command-jr:x.journey.ts")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("command-ep:getPet")).toBeTruthy());
+    expect(screen.queryByTestId("command-r:/editor")).toBeNull();
+    expect(screen.queryByTestId("command-jr:x.journey.ts")).toBeNull();
   });
 });

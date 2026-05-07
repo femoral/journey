@@ -20,6 +20,7 @@ import {
   type IconProps,
 } from "../ui/icons";
 import { api } from "../api/client";
+import { experimentalEnabled } from "../experimental";
 
 export type CommandPaletteProps = {
   open: boolean;
@@ -38,9 +39,7 @@ type Command = {
   run: () => void;
 };
 
-const ROUTES: Array<
-  Omit<Command, "run"> & { path: string }
-> = [
+const ROUTES: Array<Omit<Command, "run"> & { path: string; experimental?: boolean }> = [
   { id: "r:/", path: "/", label: "Overview", hint: "go", icon: IconHome },
   {
     id: "r:/endpoints",
@@ -62,6 +61,7 @@ const ROUTES: Array<
     label: "Editor",
     hint: "go",
     icon: IconEditor,
+    experimental: true,
   },
   { id: "r:/files", path: "/files", label: "Files", hint: "go", icon: IconFiles },
   {
@@ -113,7 +113,8 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
   });
 
   const commands = createMemo<Command[]>(() => {
-    const routeCmds: Command[] = ROUTES.map((r) => ({
+    const exp = experimentalEnabled();
+    const routeCmds: Command[] = ROUTES.filter((r) => exp || !r.experimental).map((r) => ({
       id: r.id,
       label: r.label,
       hint: r.hint,
@@ -143,13 +144,15 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
           )}`,
         ),
     }));
-    const journeyCmds: Command[] = (journeys()?.files ?? []).map((f) => ({
-      id: `jr:${f}`,
-      label: f,
-      hint: "open",
-      icon: IconJourneys,
-      run: () => navigate("/editor"),
-    }));
+    const journeyCmds: Command[] = exp
+      ? (journeys()?.files ?? []).map((f) => ({
+          id: `jr:${f}`,
+          label: f,
+          hint: "open",
+          icon: IconJourneys,
+          run: () => navigate("/editor"),
+        }))
+      : [];
     return [...actionCmds, ...routeCmds, ...endpointCmds, ...journeyCmds];
   });
 
@@ -253,9 +256,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
             esc
           </span>
         </div>
-        <div
-          style={{ "max-height": "50vh", overflow: "auto", padding: "4px 0" }}
-        >
+        <div style={{ "max-height": "50vh", overflow: "auto", padding: "4px 0" }}>
           <Show
             when={filtered().length > 0}
             fallback={
@@ -284,15 +285,11 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
                     gap: "10px",
                     padding: "8px 14px",
                     "text-align": "left",
-                    background:
-                      cursor() === i() ? "var(--bg-3)" : "transparent",
+                    background: cursor() === i() ? "var(--bg-3)" : "transparent",
                     "font-size": "12px",
                   }}
                 >
-                  <cmd.icon
-                    size={13}
-                    style={{ color: "var(--fg-2)", "flex-shrink": 0 }}
-                  />
+                  <cmd.icon size={13} style={{ color: "var(--fg-2)", "flex-shrink": 0 }} />
                   <span
                     class="mono"
                     style={{
@@ -305,10 +302,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
                   >
                     {cmd.label}
                   </span>
-                  <span
-                    class="mono"
-                    style={{ "font-size": "10px", color: "var(--fg-3)" }}
-                  >
+                  <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
                     {cmd.hint}
                   </span>
                 </button>
