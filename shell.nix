@@ -1,4 +1,6 @@
-{ pkgs ? import <nixpkgs> { } }:
+{
+  pkgs ? import <nixpkgs> { },
+}:
 
 let
   # Tauri 2 needs webkit2gtk 4.1 + its runtime deps
@@ -20,7 +22,7 @@ let
     webkitgtk_4_1
     gtk3
     glib
-    glib-networking  # TLS for libsoup (WebKit's HTTP stack)
+    glib-networking # TLS for libsoup (WebKit's HTTP stack)
     libsoup_3
     cairo
     pango
@@ -64,15 +66,18 @@ in
 pkgs.mkShell {
   name = "journey-dev";
 
-  packages = with pkgs; [
-    # Node / JS
-    nodejs_22
-    pnpm
+  packages =
+    with pkgs;
+    [
+      # Node / JS
+      nodejs_22
+      pnpm
 
-    # Testing
-    playwright-driver.browsers
-    k6
-  ] ++ tauriDeps;
+      # Testing
+      playwright-driver.browsers
+      k6
+    ]
+    ++ tauriDeps;
 
   # Playwright (pinned to nixpkgs' browser bundle)
   PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
@@ -88,17 +93,13 @@ pkgs.mkShell {
   # GIO needs this to find the TLS module (otherwise HTTPS in WebView fails)
   GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules";
 
-  # WSLg doesn't forward Windows' DPI scale to GTK/WebKit apps.
-  #   GDK_BACKEND=x11  — force Xwayland; GDK_SCALE is ignored on Wayland
-  #   GDK_SCALE=2      — integer pixel doubling (crisp text on HiDPI)
-  #   GDK_DPI_SCALE=1  — no further fractional adjustment
-  # For 1080p displays: `GDK_SCALE=1 pnpm dev:tauri` or override in your shell.
   GDK_BACKEND = "x11";
-  GDK_SCALE = "2";
-  GDK_DPI_SCALE = "1";
 
   # XDG for WSLg — make sure glib/gio find schemas
-  XDG_DATA_DIRS = pkgs.lib.makeSearchPathOutput "out" "share" [ pkgs.gsettings-desktop-schemas pkgs.gtk3 ];
+  XDG_DATA_DIRS = pkgs.lib.makeSearchPathOutput "out" "share" [
+    pkgs.gsettings-desktop-schemas
+    pkgs.gtk3
+  ];
 
   shellHook = ''
     echo "journey-dev shell"
