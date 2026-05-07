@@ -78,7 +78,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **GUI run-event abstraction** → `packages/gui/src/api/runEvents.ts` (consumes the CLI SSE endpoint)
 - **Codegen** → `packages/codegen/src/{parse,emit-endpoints,names,types}.ts`
 - **k6 transpiler** → `packages/k6-adapter/src/`
-- **Working example** → `examples/petstore/` (mock at `server.mjs`, journeys, env in `environments/dev.json`)
+- **Working example** → `examples/petstore/` (primary mock at `server.mjs` on 5180, IDP mock at `auth-server.mjs` on 5182, three envs `local|ci|staging` under `environments/`)
 - **Docs (user-facing)** → `docs/guide/{getting-started,writing-journeys/*,cli/*,environments/*,gui/*}.md`, `docs/reference/{config,step-options,openapi-codegen,journey-api/*}.md`
 - **Design tokens** → `design/system/README.md`
 

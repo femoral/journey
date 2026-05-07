@@ -1,0 +1,9 @@
+{
+  "BASE_URL": "http://127.0.0.1:5180",
+  "AUTH_BASE_URL": "http://127.0.0.1:5182",
+  "USERNAME": "staging-user",
+  "PASSWORD": "staging-pass",
+  "REQUEST_ID_PREFIX": "journey-staging",
+  "PET_LIST_LIMIT": "10",
+  "EXPECTED_USERNAME": "staging-user"
+}

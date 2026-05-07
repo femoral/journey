@@ -9,6 +9,7 @@ import {
   loadEnvironment,
   loggerFromEnv,
   pruneRuns,
+  resolveBaseUrl,
   resolveConfigPaths,
   runAllRegistered,
   setActiveEnvironment,
@@ -66,7 +67,8 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   }
 
   const ctx: HttpContext = {};
-  if (loaded.config.baseUrl) ctx.baseUrl = loaded.config.baseUrl;
+  const baseUrl = resolveBaseUrl(loaded.config);
+  if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();
   if (logger) ctx.logger = logger;
   const results: JourneyResult[] = await runAllRegistered(ctx);

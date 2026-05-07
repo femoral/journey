@@ -14,12 +14,14 @@ Environments are the mechanism for swapping values between `dev`, `staging`, `pr
 One JSON file per environment, in `environments/` (or whatever `environmentsDir` is set to in `journey.config.json`). The root must be a plain object — no arrays, no top-level primitives.
 
 ```json
-// environments/dev.json
+// environments/local.json
 {
+  "BASE_URL": "http://127.0.0.1:5180",
+  "AUTH_BASE_URL": "http://127.0.0.1:5182",
   "USERNAME": "alice",
   "PASSWORD": "wonderland",
-  "REQUEST_ID_PREFIX": "journey-dev",
-  "SEED_API_URL": "http://127.0.0.1:7000"
+  "REQUEST_ID_PREFIX": "journey-local",
+  "PET_LIST_LIMIT": "5"
 }
 ```
 
@@ -28,6 +30,12 @@ One JSON file per environment, in `environments/` (or whatever `environmentsDir`
 ```ts
 const port = Number(env("PORT"));
 ```
+
+## `BASE_URL` is special-cased
+
+If `journey.config.json` has no top-level `baseUrl`, the runtime falls back to `env("BASE_URL")` from the active environment. This lets each environment target a different primary API without editing config — useful when CI, staging, and local point at different deployments. Per-step descriptors with their own `baseUrl` (e.g. `baseUrl: env("AUTH_BASE_URL")`) still override on a step-by-step basis.
+
+The example project under `examples/petstore` ships three environments — `local`, `ci`, `staging` — to illustrate this pattern. See `examples/petstore/environments/` and `examples/petstore/journeys/whoami.journey.ts` for a journey that calls two different APIs in one flow.
 
 ## Validation
 

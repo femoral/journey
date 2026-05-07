@@ -11,7 +11,6 @@ type JsonResponse<P extends keyof paths, M extends keyof paths[P]> =
     : unknown;
 
 export const endpoints = {
-  login: { method: "POST", path: "/auth/login", operationId: "login" } as unknown as EndpointRef<JsonResponse<"/auth/login", "post">>,
   findPetsByStatus: { method: "GET", path: "/pet/findByStatus", operationId: "findPetsByStatus" } as unknown as EndpointRef<JsonResponse<"/pet/findByStatus", "get">>,
   createPet: { method: "POST", path: "/pet", operationId: "createPet" } as unknown as EndpointRef<JsonResponse<"/pet", "post">>,
   getPetById: { method: "GET", path: "/pet/{id}", operationId: "getPetById" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "get">>,

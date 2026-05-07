@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { z } from "zod";
+import { tryEnv } from "./env.js";
 
 export const JourneyConfigSchema = z
   .object({
@@ -25,6 +26,16 @@ export interface LoadedConfig {
 
 function resolveRelative(projectDir: string, value: string): string {
   return isAbsolute(value) ? value : join(projectDir, value);
+}
+
+/**
+ * Effective base URL for runtime requests. `config.baseUrl` wins when set;
+ * otherwise the active environment's `BASE_URL` is used. Returns `undefined`
+ * if neither source supplies one — descriptor endpoints can still carry their
+ * own per-step baseUrl in that case.
+ */
+export function resolveBaseUrl(config: JourneyConfig): string | undefined {
+  return config.baseUrl ?? tryEnv("BASE_URL");
 }
 
 export function resolveConfigPaths(loaded: LoadedConfig) {

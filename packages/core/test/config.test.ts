@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig, resolveConfigPaths } from "../src/config.js";
+import { loadConfig, resolveBaseUrl, resolveConfigPaths } from "../src/config.js";
+import { clearActiveEnvironment, setActiveEnvironment } from "../src/env.js";
 
 describe("loadConfig", () => {
   let dir: string;
@@ -28,5 +29,48 @@ describe("loadConfig", () => {
     await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
     await writeFile(join(dir, "journey.config.json"), JSON.stringify({ baseUrl: "not-a-url" }));
     await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
+  });
+});
+
+describe("resolveBaseUrl", () => {
+  afterEach(() => clearActiveEnvironment());
+
+  it("prefers config.baseUrl", () => {
+    setActiveEnvironment("any", { BASE_URL: "http://from-env" });
+    expect(
+      resolveBaseUrl({
+        spec: "openapi.yaml",
+        generatedDir: "generated",
+        journeysDir: "journeys",
+        environmentsDir: "environments",
+        baseUrl: "http://from-config",
+        runHistoryKeepCount: 20,
+      }),
+    ).toBe("http://from-config");
+  });
+
+  it("falls back to env BASE_URL when config has none", () => {
+    setActiveEnvironment("any", { BASE_URL: "http://from-env" });
+    expect(
+      resolveBaseUrl({
+        spec: "openapi.yaml",
+        generatedDir: "generated",
+        journeysDir: "journeys",
+        environmentsDir: "environments",
+        runHistoryKeepCount: 20,
+      }),
+    ).toBe("http://from-env");
+  });
+
+  it("returns undefined when neither source supplies a URL", () => {
+    expect(
+      resolveBaseUrl({
+        spec: "openapi.yaml",
+        generatedDir: "generated",
+        journeysDir: "journeys",
+        environmentsDir: "environments",
+        runHistoryKeepCount: 20,
+      }),
+    ).toBeUndefined();
   });
 });

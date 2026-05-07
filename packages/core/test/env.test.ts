@@ -8,6 +8,7 @@ import {
   listEnvironments,
   loadEnvironment,
   setActiveEnvironment,
+  tryEnv,
 } from "../src/env.js";
 
 describe("env()", () => {
@@ -44,5 +45,12 @@ describe("env()", () => {
   it("rejects non-object JSON", async () => {
     await writeFile(join(dir, "bad.json"), "[1,2,3]");
     await expect(loadEnvironment(dir, "bad")).rejects.toThrow(/must contain a JSON object/);
+  });
+
+  it("tryEnv returns undefined instead of throwing", () => {
+    expect(tryEnv("ANY")).toBeUndefined();
+    setActiveEnvironment("dev", { FOO: "bar" });
+    expect(tryEnv("FOO")).toBe("bar");
+    expect(tryEnv("MISSING")).toBeUndefined();
   });
 });

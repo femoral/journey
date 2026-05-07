@@ -5,33 +5,11 @@ info:
   description: |
     Toy API used by the Journey examples. A local mock implementation lives
     next to this spec at `server.mjs` — `pnpm dev:web` boots it on port 5180.
+    Authentication lives behind a separate IDP mock (`auth-server.mjs`,
+    port 5182); journeys hit it via descriptor endpoints with `baseUrl: env(...)`.
 servers:
   - url: http://127.0.0.1:5180
 paths:
-  /auth/login:
-    post:
-      operationId: login
-      summary: Exchange username + password for a bearer token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResponse"
-        "401":
-          description: Bad credentials
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
   /pet/findByStatus:
     get:
       operationId: findPetsByStatus
@@ -220,23 +198,6 @@ paths:
 
 components:
   schemas:
-    LoginRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-        password:
-          type: string
-    LoginResponse:
-      type: object
-      required: [token, expiresIn]
-      properties:
-        token:
-          type: string
-        expiresIn:
-          type: integer
-          description: Seconds until the token expires.
     PetInput:
       type: object
       required: [name, status]

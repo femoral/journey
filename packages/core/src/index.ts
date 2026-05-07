@@ -10,6 +10,7 @@ export { isEndpointRef } from "./endpoint.js";
 export {
   JourneyConfigSchema,
   loadConfig,
+  resolveBaseUrl,
   resolveConfigPaths,
   type JourneyConfig,
   type LoadedConfig,
@@ -21,6 +22,7 @@ export {
   listEnvironments,
   loadEnvironment,
   setActiveEnvironment,
+  tryEnv,
   type EnvValues,
 } from "./env.js";
 

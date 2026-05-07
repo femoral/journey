@@ -13,8 +13,8 @@
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "dev:web": "pnpm --filter @journey/cli build && concurrently -n mock,api,gui -c green,cyan,magenta --kill-others --handle-input \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\"",
-    "dev:tauri": "pnpm --filter @journey/cli build && concurrently -n mock,api,vite,tauri -c green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\" \"pnpm --filter @journey/gui tauri:dev\""
+    "dev:web": "pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,gui -c blue,green,cyan,magenta --kill-others --handle-input \"node examples/petstore/auth-server.mjs\" \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\"",
+    "dev:tauri": "pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,vite,tauri -c blue,green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore/auth-server.mjs\" \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\" \"pnpm --filter @journey/gui tauri:dev\""
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

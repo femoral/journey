@@ -9,8 +9,15 @@ journey("pet CRUD flow", () => {
   let token = "";
   let petId = 0;
 
+  // Auth lives behind a separate IDP mock on its own port. Use a descriptor
+  // endpoint with `baseUrl: env("AUTH_BASE_URL")` so a single journey can hit
+  // two different services without faking a unified spec.
   step("login", {
-    endpoint: endpoints.login,
+    endpoint: {
+      method: "POST",
+      path: "/auth/login",
+      baseUrl: env("AUTH_BASE_URL"),
+    },
     body: { username: env("USERNAME"), password: env("PASSWORD") },
     assert(res) {
       expect(res.status).toBe(200);

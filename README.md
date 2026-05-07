@@ -21,7 +21,8 @@ my-api/
 │   ├── create-payment.journey.ts
 │   └── auth-flow.journey.ts
 ├── environments/
-│   ├── dev.json
+│   ├── local.json
+│   ├── ci.json
 │   └── staging.json
 └── .journey/
     └── cache/                 # Local run history (gitignored)
@@ -188,19 +189,19 @@ Takes a `.journey.ts` file and emits a valid k6 script. Maps `assert()` callback
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| CLI | Node.js + TypeScript, `commander` |
-| Journey files | TypeScript (`.journey.ts`), executed via `tsx` |
-| Runtime core | TypeScript, native `fetch`, `zod` |
-| Codegen | `openapi-typescript` |
-| GUI shell | Tauri 2 (Rust + system webview) |
-| GUI frontend | Solid.js + Tailwind |
-| GUI components | Kobalte (accessible primitives) |
-| k6 adapter | Constrained subset → transpiled `.js` output |
-| Assertions | Built-in `expect()` in `@journey/core` |
-| Monorepo | pnpm workspaces |
-| Packaging | npm (CLI), Tauri platform installers (GUI) |
+| Layer          | Technology                                     |
+| -------------- | ---------------------------------------------- |
+| CLI            | Node.js + TypeScript, `commander`              |
+| Journey files  | TypeScript (`.journey.ts`), executed via `tsx` |
+| Runtime core   | TypeScript, native `fetch`, `zod`              |
+| Codegen        | `openapi-typescript`                           |
+| GUI shell      | Tauri 2 (Rust + system webview)                |
+| GUI frontend   | Solid.js + Tailwind                            |
+| GUI components | Kobalte (accessible primitives)                |
+| k6 adapter     | Constrained subset → transpiled `.js` output   |
+| Assertions     | Built-in `expect()` in `@journey/core`         |
+| Monorepo       | pnpm workspaces                                |
+| Packaging      | npm (CLI), Tauri platform installers (GUI)     |
 
 ---
 

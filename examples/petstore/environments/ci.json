@@ -1,0 +1,9 @@
+{
+  "BASE_URL": "http://127.0.0.1:5180",
+  "AUTH_BASE_URL": "http://127.0.0.1:5182",
+  "USERNAME": "ci-bot",
+  "PASSWORD": "ci-secret",
+  "REQUEST_ID_PREFIX": "journey-ci",
+  "PET_LIST_LIMIT": "25",
+  "EXPECTED_USERNAME": "ci-bot"
+}

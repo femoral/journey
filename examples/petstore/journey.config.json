@@ -4,6 +4,5 @@
   "generatedDir": "generated",
   "journeysDir": "journeys",
   "environmentsDir": "environments",
-  "defaultEnvironment": "dev",
-  "baseUrl": "http://127.0.0.1:5180"
+  "defaultEnvironment": "local"
 }

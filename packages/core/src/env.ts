@@ -36,6 +36,10 @@ export function env(key: string): string {
   return value;
 }
 
+export function tryEnv(key: string): string | undefined {
+  return shared.active?.values[key];
+}
+
 export async function loadEnvironment(environmentsDir: string, name: string): Promise<EnvValues> {
   const path = join(environmentsDir, `${name}.json`);
   let raw: string;

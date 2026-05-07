@@ -3,10 +3,14 @@
 // node:http. Used by `pnpm dev:web` so journeys can hit a real backend offline.
 
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 5180);
 const HOST = process.env.HOST ?? "127.0.0.1";
+
+// AUTH_SECRET is shared with the IDP mock (auth-server.mjs). Both must agree
+// on this value for HMAC-signed bearer verification to succeed.
+const AUTH_SECRET = process.env.AUTH_SECRET ?? "journey-shared-dev-secret";
 
 // --- in-memory state -------------------------------------------------------
 
@@ -14,10 +18,6 @@ let nextPetId = 1;
 let nextNoteId = 1;
 const pets = new Map(); // id -> Pet
 const notesByPet = new Map(); // petId -> Note[]
-const sessions = new Set(); // bearer tokens
-
-const VALID_USER = process.env.MOCK_USER ?? "alice";
-const VALID_PASSWORD = process.env.MOCK_PASSWORD ?? "wonderland";
 
 function seed() {
   const initial = [
@@ -67,10 +67,30 @@ async function readJson(req) {
   }
 }
 
+function verifyIdpToken(token) {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "idp") return null;
+  const head = `idp.${parts[1]}`;
+  const expected = createHmac("sha256", AUTH_SECRET).update(head).digest("hex");
+  const got = parts[2];
+  if (got.length !== expected.length) return null;
+  if (!timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(got, "hex"))) return null;
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof payload?.exp !== "number" || Date.now() / 1000 > payload.exp) return null;
+  if (typeof payload.sub !== "string") return null;
+  return payload;
+}
+
 function requireAuth(req, res) {
   const auth = req.headers["authorization"] ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(auth);
-  if (!match || !sessions.has(match[1])) {
+  if (!match || !verifyIdpToken(match[1])) {
     send(res, 401, { code: 401, message: "missing or invalid bearer token" });
     return false;
   }
@@ -89,22 +109,6 @@ function isPetInput(b) {
 // --- routing ---------------------------------------------------------------
 
 const routes = [
-  {
-    method: "POST",
-    re: /^\/auth\/login$/,
-    handler: async (req, res) => {
-      const body = await readJson(req);
-      if (body === Symbol.for("__bad_json__")) {
-        return send(res, 400, { code: 400, message: "invalid JSON body" });
-      }
-      if (!body || body.username !== VALID_USER || body.password !== VALID_PASSWORD) {
-        return send(res, 401, { code: 401, message: "bad credentials" });
-      }
-      const token = randomBytes(16).toString("hex");
-      sessions.add(token);
-      return send(res, 200, { token, expiresIn: 3600 });
-    },
-  },
   {
     method: "GET",
     re: /^\/pet\/findByStatus$/,
@@ -253,8 +257,8 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Petstore mock listening at http://${HOST}:${PORT}`);
-  console.log(`  user: ${VALID_USER} / password: ${VALID_PASSWORD}`);
   console.log(`  seeded ${pets.size} pets`);
+  console.log(`  bearer tokens verified via shared AUTH_SECRET (issued by IDP mock)`);
 });
 
 const shutdown = () => {

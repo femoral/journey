@@ -7,6 +7,7 @@ import {
   loadEnvironment,
   loggerFromEnv,
   pruneRuns,
+  resolveBaseUrl,
   runAllRegistered,
   setActiveEnvironment,
   writeRun,
@@ -54,7 +55,8 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   await tsImport(pathToFileURL(abs).href, import.meta.url);
 
   const ctx: HttpContext = {};
-  if (opts.loaded.config.baseUrl) ctx.baseUrl = opts.loaded.config.baseUrl;
+  const baseUrl = resolveBaseUrl(opts.loaded.config);
+  if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
@@ -62,9 +64,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   try {
     results = await runAllRegistered(ctx, {
       ...(opts.runId !== undefined ? { runId: opts.runId } : {}),
-      ...(opts.upToStepIdx !== undefined
-        ? { upToStepIdx: opts.upToStepIdx }
-        : {}),
+      ...(opts.upToStepIdx !== undefined ? { upToStepIdx: opts.upToStepIdx } : {}),
     });
   } finally {
     unpatchConsole();
