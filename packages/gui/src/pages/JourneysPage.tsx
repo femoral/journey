@@ -8,15 +8,11 @@ import {
   type Component,
   type JSX,
 } from "solid-js";
-import {
-  api,
-  type JourneyResult,
-  type RunSummary,
-  type StepResult,
-} from "../api/client";
+import { api, type JourneyResult, type RunSummary, type StepResult } from "../api/client";
 import { runEvents } from "../api/runEvents";
 import { useNavigate } from "@solidjs/router";
 import { useConsole } from "../shell/consoleContext";
+import { useEnvSelection } from "../shell/envContext";
 import {
   IconCheck,
   IconChevron,
@@ -42,6 +38,7 @@ type UiRunState = "idle" | "running" | "done";
 
 export const JourneysPage: Component = () => {
   const cons = useConsole();
+  const envSel = useEnvSelection();
   const navigate = useNavigate();
   const [list, { refetch: refetchList }] = createResource(api.getJourneys);
   const [selected, setSelected] = createSignal<string | undefined>(undefined);
@@ -95,7 +92,11 @@ export const JourneysPage: Component = () => {
     };
 
     try {
-      const { runId } = await api.startJourneyRun(file, opts);
+      const env = envSel?.selectedEnv();
+      const { runId } = await api.startJourneyRun(file, {
+        ...opts,
+        ...(env !== undefined ? { env } : {}),
+      });
       activeSub = runEvents.subscribe(runId, (event) => {
         cons.ingest(event);
         switch (event.kind) {
@@ -151,10 +152,7 @@ export const JourneysPage: Component = () => {
   };
 
   return (
-    <div
-      style={{ display: "flex", height: "100%", "min-height": 0 }}
-      data-testid="journeys-page"
-    >
+    <div style={{ display: "flex", height: "100%", "min-height": 0 }} data-testid="journeys-page">
       <aside
         style={{
           width: "300px",
@@ -208,10 +206,7 @@ export const JourneysPage: Component = () => {
             <IconPlus size={12} />
           </button>
         </div>
-        <div
-          style={{ flex: 1, overflow: "auto" }}
-          data-testid="journey-list"
-        >
+        <div style={{ flex: 1, overflow: "auto" }} data-testid="journey-list">
           <Show
             when={filteredFiles().length > 0}
             fallback={
@@ -334,18 +329,14 @@ function JourneyRow(props: {
         padding: "10px 14px",
         "text-align": "left",
         background: props.active ? "var(--bg-3)" : "transparent",
-        "border-left": props.active
-          ? "2px solid var(--ac)"
-          : "2px solid transparent",
+        "border-left": props.active ? "2px solid var(--ac)" : "2px solid transparent",
         "border-bottom": "1px solid var(--bd-1)",
       }}
       onMouseEnter={(e) => {
-        if (!props.active)
-          (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
+        if (!props.active) (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
       }}
       onMouseLeave={(e) => {
-        if (!props.active)
-          (e.currentTarget as HTMLElement).style.background = "transparent";
+        if (!props.active) (e.currentTarget as HTMLElement).style.background = "transparent";
       }}
     >
       <div
@@ -370,10 +361,7 @@ function JourneyRow(props: {
         >
           {name()}
         </span>
-        <span
-          class="mono"
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
-        >
+        <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
           {props.lastRun ? formatRelative(props.lastRun.timestamp) : "—"}
         </span>
       </div>
@@ -409,9 +397,7 @@ function JourneyHeader(props: {
         "flex-shrink": 0,
       }}
     >
-      <div
-        style={{ display: "flex", "align-items": "center", gap: "12px" }}
-      >
+      <div style={{ display: "flex", "align-items": "center", gap: "12px" }}>
         <div style={{ flex: 1, "min-width": 0 }}>
           <h2
             class="mono"
@@ -493,10 +479,7 @@ function JourneyHeader(props: {
             "border-radius": "5px",
             "font-weight": 600,
             "font-size": "12px",
-            border:
-              props.runState === "running"
-                ? "1px solid var(--bd-2)"
-                : "none",
+            border: props.runState === "running" ? "1px solid var(--bd-2)" : "none",
           }}
         >
           <Show
@@ -554,9 +537,7 @@ function StepTimeline(props: {
           Current run
         </span>
         <Show when={props.runState === "done" && allSteps().length > 0}>
-          <span class="mono">
-            {allSteps().reduce((a, s) => a + s.durationMs, 0)}ms
-          </span>
+          <span class="mono">{allSteps().reduce((a, s) => a + s.durationMs, 0)}ms</span>
         </Show>
         <Show when={props.runState === "running"}>
           <span class="mono" style={{ color: "var(--ac)" }}>
@@ -698,9 +679,7 @@ function StepCard(props: {
               )}
             </Show>
           </div>
-          <Show when={props.step.response}>
-            {(res) => <StatusPill status={res().status} />}
-          </Show>
+          <Show when={props.step.response}>{(res) => <StatusPill status={res().status} />}</Show>
           <span
             class="mono"
             style={{
@@ -804,9 +783,7 @@ function StepDetail(props: {
   onRunOnly: () => void;
   onSendViaEndpoints: () => void;
 }): JSX.Element {
-  const [tab, setTab] = createSignal<DetailTab>(
-    props.step.ok ? "response" : "response",
-  );
+  const [tab, setTab] = createSignal<DetailTab>(props.step.ok ? "response" : "response");
   const reqBodyPresent = createMemo(
     () => false, // StepResult.request only exposes method/url today
   );
@@ -839,22 +816,14 @@ function StepDetail(props: {
         }}
         role="tablist"
       >
-        <MiniTab
-          label="Request"
-          active={tab() === "request"}
-          onClick={() => setTab("request")}
-        />
+        <MiniTab label="Request" active={tab() === "request"} onClick={() => setTab("request")} />
         <MiniTab
           label="Response"
           active={tab() === "response"}
           onClick={() => setTab("response")}
         />
         <Show when={props.step.error}>
-          <MiniTab
-            label="Error"
-            active={tab() === "logs"}
-            onClick={() => setTab("logs")}
-          />
+          <MiniTab label="Error" active={tab() === "logs"} onClick={() => setTab("logs")} />
         </Show>
         <div style={{ flex: 1 }} />
         <button
@@ -918,9 +887,7 @@ function StepDetail(props: {
           <Show
             when={props.step.request}
             fallback={
-              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
-                No request recorded.
-              </div>
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>No request recorded.</div>
             }
           >
             <pre
@@ -940,9 +907,7 @@ function StepDetail(props: {
           <Show
             when={props.step.response}
             fallback={
-              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
-                No response recorded.
-              </div>
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>No response recorded.</div>
             }
           >
             <pre

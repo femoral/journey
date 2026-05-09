@@ -17,19 +17,61 @@ import { api } from "../api/client";
 import { RouteFade } from "../ui";
 import { createConsoleStore } from "./consoleStore";
 import { ConsoleContext } from "./consoleContext";
+import { EnvContext, type EnvSelection } from "./envContext";
+import { loadSelectedEnv, saveSelectedEnv } from "./selectedEnv";
 
 export function Shell(props: { children?: JSX.Element }): JSX.Element {
   const [project] = createResource(() => api.getProject());
   const [drift] = createResource(() => api.getSpecDrift());
+  const [envs] = createResource(() => api.getEnvironments());
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
   const [consoleOpen, setConsoleOpen] = createSignal(false);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [importOpen, setImportOpen] = createSignal(false);
   const [recents, setRecents] = createSignal<RecentProject[]>(loadRecentProjects());
+  const [selectedEnv, setSelectedEnvSignal] = createSignal<string | undefined>(undefined);
 
   useCmdKHotkey(() => setPaletteOpen(true));
 
   const consoleStore = createConsoleStore();
+
+  // Reconcile selectedEnv whenever project + env list resolve. Precedence:
+  // 1) saved choice in localStorage (if it still exists in the env list),
+  // 2) project defaultEnvironment, 3) first env in the list.
+  createEffect(() => {
+    const p = project();
+    const e = envs();
+    if (!p?.projectDir || !e) return;
+    const names = new Set(e.environments.map((env) => env.name));
+    if (names.size === 0) return;
+    const current = selectedEnv();
+    if (current && names.has(current)) return;
+    const saved = loadSelectedEnv(p.projectDir);
+    const fallback =
+      (saved && names.has(saved) ? saved : undefined) ??
+      e.defaultEnvironment ??
+      p.config?.defaultEnvironment ??
+      e.environments[0]?.name;
+    if (fallback) setSelectedEnvSignal(fallback);
+  });
+
+  const setSelectedEnv = (name: string) => {
+    setSelectedEnvSignal(name);
+    const dir = project()?.projectDir;
+    if (dir) saveSelectedEnv(dir, name);
+  };
+
+  const envSelection: EnvSelection = {
+    selectedEnv,
+    setSelectedEnv,
+    environments: () => envs()?.environments ?? [],
+    envValues: () => {
+      const e = envs();
+      const name = selectedEnv();
+      if (!e || !name) return {};
+      return e.environments.find((x) => x.name === name)?.values ?? {};
+    },
+  };
 
   // Auto-open the console dock the first time any run activity appears, so
   // users discover it without having to click the Console button first.
@@ -57,80 +99,87 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
 
   return (
     <ConsoleContext.Provider value={consoleStore}>
-      <div
-        style={{
-          display: "flex",
-          "flex-direction": "column",
-          height: "100vh",
-          background: "var(--bg-0)",
-        }}
-      >
-        <TopBar
-          projectName={project()?.config?.name ?? (project()?.projectDir ? basename(project()!.projectDir) : undefined)}
-          envName={project()?.config?.defaultEnvironment}
-          envBaseUrl={project()?.config?.baseUrl}
-          onOpenSwitcher={() => setSwitcherOpen(true)}
-          onToggleConsole={() => setConsoleOpen((o) => !o)}
-          consoleOpen={consoleOpen()}
-          onOpenPalette={() => setPaletteOpen(true)}
-        />
-        <CommandPalette
-          open={paletteOpen()}
-          onClose={() => setPaletteOpen(false)}
-          onOpenImport={() => {
-            setPaletteOpen(false);
-            setImportOpen(true);
+      <EnvContext.Provider value={envSelection}>
+        <div
+          style={{
+            display: "flex",
+            "flex-direction": "column",
+            height: "100vh",
+            background: "var(--bg-0)",
           }}
-        />
-        <ImportDialog open={importOpen()} onClose={() => setImportOpen(false)} />
-        <ProjectSwitcher
-          open={switcherOpen()}
-          onClose={() => setSwitcherOpen(false)}
-          projects={recents()}
-          currentPath={project()?.projectDir}
-          onSwitch={(p) => {
-            console.info("[shell] project switch requested", p);
-          }}
-          onOpenFolder={() => {
-            console.info("[shell] open folder requested");
-          }}
-          onInitNew={() => {
-            console.info("[shell] init new project requested");
-          }}
-        />
-
-        <div style={{ flex: 1, display: "flex", "min-height": 0 }}>
-          <Sidebar
-            counts={{
-              endpoints: project()?.counts?.endpoints,
-              journeys: project()?.counts?.journeys,
-              envs: project()?.counts?.environments,
-              drift: drift()?.count,
+        >
+          <TopBar
+            projectName={
+              project()?.config?.name ??
+              (project()?.projectDir ? basename(project()!.projectDir) : undefined)
+            }
+            envName={selectedEnv()}
+            envBaseUrl={project()?.config?.baseUrl}
+            envOptions={envSelection.environments().map((e) => e.name)}
+            onSelectEnv={setSelectedEnv}
+            onOpenSwitcher={() => setSwitcherOpen(true)}
+            onToggleConsole={() => setConsoleOpen((o) => !o)}
+            consoleOpen={consoleOpen()}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+          <CommandPalette
+            open={paletteOpen()}
+            onClose={() => setPaletteOpen(false)}
+            onOpenImport={() => {
+              setPaletteOpen(false);
+              setImportOpen(true);
             }}
           />
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              "flex-direction": "column",
-              "min-width": 0,
-              "min-height": 0,
+          <ImportDialog open={importOpen()} onClose={() => setImportOpen(false)} />
+          <ProjectSwitcher
+            open={switcherOpen()}
+            onClose={() => setSwitcherOpen(false)}
+            projects={recents()}
+            currentPath={project()?.projectDir}
+            onSwitch={(p) => {
+              console.info("[shell] project switch requested", p);
             }}
-          >
-            <div style={{ flex: 1, "min-height": 0, overflow: "hidden" }}>
-              <RouteFade>
-                <div
-                  data-route={location.pathname}
-                  style={{ flex: 1, "min-height": 0, overflow: "auto", width: "100%" }}
-                >
-                  {props.children}
-                </div>
-              </RouteFade>
+            onOpenFolder={() => {
+              console.info("[shell] open folder requested");
+            }}
+            onInitNew={() => {
+              console.info("[shell] init new project requested");
+            }}
+          />
+
+          <div style={{ flex: 1, display: "flex", "min-height": 0 }}>
+            <Sidebar
+              counts={{
+                endpoints: project()?.counts?.endpoints,
+                journeys: project()?.counts?.journeys,
+                envs: project()?.counts?.environments,
+                drift: drift()?.count,
+              }}
+            />
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                "flex-direction": "column",
+                "min-width": 0,
+                "min-height": 0,
+              }}
+            >
+              <div style={{ flex: 1, "min-height": 0, overflow: "hidden" }}>
+                <RouteFade>
+                  <div
+                    data-route={location.pathname}
+                    style={{ flex: 1, "min-height": 0, overflow: "auto", width: "100%" }}
+                  >
+                    {props.children}
+                  </div>
+                </RouteFade>
+              </div>
+              <ConsoleDock open={consoleOpen()} onClose={() => setConsoleOpen(false)} />
             </div>
-            <ConsoleDock open={consoleOpen()} onClose={() => setConsoleOpen(false)} />
           </div>
         </div>
-      </div>
+      </EnvContext.Provider>
     </ConsoleContext.Provider>
   );
 }

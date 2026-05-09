@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
+import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import {
   IconChevronDown,
   IconConsole,
@@ -14,6 +15,8 @@ export type TopBarProps = {
   projectBranch?: string | undefined;
   envName?: string | undefined;
   envBaseUrl?: string | undefined;
+  envOptions?: string[] | undefined;
+  onSelectEnv?: ((name: string) => void) | undefined;
   onOpenSwitcher: () => void;
   onToggleConsole: () => void;
   consoleOpen: boolean;
@@ -89,37 +92,82 @@ export function TopBar(props: TopBarProps): JSX.Element {
       </button>
 
       <Show when={props.envName}>
-        <div
-          style={{
-            display: "flex",
-            "align-items": "center",
-            gap: "6px",
-            padding: "5px 10px",
-            border: "1px solid var(--bd-1)",
-            "border-radius": "5px",
-            "font-size": "11px",
-          }}
-        >
-          <span
+        <DropdownMenu>
+          <DropdownMenu.Trigger
+            data-testid="env-switcher"
+            title="Switch environment for runs"
+            disabled={!props.onSelectEnv || (props.envOptions?.length ?? 0) === 0}
             style={{
-              width: "6px",
-              height: "6px",
-              "border-radius": "50%",
-              background: "var(--ac)",
+              display: "flex",
+              "align-items": "center",
+              gap: "6px",
+              padding: "5px 10px",
+              border: "1px solid var(--bd-1)",
+              "border-radius": "5px",
+              "font-size": "11px",
+              background: "transparent",
+              cursor: props.onSelectEnv ? "pointer" : "default",
             }}
-          />
-          <span class="mono" style={{ color: "var(--fg-1)" }}>
-            {props.envName}
-          </span>
-          <Show when={props.envBaseUrl}>
-            <span class="mono" style={{ color: "var(--fg-3)" }}>
-              ·
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                "border-radius": "50%",
+                background: "var(--ac)",
+              }}
+            />
+            <span class="mono" style={{ color: "var(--fg-1)" }}>
+              {props.envName}
             </span>
-            <span class="mono" style={{ color: "var(--fg-2)" }}>
-              {props.envBaseUrl}
-            </span>
-          </Show>
-        </div>
+            <Show when={props.envBaseUrl}>
+              <span class="mono" style={{ color: "var(--fg-3)" }}>
+                ·
+              </span>
+              <span class="mono" style={{ color: "var(--fg-2)" }}>
+                {props.envBaseUrl}
+              </span>
+            </Show>
+            <IconChevronDown size={10} style={{ color: "var(--fg-3)" }} />
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              data-testid="env-switcher-menu"
+              style={{
+                background: "var(--bg-1)",
+                border: "1px solid var(--bd-2)",
+                "border-radius": "4px",
+                padding: "3px",
+                "min-width": "160px",
+                "box-shadow": "0 8px 24px rgba(0,0,0,0.4)",
+                "z-index": 70,
+              }}
+            >
+              <For each={props.envOptions ?? []}>
+                {(opt) => (
+                  <DropdownMenu.Item
+                    onSelect={() => props.onSelectEnv?.(opt)}
+                    class="mono"
+                    data-testid={`env-option-${opt}`}
+                    style={{
+                      width: "100%",
+                      padding: "5px 10px",
+                      "text-align": "left",
+                      "font-size": "12px",
+                      "border-radius": "3px",
+                      color: opt === props.envName ? "var(--ac)" : "var(--fg-1)",
+                      background: opt === props.envName ? "var(--ac-bg)" : "transparent",
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  >
+                    {opt}
+                  </DropdownMenu.Item>
+                )}
+              </For>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu>
       </Show>
 
       <div style={{ flex: 1 }} />
@@ -145,9 +193,7 @@ export function TopBar(props: TopBarProps): JSX.Element {
         }}
       >
         <IconSearch size={12} />
-        <span style={{ flex: 1, "text-align": "left" }}>
-          Search endpoints, journeys…
-        </span>
+        <span style={{ flex: 1, "text-align": "left" }}>Search endpoints, journeys…</span>
         <span
           class="mono"
           style={{

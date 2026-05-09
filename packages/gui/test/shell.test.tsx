@@ -57,6 +57,39 @@ describe("TopBar", () => {
     fireEvent.click(btn);
     expect(open()).toBe(true);
   });
+
+  it("disables the env switcher when no options are provided", () => {
+    render(() => (
+      <TopBar
+        projectName="ledger-api"
+        envName="local"
+        envOptions={[]}
+        onSelectEnv={() => {}}
+        onOpenSwitcher={() => {}}
+        onToggleConsole={() => {}}
+        consoleOpen={false}
+      />
+    ));
+    const trigger = screen.getByTestId("env-switcher") as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+  });
+
+  it("exposes a working env switcher trigger when options exist", () => {
+    const picked: string[] = [];
+    render(() => (
+      <TopBar
+        projectName="ledger-api"
+        envName="local"
+        envOptions={["local", "ci", "staging"]}
+        onSelectEnv={(name) => picked.push(name)}
+        onOpenSwitcher={() => {}}
+        onToggleConsole={() => {}}
+        consoleOpen={false}
+      />
+    ));
+    const trigger = screen.getByTestId("env-switcher") as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+  });
 });
 
 describe("Sidebar", () => {

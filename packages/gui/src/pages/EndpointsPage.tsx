@@ -20,6 +20,7 @@ import { runPostScript, runPreScript } from "./scripts";
 import { useSearchParams } from "@solidjs/router";
 import { createEffect } from "solid-js";
 import { useConsole } from "../shell/consoleContext";
+import { useEnvSelection } from "../shell/envContext";
 import {
   Checkbox,
   Field,
@@ -44,6 +45,7 @@ type ParamRow = { name: string; enabled: boolean; value: string; info: Parameter
 
 export const EndpointsPage: Component = () => {
   const cons = useConsole();
+  const envSel = useEnvSelection();
   const [params] = useSearchParams<{ method?: string; url?: string }>();
   const [list] = createResource(api.getEndpoints);
   const [selected, setSelected] = createSignal<EndpointSummary | undefined>(undefined);
@@ -66,9 +68,15 @@ export const EndpointsPage: Component = () => {
   const [postScript, setPostScript] = createSignal("");
   const [saveAsStepOpen, setSaveAsStepOpen] = createSignal(false);
 
-  // Active env values feed `{{env.VAR}}` interpolation in auth presets.
-  const [envs] = createResource(() => api.getEnvironments());
+  // Active env values feed `{{env.VAR}}` interpolation in auth presets. Source
+  // from the global env selection in the TopBar (falls back to a local fetch
+  // when the page is rendered without a Shell, e.g. in some tests).
+  const [envs] = createResource(
+    () => envSel === undefined,
+    () => api.getEnvironments(),
+  );
   const activeEnv = createMemo<Record<string, string>>(() => {
+    if (envSel) return envSel.envValues();
     const data = envs();
     if (!data) return {};
     const name = data.defaultEnvironment;

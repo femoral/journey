@@ -4,13 +4,12 @@ import { Router, Route } from "@solidjs/router";
 import { JourneysPage } from "../src/pages/JourneysPage";
 import { ConsoleContext } from "../src/shell/consoleContext";
 import { createConsoleStore } from "../src/shell/consoleStore";
+import { EnvContext, type EnvSelection } from "../src/shell/envContext";
 
 const list = { journeysDir: "/tmp/demo/journeys", files: ["auth.journey.ts"] };
 
 function sseFrames(events: unknown[]): string {
-  return (
-    events.map((e) => `data: ${JSON.stringify(e)}`).join("\n\n") + "\n\n"
-  );
+  return events.map((e) => `data: ${JSON.stringify(e)}`).join("\n\n") + "\n\n";
 }
 
 function streamResponse(text: string): Response {
@@ -71,17 +70,27 @@ const runEventsFrames = sseFrames([
   },
 ]);
 
-function stubFetch() {
+type Captured = { runBody?: unknown };
+
+function stubFetch(captured?: Captured) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: Request | string) => {
+    vi.fn(async (input: Request | string, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
       if (url.endsWith("/api/runs/r1/events")) {
         return streamResponse(runEventsFrames);
       }
       let body: unknown;
-      if (url.endsWith("/run")) body = { runId: "r1" };
-      else if (url.endsWith("/api/journeys")) body = list;
+      if (url.endsWith("/run")) {
+        if (captured && typeof init?.body === "string") {
+          try {
+            captured.runBody = JSON.parse(init.body);
+          } catch {
+            captured.runBody = init.body;
+          }
+        }
+        body = { runId: "r1" };
+      } else if (url.endsWith("/api/journeys")) body = list;
       else if (url.endsWith("/api/runs")) body = [];
       else body = {};
       return new Response(JSON.stringify(body), {
@@ -92,23 +101,48 @@ function stubFetch() {
   );
 }
 
-function renderWithConsole() {
+function renderWithConsole(opts: { env?: EnvSelection } = {}) {
   const store = createConsoleStore();
+  const inner = () => (
+    <ConsoleContext.Provider value={store}>
+      <Router>
+        <Route path="*" component={JourneysPage} />
+      </Router>
+    </ConsoleContext.Provider>
+  );
   return {
     store,
-    result: render(() => (
-      <ConsoleContext.Provider value={store}>
-        <Router>
-          <Route path="*" component={JourneysPage} />
-        </Router>
-      </ConsoleContext.Provider>
-    )),
+    result: render(() =>
+      opts.env ? <EnvContext.Provider value={opts.env}>{inner()}</EnvContext.Provider> : inner(),
+    ),
   };
 }
 
 describe("JourneysPage", () => {
   beforeEach(() => stubFetch());
   afterEach(() => vi.unstubAllGlobals());
+
+  it("forwards the EnvContext selection when starting a run", async () => {
+    const captured: Captured = {};
+    vi.unstubAllGlobals();
+    stubFetch(captured);
+    const env: EnvSelection = {
+      selectedEnv: () => "ci",
+      setSelectedEnv: () => {},
+      environments: () => [],
+      envValues: () => ({}),
+    };
+    renderWithConsole({ env });
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    const runBtn = await waitFor(() => screen.getByTestId("run-button"));
+    fireEvent.click(runBtn);
+    await waitFor(() => {
+      expect(captured.runBody).toMatchObject({ stream: true, env: "ci" });
+    });
+  });
 
   it("streams step results over SSE after kickoff and feeds the console", async () => {
     const { store } = renderWithConsole();
