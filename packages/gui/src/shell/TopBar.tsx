@@ -109,14 +109,6 @@ export function TopBar(props: TopBarProps): JSX.Element {
               cursor: props.onSelectEnv ? "pointer" : "default",
             }}
           >
-            <span
-              style={{
-                width: "6px",
-                height: "6px",
-                "border-radius": "50%",
-                background: "var(--ac)",
-              }}
-            />
             <span class="mono" style={{ color: "var(--fg-1)" }}>
               {props.envName}
             </span>
