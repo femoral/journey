@@ -8,12 +8,7 @@ import {
   type JSX,
 } from "solid-js";
 import { api, type Environment } from "../api/client";
-import {
-  IconPlus,
-  IconX,
-  JsonPretty,
-  SegBtn,
-} from "../ui";
+import { IconPlus, IconX } from "../ui";
 
 type Row = { key: string; value: string };
 
@@ -23,7 +18,6 @@ export const EnvironmentsPage: Component = () => {
   const [selectedName, setSelectedName] = createSignal<string | undefined>(undefined);
   const [draft, setDraft] = createSignal<Row[]>([]);
   const [status, setStatus] = createSignal<string | undefined>(undefined);
-  const [view, setView] = createSignal<"table" | "JSON">("table");
 
   const selectedEnv = createMemo(() =>
     data()?.environments.find((e) => e.name === selectedName()),
@@ -304,15 +298,9 @@ export const EnvironmentsPage: Component = () => {
                 {draft().length === 1 ? "variable" : "variables"}
               </div>
             </div>
-            <SegBtn<"table" | "JSON">
-              options={["table", "JSON"] as const}
-              value={view()}
-              onChange={setView}
-            />
           </div>
 
-          <Show when={view() === "table"}>
-            <div style={{ flex: 1, overflow: "auto" }} data-testid="env-values">
+          <div style={{ flex: 1, overflow: "auto" }} data-testid="env-values">
               <div
                 style={{
                   display: "grid",
@@ -423,25 +411,6 @@ export const EnvironmentsPage: Component = () => {
                 <IconPlus size={11} /> Add variable
               </button>
             </div>
-          </Show>
-
-          <Show when={view() === "JSON"}>
-            <pre
-              class="mono"
-              style={{
-                margin: 0,
-                padding: "16px 22px",
-                "font-size": "12px",
-                "line-height": 1.7,
-                color: "var(--fg-1)",
-                flex: 1,
-                overflow: "auto",
-                background: "var(--bg-0)",
-              }}
-            >
-              <JsonPretty text={jsonFor(draft())} />
-            </pre>
-          </Show>
 
           <FooterBar
             onSave={() => void save()}
@@ -519,11 +488,3 @@ function FooterBar(props: {
   );
 }
 
-function jsonFor(rows: Row[]): string {
-  const obj: Record<string, string> = {};
-  for (const { key, value } of rows) {
-    if (!key.trim()) continue;
-    obj[key] = value;
-  }
-  return JSON.stringify(obj, null, 2);
-}
