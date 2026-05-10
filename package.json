@@ -13,8 +13,10 @@
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "dev:web": "pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,gui -c blue,green,cyan,magenta --kill-others --handle-input \"node examples/petstore/auth-server.mjs\" \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\"",
-    "dev:tauri": "pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,vite,tauri -c blue,green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore/auth-server.mjs\" \"node examples/petstore/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore --port 5181\" \"pnpm --filter @journey/gui dev\" \"pnpm --filter @journey/gui tauri:dev\""
+    "dev:ensure": "node scripts/ensure-petstore-dev.mjs",
+    "dev:reset": "node scripts/ensure-petstore-dev.mjs --force",
+    "dev:web": "pnpm dev:ensure && pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,gui -c blue,green,cyan,magenta --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @journey/gui dev\"",
+    "dev:tauri": "pnpm dev:ensure && pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,vite,tauri -c blue,green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @journey/gui dev\" \"pnpm --filter @journey/gui tauri:dev\""
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

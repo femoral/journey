@@ -152,6 +152,9 @@ packages/*/.test-tmp/
 packages/*/test-results/
 packages/*/playwright-report/
 
+# Dev-time scratch copy of examples/petstore (regenerable via `pnpm dev:reset`)
+examples/petstore.dev/
+
 # Windows NTFS alternate data streams that WSL surfaces for files copied from Windows
 *:Zone.Identifier
 

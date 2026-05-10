@@ -44,6 +44,7 @@ pnpm -r build                          # tsup / vite build
 pnpm format[:check]                    # prettier across the repo
 pnpm dev:web                           # mock (5180) + cli serve (5181) + gui vite (5173)
 pnpm dev:tauri                         # same as dev:web + cargo tauri dev
+pnpm dev:reset                         # rebuild examples/petstore.dev/ scratch from canonical petstore
 pnpm --filter @journey/gui test:e2e    # Playwright (needs a running petstore stack)
 pnpm --filter @journey/docs sources:check  # CI gate — fails if SOURCES.md is stale
 pnpm --filter @journey/docs sources:gen    # refresh SOURCES.md
@@ -78,7 +79,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **GUI run-event abstraction** → `packages/gui/src/api/runEvents.ts` (consumes the CLI SSE endpoint)
 - **Codegen** → `packages/codegen/src/{parse,emit-endpoints,names,types}.ts`
 - **k6 transpiler** → `packages/k6-adapter/src/`
-- **Working example** → `examples/petstore/` (primary mock at `server.mjs` on 5180, IDP mock at `auth-server.mjs` on 5182, three envs `local|ci|staging` under `environments/`)
+- **Working example** → `examples/petstore/` (primary mock at `server.mjs` on 5180, IDP mock at `auth-server.mjs` on 5182, three envs `local|ci|staging` under `environments/`). `pnpm dev:web` / `dev:tauri` run from a gitignored scratch copy at `examples/petstore.dev/` (auto-created on first run, rebuild with `pnpm dev:reset`); edits to canonical `examples/petstore/` only take effect after a reset.
 - **Docs (user-facing)** → `docs/guide/{getting-started,writing-journeys/*,cli/*,environments/*,gui/*}.md`, `docs/reference/{config,step-options,openapi-codegen,journey-api/*}.md`
 - **Design tokens** → `design/system/README.md`
 
