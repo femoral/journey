@@ -1,5 +1,6 @@
 import {
   For,
+  Index,
   Show,
   createMemo,
   createResource,
@@ -712,9 +713,9 @@ function TabParams(props: {
           </div>
         }
       >
-        <For each={rows()}>
+        <Index each={rows()}>
           {(r) => {
-            const key = `${r.info.in}:${r.info.name}`;
+            const key = () => `${r().info.in}:${r().info.name}`;
             return (
               <div
                 style={{
@@ -724,24 +725,24 @@ function TabParams(props: {
                   "align-items": "center",
                   gap: "8px",
                   "border-bottom": "1px solid var(--bd-1)",
-                  opacity: r.enabled ? 1 : 0.5,
+                  opacity: r().enabled ? 1 : 0.5,
                 }}
-                data-testid={`param-row-${r.info.in}-${r.info.name}`}
+                data-testid={`param-row-${r().info.in}-${r().info.name}`}
               >
                 <Checkbox
-                  checked={r.enabled}
-                  onChange={(v) => props.onToggle(key, v)}
-                  aria-label={`Include ${r.info.name}`}
+                  checked={r().enabled}
+                  onChange={(v) => props.onToggle(key(), v)}
+                  aria-label={`Include ${r().info.name}`}
                 />
                 <span
                   class="mono"
                   style={{
                     "font-size": "11px",
-                    color: r.info.in === "path" ? "var(--info)" : "var(--fg-2)",
+                    color: r().info.in === "path" ? "var(--info)" : "var(--fg-2)",
                     "text-transform": "uppercase",
                   }}
                 >
-                  {r.info.in}
+                  {r().info.in}
                 </span>
                 <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
                   <span
@@ -752,9 +753,9 @@ function TabParams(props: {
                       "font-weight": 500,
                     }}
                   >
-                    {r.info.name}
+                    {r().info.name}
                   </span>
-                  <Show when={r.info.required}>
+                  <Show when={r().info.required}>
                     <span
                       title="Required"
                       style={{
@@ -766,17 +767,17 @@ function TabParams(props: {
                     />
                   </Show>
                 </div>
-                <TypeHint t="string" required={r.info.required} />
+                <TypeHint t="string" required={r().info.required} />
                 <input
-                  value={r.value}
-                  placeholder={r.info.description ?? "value"}
+                  value={r().value}
+                  placeholder={r().info.description ?? "value"}
                   class="mono"
-                  data-testid={`${r.info.in === "path" ? "param" : "query"}-${r.info.name}`}
-                  disabled={!r.enabled}
+                  data-testid={`${r().info.in === "path" ? "param" : "query"}-${r().info.name}`}
+                  disabled={!r().enabled}
                   onInput={(e) =>
-                    r.info.in === "path"
-                      ? props.onParamInput(r.info.name, e.currentTarget.value)
-                      : props.onQueryInput(r.info.name, e.currentTarget.value)
+                    r().info.in === "path"
+                      ? props.onParamInput(r().info.name, e.currentTarget.value)
+                      : props.onQueryInput(r().info.name, e.currentTarget.value)
                   }
                   style={{
                     width: "100%",
@@ -788,7 +789,7 @@ function TabParams(props: {
               </div>
             );
           }}
-        </For>
+        </Index>
       </Show>
     </div>
   );
@@ -827,7 +828,7 @@ function TabHeaders(props: {
         <div>Value</div>
         <div />
       </div>
-      <For each={props.rows}>
+      <Index each={props.rows}>
         {(r, i) => (
           <div
             style={{
@@ -837,34 +838,34 @@ function TabHeaders(props: {
               "align-items": "center",
               gap: "8px",
               "border-bottom": "1px solid var(--bd-1)",
-              opacity: r.enabled ? 1 : 0.5,
+              opacity: r().enabled ? 1 : 0.5,
             }}
           >
             <Checkbox
-              checked={r.enabled}
-              onChange={(v) => update(i(), { enabled: v })}
-              aria-label={`Include header ${r.name || "(unnamed)"}`}
+              checked={r().enabled}
+              onChange={(v) => update(i, { enabled: v })}
+              aria-label={`Include header ${r().name || "(unnamed)"}`}
             />
             <input
-              value={r.name}
+              value={r().name}
               placeholder="Authorization"
               class="mono"
-              disabled={!r.enabled}
+              disabled={!r().enabled}
               style={{ "font-size": "12px", width: "100%" }}
-              onInput={(e) => update(i(), { name: e.currentTarget.value })}
+              onInput={(e) => update(i, { name: e.currentTarget.value })}
               data-testid={`headers-input`}
             />
             <input
-              value={r.value}
+              value={r().value}
               placeholder="Bearer {{env.TOKEN}}"
               class="mono"
-              disabled={!r.enabled}
+              disabled={!r().enabled}
               style={{ "font-size": "12px", width: "100%" }}
-              onInput={(e) => update(i(), { value: e.currentTarget.value })}
+              onInput={(e) => update(i, { value: e.currentTarget.value })}
             />
             <button
               type="button"
-              onClick={() => remove(i())}
+              onClick={() => remove(i)}
               style={{ color: "var(--fg-3)" }}
               aria-label="Remove header"
             >
@@ -872,7 +873,7 @@ function TabHeaders(props: {
             </button>
           </div>
         )}
-      </For>
+      </Index>
       <button
         type="button"
         onClick={addRow}
@@ -1183,7 +1184,7 @@ function UrlencodedBodyEditor(props: {
         <div />
       </div>
       <div style={{ flex: 1, overflow: "auto" }}>
-        <For each={props.rows}>
+        <Index each={props.rows}>
           {(r, i) => (
             <div
               style={{
@@ -1193,33 +1194,33 @@ function UrlencodedBodyEditor(props: {
                 "align-items": "center",
                 gap: "8px",
                 "border-bottom": "1px solid var(--bd-1)",
-                opacity: r.enabled ? 1 : 0.5,
+                opacity: r().enabled ? 1 : 0.5,
               }}
             >
               <Checkbox
-                checked={r.enabled}
-                onChange={(v) => update(i(), { enabled: v })}
-                aria-label={`Include field ${r.name || "(unnamed)"}`}
+                checked={r().enabled}
+                onChange={(v) => update(i, { enabled: v })}
+                aria-label={`Include field ${r().name || "(unnamed)"}`}
               />
               <input
-                value={r.name}
+                value={r().name}
                 placeholder="name"
-                disabled={!r.enabled}
+                disabled={!r().enabled}
                 class="mono"
                 style={{ "font-size": "12px", width: "100%" }}
-                onInput={(e) => update(i(), { name: e.currentTarget.value })}
+                onInput={(e) => update(i, { name: e.currentTarget.value })}
               />
               <input
-                value={r.value}
+                value={r().value}
                 placeholder="value"
-                disabled={!r.enabled}
+                disabled={!r().enabled}
                 class="mono"
                 style={{ "font-size": "12px", width: "100%" }}
-                onInput={(e) => update(i(), { value: e.currentTarget.value })}
+                onInput={(e) => update(i, { value: e.currentTarget.value })}
               />
               <button
                 type="button"
-                onClick={() => remove(i())}
+                onClick={() => remove(i)}
                 style={{ color: "var(--fg-3)" }}
                 aria-label="Remove field"
               >
@@ -1227,7 +1228,7 @@ function UrlencodedBodyEditor(props: {
               </button>
             </div>
           )}
-        </For>
+        </Index>
         <button
           type="button"
           onClick={add}

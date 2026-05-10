@@ -1,5 +1,6 @@
 import {
   For,
+  Index,
   Show,
   createMemo,
   createResource,
@@ -319,7 +320,7 @@ export const EnvironmentsPage: Component = () => {
                 <span />
                 <span />
               </div>
-              <For each={draft()}>
+              <Index each={draft()}>
                 {(row, i) => {
                   return (
                     <div
@@ -343,10 +344,10 @@ export const EnvironmentsPage: Component = () => {
                         }}
                       >
                         <input
-                          value={row.key}
+                          value={row().key}
                           placeholder="KEY"
                           onInput={(e) =>
-                            updateRow(i(), { key: e.currentTarget.value })
+                            updateRow(i, { key: e.currentTarget.value })
                           }
                           style={{
                             flex: 1,
@@ -365,17 +366,17 @@ export const EnvironmentsPage: Component = () => {
                         }}
                       >
                         <input
-                          value={row.value}
+                          value={row().value}
                           placeholder="value"
                           type="text"
                           onInput={(e) =>
-                            updateRow(i(), { value: e.currentTarget.value })
+                            updateRow(i, { value: e.currentTarget.value })
                           }
                           style={{
                             flex: 1,
                             "font-size": "12px",
                             color:
-                              row.value.startsWith("$")
+                              row().value.startsWith("$")
                                 ? "var(--m-patch)"
                                 : "var(--fg-0)",
                             width: "100%",
@@ -385,16 +386,16 @@ export const EnvironmentsPage: Component = () => {
                       <span />
                       <button
                         type="button"
-                        onClick={() => removeRow(i())}
+                        onClick={() => removeRow(i)}
                         style={{ color: "var(--fg-3)" }}
-                        aria-label={`Remove ${row.key || "row"}`}
+                        aria-label={`Remove ${row().key || "row"}`}
                       >
                         <IconX size={10} />
                       </button>
                     </div>
                   );
                 }}
-              </For>
+              </Index>
               <button
                 type="button"
                 data-testid="add-row"
