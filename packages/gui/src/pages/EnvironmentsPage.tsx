@@ -29,6 +29,22 @@ export const EnvironmentsPage: Component = () => {
     data()?.environments.find((e) => e.name === selectedName()),
   );
 
+  const isDirty = createMemo(() => {
+    const env = selectedEnv();
+    if (!env) return false;
+    const built: Record<string, string> = {};
+    for (const { key, value } of draft()) {
+      if (key.trim()) built[key] = value;
+    }
+    const original = env.values;
+    const builtKeys = Object.keys(built);
+    if (builtKeys.length !== Object.keys(original).length) return true;
+    for (const k of builtKeys) {
+      if (built[k] !== original[k]) return true;
+    }
+    return false;
+  });
+
   const loadDraftFor = (env: Environment) => {
     setDraft(Object.entries(env.values).map(([key, value]) => ({ key, value })));
     setStatus(undefined);
@@ -431,6 +447,7 @@ export const EnvironmentsPage: Component = () => {
             onSave={() => void save()}
             onDelete={() => void destroy()}
             status={status()}
+            canSave={isDirty()}
           />
         </Show>
       </section>
@@ -442,6 +459,7 @@ function FooterBar(props: {
   onSave: () => void;
   onDelete: () => void;
   status: string | undefined;
+  canSave: boolean;
 }): JSX.Element {
   return (
     <div
@@ -484,13 +502,15 @@ function FooterBar(props: {
         type="button"
         data-testid="save-env"
         onClick={props.onSave}
+        disabled={!props.canSave}
         style={{
           padding: "6px 14px",
-          background: "var(--ac)",
-          color: "#1a1200",
+          background: props.canSave ? "var(--ac)" : "var(--bg-3)",
+          color: props.canSave ? "#1a1200" : "var(--fg-3)",
           "border-radius": "4px",
           "font-size": "12px",
           "font-weight": 600,
+          cursor: props.canSave ? "pointer" : "not-allowed",
         }}
       >
         Save
