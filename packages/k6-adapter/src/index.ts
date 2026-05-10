@@ -6,8 +6,16 @@ import { ENTRY_SOURCE, SHIM_SOURCE } from "./shim.js";
 export interface ExportK6Options {
   /** Absolute or cwd-relative path to the `.journey.ts` file. */
   journeyFile: string;
-  /** Output path for the emitted k6 script. Defaults to `<journey>.k6.js` next to the source. */
+  /** Output path for the emitted k6 script. Wins over `outDir` when both are set. */
   outFile?: string;
+  /** Output directory; emitted file is `<outDir>/<basename>.k6.js`. Ignored when `outFile` is set. */
+  outDir?: string;
+  /**
+   * k6 options block to bake into the emitted script as `export const options = {...}`.
+   * Same shape as `JourneyOptions['k6']` from `@journey/core`; kept loose here so the
+   * adapter does not pull a runtime dep on core. JSON-serialized verbatim.
+   */
+  k6Options?: Record<string, unknown>;
 }
 
 export interface ExportK6Result {
@@ -27,13 +35,21 @@ export async function exportToK6(opts: ExportK6Options): Promise<ExportK6Result>
   const inlined = await inlineRelativeImports(withoutTypeImports, journeyPath);
   const withoutCore = stripCoreImports(inlined);
 
+  const fileBase = basename(journeyPath).replace(/\.journey\.ts$/, "");
   const outFile = opts.outFile
     ? resolve(process.cwd(), opts.outFile)
-    : resolve(dirname(journeyPath), `${basename(journeyPath).replace(/\.journey\.ts$/, "")}.k6.js`);
+    : opts.outDir
+      ? resolve(process.cwd(), opts.outDir, `${fileBase}.k6.js`)
+      : resolve(dirname(journeyPath), `${fileBase}.k6.js`);
+
+  const optionsBlock = opts.k6Options
+    ? `export const options = ${JSON.stringify(opts.k6Options, null, 2)};\n`
+    : "";
 
   const source = [
     HEADER,
     SHIM_SOURCE,
+    optionsBlock,
     "// ===== user journey =====",
     withoutCore.trimStart(),
     ENTRY_SOURCE,

@@ -7,13 +7,16 @@ sources:
 
 # Runtime
 
-## `journey(name, body)`
+## `journey(name, body)` / `journey(name, options, body)`
 
 ```ts
 function journey(name: string, body: () => void | Promise<void>): void;
+function journey(name: string, options: JourneyOptions, body: () => void | Promise<void>): void;
 ```
 
 Registers a journey. The body runs at registration time (collecting `step()` calls), not per run. See [Writing journeys → journey() and step()](../../guide/writing-journeys/journey-and-step).
+
+The optional `options` object carries cross-cutting metadata — currently `tags` (used by [`journey export k6 --tag`](../../guide/cli/export-k6) to filter which journeys ship to k6) and `k6` (load options baked into the emitted k6 script's `export const options`).
 
 ## `step(name, options)`
 
@@ -26,10 +29,7 @@ Registers a step inside a journey body. Throws if called outside a `journey()` b
 ## `runAllRegistered(ctx, opts?)`
 
 ```ts
-function runAllRegistered(
-  ctx: HttpContext,
-  opts?: RunMeta,
-): Promise<JourneyResult[]>;
+function runAllRegistered(ctx: HttpContext, opts?: RunMeta): Promise<JourneyResult[]>;
 ```
 
 Walks the journey registry, clears it, and runs each journey in order. Emits `onRunStart` / `onRunEnd` via `ctx.logger`; every journey in the same invocation shares one `runId`. `stepIdx` is **monotonic across journey boundaries** so subscribers can key streams by it.
@@ -54,7 +54,11 @@ Run a single journey without touching the registry. Does **not** emit `onRunStar
 ## `getRegisteredJourneys()`
 
 ```ts
-function getRegisteredJourneys(): ReadonlyArray<{ name: string; body: () => void | Promise<void> }>;
+function getRegisteredJourneys(): ReadonlyArray<{
+  name: string;
+  body: () => void | Promise<void>;
+  options?: JourneyOptions;
+}>;
 ```
 
 Inspect the registry without consuming it. Mostly useful for introspection tools.
@@ -68,6 +72,32 @@ function clearRegistry(): void;
 Drops every registered journey. `runAllRegistered` calls this internally after snapshotting.
 
 ## Types
+
+### `JourneyOptions`
+
+```ts
+interface JourneyOptions {
+  tags?: string[];
+  k6?: K6JourneyOptions;
+}
+```
+
+- `tags` — free-form labels. `journey export k6 --tag <t>` selects only journeys carrying every listed tag (AND across repeats).
+- `k6` — k6 options baked into the emitted script as `export const options = {...}`. Module-scoped on the k6 side: at most one journey per file may declare a `k6` block (the export errors otherwise).
+
+### `K6JourneyOptions`
+
+```ts
+interface K6JourneyOptions {
+  vus?: number;
+  duration?: string;
+  iterations?: number;
+  stages?: Array<{ duration: string; target: number }>;
+  [extra: string]: unknown;
+}
+```
+
+The named fields cover the common load profiles. The index signature passes any other k6 options key (thresholds, scenarios, ext, …) straight through to the emitted `export const options`.
 
 ### `RunMeta`
 

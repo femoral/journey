@@ -6,20 +6,45 @@ sources:
   - packages/k6-adapter/src/index.ts
 ---
 
-# `journey export k6 <journey-file>`
+# `journey export k6 <path>`
 
-Transpile a `.journey.ts` file into a standalone k6 script.
+Transpile one `.journey.ts` file or every `.journey.ts` in a directory into standalone k6 scripts.
 
 ```sh
-journey export k6 <journey-file> [--out <path>]
+journey export k6 <path> [--out <file>] [--out-dir <dir>] [--tag <tag>...]
 ```
 
 ## Arguments and flags
 
-| Argument / flag  | Type   | Default                                   | Required | Purpose |
-|------------------|--------|-------------------------------------------|----------|---------|
-| `<journey-file>` | path   | —                                         | Yes      | The journey to convert. |
-| `--out <path>`   | path   | `<journey basename>.k6.js` next to source | No       | Output file path. |
+| Argument / flag    | Type   | Default                                   | Required | Purpose                                                                                       |
+| ------------------ | ------ | ----------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `<path>`           | path   | —                                         | Yes      | A `.journey.ts` file or a directory of them.                                                  |
+| `--out <path>`     | path   | `<journey basename>.k6.js` next to source | No       | Output file path. Single-file mode only.                                                      |
+| `--out-dir <path>` | path   | next to each source                       | No       | Directory mode output dir; emitted files are `<basename>.k6.js`.                              |
+| `--tag <tag>`      | string | —                                         | No       | Repeatable. Skip files whose journeys do not all carry every listed tag (AND across repeats). |
+
+## Tag-based selection
+
+Declare tags on the journey to opt files into the export:
+
+```ts
+journey("checkout flow", { tags: ["load", "checkout"], k6: { vus: 10, duration: "30s" } }, () => {
+  step("add to cart", {
+    /* ... */
+  });
+});
+```
+
+Then filter at the CLI:
+
+```sh
+journey export k6 --tag load journeys/
+# → checkout.k6.js   (tagged 'load')
+# → signup.k6.js     (tagged 'load')
+#   (skipped: smoke-test.journey.ts — no 'load' tag)
+```
+
+Filtering is at the file level: if **any** journey in a file carries every requested tag, the whole file transpiles through. For finer control, keep one journey per file.
 
 ## Behaviour
 
@@ -36,9 +61,9 @@ Wrote k6 script → /abs/path/my.k6.js
 
 ## Exit codes
 
-| Code | When |
-|------|------|
-| `0`  | Success. |
+| Code | When                          |
+| ---- | ----------------------------- |
+| `0`  | Success.                      |
 | `1`  | Source read or write failure. |
 
 ## Running the k6 script
@@ -49,21 +74,43 @@ The emitted file is self-contained. Point k6 at it with a base URL:
 JOURNEY_BASE_URL=https://api.example.com k6 run my.k6.js
 ```
 
-k6 picks up the base URL from the `JOURNEY_BASE_URL` environment variable the shim injects. For load scenarios, use k6 flags (`--vus`, `--duration`, `--stage`) on top:
+k6 picks up the base URL from the `JOURNEY_BASE_URL` environment variable the shim injects.
 
-```sh
-JOURNEY_BASE_URL=https://api.example.com \
-  k6 run --vus 50 --duration 30s my.k6.js
+If the journey declares a `k6` block, the emitted script bakes it in as `export const options`, so no `--vus` / `--duration` / `--stage` flag is needed at run time:
+
+```ts
+journey(
+  "load: list pets",
+  {
+    tags: ["load"],
+    k6: {
+      stages: [
+        { duration: "10s", target: 5 },
+        { duration: "30s", target: 20 },
+        { duration: "10s", target: 0 },
+      ],
+    },
+  },
+  () => {
+    /* ... */
+  },
+);
 ```
+
+For ad-hoc overrides, k6's CLI flags (`--vus`, `--duration`, `--stage`) still take precedence over the baked-in options.
+
+::: warning One k6 block per file
+`export const options` is module-scoped on the k6 side. If a single `.journey.ts` declares more than one journey with a `k6` block, the export errors and names the offenders. Split into separate files.
+:::
 
 ## What maps to what
 
-| Journey                 | k6                                         |
-|-------------------------|--------------------------------------------|
-| `step("name", { … })`   | `group("name", () => { … })`               |
-| `assert(res)` throws    | `check(res, { … })` / fail via `check`    |
-| `env("KEY")`            | `__ENV.KEY` (k6 reads `JOURNEY_*` env vars) |
-| `fetch(url, …)`         | `http.get/post/put/…`                      |
+| Journey               | k6                                          |
+| --------------------- | ------------------------------------------- |
+| `step("name", { … })` | `group("name", () => { … })`                |
+| `assert(res)` throws  | `check(res, { … })` / fail via `check`      |
+| `env("KEY")`          | `__ENV.KEY` (k6 reads `JOURNEY_*` env vars) |
+| `fetch(url, …)`       | `http.get/post/put/…`                       |
 
 ## Limits
 

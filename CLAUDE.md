@@ -65,6 +65,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **`headers` and `body` accept functions** so they evaluate after prior steps run. Static values are also fine.
 - **`endpoint`** is either a generated reference (typed response) or a `{ method, path, baseUrl? }` descriptor (response is `unknown` unless annotated).
 - **`assert(res)`** is the assertion hook — typed when `endpoint` is a reference. **`after(res)`** is the extraction/side-effect hook.
+- **`journey()` accepts an optional middle `options` arg** — `{ tags?: string[]; k6?: K6JourneyOptions }`. `tags` drives `journey export k6 --tag` filtering; `k6` is baked into the emitted script's `export const options` (module-scoped, so at most one journey per file may declare a `k6` block).
 - **Codegen is one-way.** `pnpm journey generate` writes only under `generated/`; never touches `journeys/`. Don't hand-edit `generated/*.ts`.
 - **One runtime core, multiple surfaces.** CLI, GUI, and k6 adapter all consume `@journey/core`. Don't fork run-loop logic per surface.
 - **Local-first / zero lock-in.** No cloud, no login. Project files are diffable JSON / YAML / TS.

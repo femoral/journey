@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearRegistry, getRegisteredJourneys, journey, runAllRegistered, step } from "../src/runtime.js";
+import {
+  clearRegistry,
+  getRegisteredJourneys,
+  journey,
+  runAllRegistered,
+  step,
+} from "../src/runtime.js";
 import { expect as jExpect } from "../src/expect.js";
 import type { JourneyLogger } from "../src/logger.js";
 
@@ -84,10 +90,7 @@ describe("runtime", () => {
       step("b", { endpoint: { method: "GET", path: "/b", operationId: "b" } });
     });
 
-    await runAllRegistered(
-      { baseUrl: "https://x", fetchImpl, logger },
-      { runId: "fixed-run-id" },
-    );
+    await runAllRegistered({ baseUrl: "https://x", fetchImpl, logger }, { runId: "fixed-run-id" });
 
     expect(seenRunId).toBe("fixed-run-id");
     expect(events).toEqual([
@@ -110,9 +113,11 @@ describe("runtime", () => {
         events.push(`runEnd:${e.ok}`);
       },
     };
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response("{}", { status: 500, headers: { "content-type": "application/json" } }),
-    );
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("{}", { status: 500, headers: { "content-type": "application/json" } }),
+      );
 
     journey("will fail", () => {
       step("boom", {
@@ -136,9 +141,11 @@ describe("runtime", () => {
         starts.push(e.stepIdx);
       },
     };
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
-    );
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+      );
 
     journey("first", () => {
       step("a", { endpoint: { method: "GET", path: "/a", operationId: "a" } });
@@ -197,5 +204,30 @@ describe("runtime", () => {
     expect(result!.ok).toBe(false);
     expect(result!.steps).toHaveLength(1);
     expect(result!.steps[0]!.error).toMatch(/expected 500 to be 200/);
+  });
+
+  describe("journey() options overload", () => {
+    it("records options on the registered def with the 3-arg form", () => {
+      journey("tagged", { tags: ["load", "checkout"], k6: { vus: 10, duration: "30s" } }, () => {});
+      const [def] = getRegisteredJourneys();
+      expect(def!.name).toBe("tagged");
+      expect(def!.options).toEqual({
+        tags: ["load", "checkout"],
+        k6: { vus: 10, duration: "30s" },
+      });
+    });
+
+    it("leaves options undefined for the 2-arg form", () => {
+      journey("plain", () => {});
+      const [def] = getRegisteredJourneys();
+      expect(def!.options).toBeUndefined();
+    });
+
+    it("step() outside a body still throws (registry inspection is side-effect free)", () => {
+      journey("with-options", { tags: ["x"] }, () => {});
+      expect(() =>
+        step("orphan", { endpoint: { method: "GET", path: "/x", operationId: "x" } }),
+      ).toThrow(/called outside a journey/);
+    });
   });
 });

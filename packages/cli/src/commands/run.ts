@@ -1,4 +1,4 @@
-import { readdir, watch } from "node:fs/promises";
+import { watch } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@journey/core";
 import { tsImport } from "tsx/esm/api";
 import { overallOk, printResults } from "../report.js";
+import { discoverJourneyFiles } from "../util/discover.js";
 
 export interface RunOptions {
   projectDir: string;
@@ -27,19 +28,6 @@ export interface RunOptions {
   env?: string;
   debug?: boolean;
   watch?: boolean;
-}
-
-async function discoverJourneyFiles(journeysDir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(journeysDir);
-    return entries
-      .filter((e) => e.endsWith(".journey.ts"))
-      .sort()
-      .map((e) => join(journeysDir, e));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {

@@ -53,7 +53,10 @@ export function buildProgram(): Command {
     .option("--watch", "Rerun on file changes", false)
     .description("Run one or more journeys (or --all)")
     .action(
-      (files: string[], options: { env?: string; all?: boolean; debug?: boolean; watch?: boolean }) =>
+      (
+        files: string[],
+        options: { env?: string; all?: boolean; debug?: boolean; watch?: boolean },
+      ) =>
         handle(() =>
           runCommand({
             projectDir: process.cwd(),
@@ -68,14 +71,26 @@ export function buildProgram(): Command {
 
   const exp = program.command("export").description("Export a journey to another format");
   exp
-    .command("k6 <journey-file>")
-    .option("--out <path>", "Output file (defaults to <journey>.k6.js next to the source)")
-    .description("Export a journey as a k6 script")
-    .action((journeyFile: string, options: { out?: string }) =>
+    .command("k6 <path>")
+    .option("--out <path>", "Output file (single-file mode only)")
+    .option(
+      "--out-dir <path>",
+      "Output directory (used in directory mode; falls back to writing next to each source)",
+    )
+    .option(
+      "--tag <tag>",
+      "Only export journeys with this tag (repeatable, AND across repeats)",
+      (v: string, prev: string[] = []) => [...prev, v],
+      [] as string[],
+    )
+    .description("Export one or more journeys as k6 scripts (path may be a file or directory)")
+    .action((path: string, options: { out?: string; outDir?: string; tag: string[] }) =>
       handle(() =>
         runExportK6({
-          journeyFile,
+          path,
           ...(options.out !== undefined ? { out: options.out } : {}),
+          ...(options.outDir !== undefined ? { outDir: options.outDir } : {}),
+          tags: options.tag,
         }),
       ),
     );
@@ -87,21 +102,19 @@ export function buildProgram(): Command {
     .option("--project <dir>", "Project directory (default: cwd)")
     .option("--debug", "Log every request/response while running journeys", false)
     .description("Run the GUI backend API for the current project")
-    .action(
-      (options: { port?: number; host?: string; project?: string; debug?: boolean }) => {
-        const projectDir = options.project
-          ? resolvePath(process.cwd(), options.project)
-          : process.cwd();
-        return handle(() =>
-          runServe({
-            projectDir,
-            ...(options.port !== undefined ? { port: options.port } : {}),
-            ...(options.host !== undefined ? { host: options.host } : {}),
-            ...(options.debug !== undefined ? { debug: options.debug } : {}),
-          }),
-        );
-      },
-    );
+    .action((options: { port?: number; host?: string; project?: string; debug?: boolean }) => {
+      const projectDir = options.project
+        ? resolvePath(process.cwd(), options.project)
+        : process.cwd();
+      return handle(() =>
+        runServe({
+          projectDir,
+          ...(options.port !== undefined ? { port: options.port } : {}),
+          ...(options.host !== undefined ? { host: options.host } : {}),
+          ...(options.debug !== undefined ? { debug: options.debug } : {}),
+        }),
+      );
+    });
 
   const envCmd = program.command("env").description("Environment management");
   envCmd

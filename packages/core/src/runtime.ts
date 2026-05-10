@@ -30,9 +30,30 @@ interface StepDef {
   options: StepOptions<Endpoint>;
 }
 
-interface JourneyDef {
+/**
+ * k6 `export const options` shape for an exported journey. Strict named fields
+ * cover the common load profiles (vus + duration, iterations, stages); the
+ * index signature passes everything else through so adding a k6 knob (e.g.
+ * thresholds, scenarios, ext) does not require a core release.
+ */
+export interface K6JourneyOptions {
+  vus?: number;
+  duration?: string;
+  iterations?: number;
+  stages?: Array<{ duration: string; target: number }>;
+  [extra: string]: unknown;
+}
+
+/** Per-call configuration accepted by the 3-arg `journey()` overload. */
+export interface JourneyOptions {
+  tags?: string[];
+  k6?: K6JourneyOptions;
+}
+
+export interface JourneyDef {
   name: string;
   body: () => void | Promise<void>;
+  options?: JourneyOptions;
 }
 
 export interface StepResult {
@@ -63,8 +84,20 @@ const globals = globalThis as unknown as { [STATE_KEY]?: SharedState };
 const state: SharedState =
   globals[STATE_KEY] ?? (globals[STATE_KEY] = { registry: [], collecting: undefined });
 
-export function journey(name: string, body: () => void | Promise<void>): void {
-  state.registry.push({ name, body });
+export function journey(name: string, body: () => void | Promise<void>): void;
+export function journey(
+  name: string,
+  options: JourneyOptions,
+  body: () => void | Promise<void>,
+): void;
+export function journey(
+  name: string,
+  optionsOrBody: JourneyOptions | (() => void | Promise<void>),
+  maybeBody?: () => void | Promise<void>,
+): void {
+  const body = typeof optionsOrBody === "function" ? optionsOrBody : maybeBody!;
+  const options = typeof optionsOrBody === "function" ? undefined : optionsOrBody;
+  state.registry.push(options ? { name, body, options } : { name, body });
 }
 
 export function step<E extends Endpoint>(name: string, options: StepOptions<E>): void {

@@ -54,10 +54,74 @@ journey("list pets", () => {
       expect(src).toContain('import http from "k6/http"');
       expect(src).toContain('import { check } from "k6"');
       expect(src).not.toContain("@journey/core");
-      expect(src).toContain('const endpoints = {');
-      expect(src).toContain('listPets:');
+      expect(src).toContain("const endpoints = {");
+      expect(src).toContain("listPets:");
       expect(src).toContain('journey("list pets"');
       expect(src).toContain("export default function");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("bakes k6Options into `export const options` when provided", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "journey-k6-opts-"));
+    try {
+      const journey = join(tmp, "load.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step } from "@journey/core";
+journey("load", () => {
+  step("ping", { endpoint: { method: "GET", path: "/ping" } });
+});
+`,
+      );
+      const result = await exportToK6({
+        journeyFile: journey,
+        k6Options: { vus: 10, duration: "30s" },
+      });
+      const src = await readFile(result.outFile, "utf8");
+      expect(src).toContain("export const options =");
+      expect(src).toContain('"vus": 10');
+      expect(src).toContain('"duration": "30s"');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the options block when k6Options is not provided", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "journey-k6-noopts-"));
+    try {
+      const journey = join(tmp, "plain.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step } from "@journey/core";
+journey("plain", () => {
+  step("ping", { endpoint: { method: "GET", path: "/ping" } });
+});
+`,
+      );
+      const result = await exportToK6({ journeyFile: journey });
+      const src = await readFile(result.outFile, "utf8");
+      expect(src).not.toContain("export const options");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("writes into outDir when provided", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "journey-k6-outdir-"));
+    try {
+      const journey = join(tmp, "src", "ping.journey.ts");
+      await mkdir(dirname(journey), { recursive: true });
+      await writeFile(
+        journey,
+        `import { journey, step } from "@journey/core";
+journey("p", () => { step("s", { endpoint: { method: "GET", path: "/" } }); });
+`,
+      );
+      const outDir = join(tmp, "out");
+      const result = await exportToK6({ journeyFile: journey, outDir });
+      expect(result.outFile).toBe(join(outDir, "ping.k6.js"));
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -110,15 +174,17 @@ journey("list pets", () => {
 `,
       );
       const { outFile } = await exportToK6({ journeyFile: journey });
-      const child = spawn(
-        "k6",
-        ["run", "--vus=1", "--iterations=1", outFile],
-        { env: { ...process.env, JOURNEY_BASE_URL: baseUrl } },
-      );
+      const child = spawn("k6", ["run", "--vus=1", "--iterations=1", outFile], {
+        env: { ...process.env, JOURNEY_BASE_URL: baseUrl },
+      });
       let stdout = "";
       let stderr = "";
-      child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-      child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      child.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
       const code: number = await new Promise((res, rej) => {
         child.once("error", rej);
         child.once("close", (c) => res(c ?? 0));
