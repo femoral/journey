@@ -68,7 +68,7 @@ Fields typed `Lazy<T>` accept either a static value or `(() => T)` or `(() => Pr
 
 ## Execution order per step
 
-1. Resolve lazy `headers`, `query`, `body`, `params` (in parallel, awaited together).
+1. Resolve lazy `headers`, `query`, `body`, `params` (sequential `await`s, in that order).
 2. Build the request (`buildRequest` — path substitution, header merge, auto `Content-Type`).
 3. `ctx.logger?.onRequest(req)`.
 4. `fetch` (with abort timer if `timeoutMs`).

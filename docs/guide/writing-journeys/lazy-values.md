@@ -92,7 +92,7 @@ step("signed", {
 });
 ```
 
-Note how `cartId` and `nowMs` (closure variables) are referenced from both — they're the shared base. The runtime evaluates the four lazy fields in parallel via `Promise.all`-style awaiting, so don't rely on one closure running before another.
+Note how `cartId` and `nowMs` (closure variables) are referenced from both — they're the shared base. The runtime resolves the four lazy fields with sequential `await`s before sending the request; treat the order as an implementation detail and keep each closure self-contained rather than relying on side effects from a sibling closure.
 
 ## Sync vs. async — no difference
 

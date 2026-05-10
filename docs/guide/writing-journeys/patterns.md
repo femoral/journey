@@ -29,6 +29,42 @@ step("authed call", {
 });
 ```
 
+## Prep logic before a request
+
+There's no `before` hook on a step — prep runs in one of three places depending on what kind of prep it is.
+
+**Prep that feeds the request** (signing, token reads, computed payloads) goes in a lazy async `headers` / `body` / `query` / `params`. The runtime awaits these at step execution time, so async work is fine. See [Async lazy values](./lazy-values#async-lazy-values).
+
+```ts
+step("signed", {
+  endpoint: endpoints.submit,
+  body: { cartId, qty: 1 },
+  headers: async () => ({
+    "X-Signature": await signPayload({ cartId, qty: 1 }),
+  }),
+});
+```
+
+**Prep that depends on a previous step's response** goes in that previous step's `after(res)`. State flows forward through closure variables — same shape as [Auth-token capture](#auth-token-capture) above.
+
+**Prep that runs once per journey** (a nonce, a timestamp, a computed base URL) goes directly in the `journey()` body, before the step that needs it. Plain TypeScript runs there — no special hook required.
+
+```ts
+journey("place order", () => {
+  const nonce = crypto.randomUUID();
+  let orderId = "";
+
+  step("create", {
+    endpoint: endpoints.createOrder,
+    headers: { "Idempotency-Key": nonce },
+    body: { sku: "A", qty: 1 },
+    after(res) {
+      orderId = (res.body as { id: string }).id;
+    },
+  });
+});
+```
+
 ## Seed via descriptor, then run typed flow
 
 Use a [descriptor endpoint](./endpoints) to hit a service outside your spec (e.g. a fixtures API), capture an ID, then continue with typed refs.
