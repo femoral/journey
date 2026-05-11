@@ -89,6 +89,8 @@ export interface ExportPostmanCliOptions {
   name?: string;
   env?: string;
   allEnvs?: boolean;
+  /** Override cwd for locating journey.config.json (used by tests). */
+  projectDir?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +279,7 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
   let environmentsDir: string | undefined;
   if (opts.env || opts.allEnvs) {
     try {
-      const loaded = await loadConfig(process.cwd());
+      const loaded = await loadConfig(opts.projectDir ?? process.cwd());
       environmentsDir = resolveConfigPaths(loaded).environmentsDir;
     } catch {
       throw new Error(
