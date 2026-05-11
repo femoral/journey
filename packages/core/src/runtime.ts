@@ -25,7 +25,7 @@ export interface StepOptions<E extends Endpoint> {
   after?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
 }
 
-interface StepDef {
+export interface StepDef {
   name: string;
   options: StepOptions<Endpoint>;
 }
@@ -113,6 +113,18 @@ export function getRegisteredJourneys(): ReadonlyArray<JourneyDef> {
 
 export function clearRegistry(): void {
   state.registry.length = 0;
+}
+
+export async function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepDef>> {
+  const steps: StepDef[] = [];
+  const prev = state.collecting;
+  state.collecting = steps;
+  try {
+    await def.body();
+  } finally {
+    state.collecting = prev;
+  }
+  return steps;
 }
 
 async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {

@@ -2,6 +2,7 @@ import { resolve as resolvePath } from "node:path";
 import { Command } from "commander";
 import { runEnvList } from "./commands/envList.js";
 import { runExportK6 } from "./commands/exportK6.js";
+import { runExportPostman } from "./commands/exportPostman.js";
 import { runGenerate } from "./commands/generate.js";
 import { runInit } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
@@ -93,6 +94,50 @@ export function buildProgram(): Command {
           tags: options.tag,
         }),
       ),
+    );
+
+  exp
+    .command("postman <path>")
+    .option("--out <path>", "Output file (single-file mode only)")
+    .option(
+      "--out-dir <path>",
+      "Output directory (used in directory mode; falls back to writing next to each source)",
+    )
+    .option(
+      "--tag <tag>",
+      "Only export journeys with this tag (repeatable, AND across repeats)",
+      (v: string, prev: string[] = []) => [...prev, v],
+      [] as string[],
+    )
+    .option("--name <name>", "Override the collection name")
+    .option("--env <name>", "Export named environment as a Postman environment file")
+    .option("--all-envs", "Export all environments as Postman environment files")
+    .description(
+      "Export one or more journeys as a Postman Collection v2.1.0 (path may be a file or directory)",
+    )
+    .action(
+      (
+        path: string,
+        options: {
+          out?: string;
+          outDir?: string;
+          tag: string[];
+          name?: string;
+          env?: string;
+          allEnvs?: boolean;
+        },
+      ) =>
+        handle(() =>
+          runExportPostman({
+            path,
+            ...(options.out !== undefined ? { out: options.out } : {}),
+            ...(options.outDir !== undefined ? { outDir: options.outDir } : {}),
+            ...(options.name !== undefined ? { name: options.name } : {}),
+            ...(options.env !== undefined ? { env: options.env } : {}),
+            ...(options.allEnvs !== undefined ? { allEnvs: options.allEnvs } : {}),
+            tags: options.tag,
+          }),
+        ),
     );
 
   program

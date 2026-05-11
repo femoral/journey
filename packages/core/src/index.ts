@@ -65,6 +65,7 @@ export {
 
 export {
   clearRegistry,
+  collectSteps,
   getRegisteredJourneys,
   journey,
   runAllRegistered,
@@ -75,6 +76,7 @@ export {
   type JourneyResult,
   type K6JourneyOptions,
   type RunMeta,
+  type StepDef,
   type StepOptions,
   type StepResult,
 } from "./runtime.js";
