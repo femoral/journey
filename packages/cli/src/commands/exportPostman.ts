@@ -12,70 +12,16 @@ import {
   resolveConfigPaths,
   setActiveEnvironment,
   type JourneyDef,
-  type StepDef,
 } from "@journey/core";
+import {
+  ENV_PROXY,
+  buildCollection,
+  buildEnvironment,
+  buildFolder,
+  type PostmanFolder,
+} from "@journey/postman-adapter";
 import { tsImport } from "tsx/esm/api";
 import { discoverJourneyFiles } from "../util/discover.js";
-
-// ---------------------------------------------------------------------------
-// Postman Collection v2.1.0 types
-// ---------------------------------------------------------------------------
-
-interface PostmanUrl {
-  raw: string;
-  host: string[];
-  path: string[];
-  query: Array<{ key: string; value: string }>;
-}
-
-interface PostmanHeader {
-  key: string;
-  value: string;
-}
-
-interface PostmanBody {
-  mode: "raw";
-  raw: string;
-  options: { raw: { language: "json" } };
-}
-
-interface PostmanRequest {
-  method: string;
-  header: PostmanHeader[];
-  url: PostmanUrl;
-  body?: PostmanBody;
-}
-
-interface PostmanItem {
-  name: string;
-  request: PostmanRequest;
-}
-
-interface PostmanFolder {
-  name: string;
-  item: PostmanItem[];
-}
-
-interface PostmanInfo {
-  name: string;
-  schema: string;
-}
-
-interface PostmanCollection {
-  info: PostmanInfo;
-  item: PostmanFolder[];
-}
-
-interface PostmanEnvValue {
-  key: string;
-  value: string;
-  enabled: boolean;
-}
-
-interface PostmanEnvironment {
-  name: string;
-  values: PostmanEnvValue[];
-}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -111,109 +57,6 @@ function matches(def: JourneyDef, tags: string[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Lazy value resolution
-// ---------------------------------------------------------------------------
-
-async function tryResolve<T>(v: T | (() => T | Promise<T>) | undefined): Promise<T | undefined> {
-  if (v === undefined) return undefined;
-  if (typeof v !== "function") return v;
-  try {
-    return await (v as () => T | Promise<T>)();
-  } catch {
-    return undefined;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// URL building
-// ---------------------------------------------------------------------------
-
-function buildPostmanUrl(
-  path: string,
-  baseUrl: string,
-  params: Record<string, string | number> | undefined,
-  query: Record<string, string | number | boolean | undefined> | undefined,
-): PostmanUrl {
-  const substituted = path.replace(/\{([^}]+)\}/g, (_, key: string) => {
-    const val = params?.[key];
-    return val != null ? encodeURIComponent(String(val)) : `{{${key}}}`;
-  });
-
-  const raw = baseUrl + substituted;
-  const segments = substituted.replace(/^\//, "").split("/").filter(Boolean);
-
-  const queryItems = Object.entries(query ?? {})
-    .filter(([, v]) => v !== undefined)
-    .map(([key, value]) => ({ key, value: String(value) }));
-
-  return {
-    raw: queryItems.length
-      ? `${raw}?${queryItems.map((q) => `${q.key}=${q.value}`).join("&")}`
-      : raw,
-    host: [baseUrl],
-    path: segments,
-    query: queryItems,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Collection builder
-// ---------------------------------------------------------------------------
-
-async function buildFolder(
-  def: JourneyDef,
-  steps: ReadonlyArray<StepDef>,
-): Promise<PostmanFolder> {
-  const items: PostmanItem[] = [];
-
-  for (const s of steps) {
-    const params = await tryResolve(s.options.params);
-    const query = await tryResolve(s.options.query);
-    const headers = await tryResolve(s.options.headers);
-    const body = await tryResolve(s.options.body);
-
-    const baseUrl = (s.options.endpoint as { baseUrl?: string }).baseUrl ?? "{{BASE_URL}}";
-    const url = buildPostmanUrl(s.options.endpoint.path, baseUrl, params, query);
-
-    const headerItems: PostmanHeader[] = Object.entries(headers ?? {}).map(([key, value]) => ({
-      key,
-      value: String(value),
-    }));
-
-    let postmanBody: PostmanBody | undefined;
-    if (body !== undefined) {
-      postmanBody = {
-        mode: "raw",
-        raw: typeof body === "string" ? body : JSON.stringify(body, null, 2),
-        options: { raw: { language: "json" } },
-      };
-    }
-
-    items.push({
-      name: s.name,
-      request: {
-        method: s.options.endpoint.method.toUpperCase(),
-        header: headerItems,
-        url,
-        ...(postmanBody ? { body: postmanBody } : {}),
-      },
-    });
-  }
-
-  return { name: def.name, item: items };
-}
-
-function buildCollection(name: string, folders: PostmanFolder[]): PostmanCollection {
-  return {
-    info: {
-      name,
-      schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    },
-    item: folders,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Environment export
 // ---------------------------------------------------------------------------
 
@@ -223,28 +66,12 @@ async function exportEnvironment(
   outDir: string,
 ): Promise<string> {
   const values = await loadEnvironment(environmentsDir, envName);
-  const env: PostmanEnvironment = {
-    name: envName,
-    values: Object.entries(values).map(([key, value]) => ({ key, value, enabled: true })),
-  };
+  const env = buildEnvironment(envName, values);
   const outFile = join(outDir, `${envName}.postman_environment.json`);
   await mkdir(dirname(outFile), { recursive: true });
   await writeFile(outFile, JSON.stringify(env, null, 2), "utf8");
   return outFile;
 }
-
-// ---------------------------------------------------------------------------
-// Env proxy for step collection — env("KEY") → "{{KEY}}"
-// ---------------------------------------------------------------------------
-
-const ENV_PROXY = new Proxy({} as Record<string, string>, {
-  get(_target, key: string) {
-    return `{{${key}}}`;
-  },
-  has() {
-    return true;
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Main command handler

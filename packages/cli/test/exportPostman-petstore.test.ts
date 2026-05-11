@@ -13,13 +13,14 @@
 
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
-import { join, dirname } from "node:path";
+import { basename, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import newman from "newman";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runExportPostman } from "../src/commands/exportPostman.js";
+import { discoverJourneyFiles } from "../src/util/discover.js";
 
 // ── paths ─────────────────────────────────────────────────────────────────────
 
@@ -107,9 +108,27 @@ describe("petstore — export structure", () => {
   afterAll(async () => rm(outDir, { recursive: true, force: true }));
 
   async function load(base: string) {
-    const { readFile } = await import("node:fs/promises");
     return JSON.parse(await readFile(join(outDir, `${base}.postman_collection.json`), "utf8"));
   }
+
+  // ── coverage gate: every discovered journey must export cleanly ────────────
+
+  it("all discovered journeys produced a valid collection", async () => {
+    const files = await discoverJourneyFiles(petstoreJourneys);
+    expect(files.length, "petstore journeys dir must not be empty").toBeGreaterThan(0);
+
+    for (const file of files) {
+      const base = basename(file).replace(/\.journey\.ts$/, "");
+      const col = JSON.parse(
+        await readFile(join(outDir, `${base}.postman_collection.json`), "utf8"),
+      );
+      expect(col.info.schema, `${base}: schema URL`).toBe(
+        "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      );
+      expect(col.item, `${base}: must have at least one folder`).toBeInstanceOf(Array);
+      expect((col.item as unknown[]).length, `${base}: folder count`).toBeGreaterThan(0);
+    }
+  });
 
   // ── list-available-pets ────────────────────────────────────────────────────
 

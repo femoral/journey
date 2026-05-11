@@ -29,9 +29,10 @@ Product overview, runnable example, and architecture diagram live in [`README.md
 | --------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | `@journey/core`       | Runtime — exports `journey()`, `step()`, `env()`, `expect()`, logger, history, http, runtime; depends only on `zod` | —                         |
 | `@journey/codegen`    | OpenAPI → `generated/{models,endpoints}.ts` (wraps `openapi-typescript`)                                            | —                         |
-| `@journey/cli`        | `commander`-based CLI: `init`, `generate`, `run`, `serve` (SSE), `export k6`, `env list`. Bin: `journey`            | core, codegen, k6-adapter |
-| `@journey/gui`        | Tauri 2 + Solid + Kobalte + Tailwind. Ships as desktop app and as a Vite web build                                  | core                      |
-| `@journey/k6-adapter` | Transpiles `.journey.ts` → k6 script; `assert()` → k6 `check()`                                                     | —                         |
+| `@journey/cli`             | `commander`-based CLI: `init`, `generate`, `run`, `serve` (SSE), `export k6`, `export postman`, `env list`. Bin: `journey` | core, codegen, k6-adapter, postman-adapter |
+| `@journey/gui`             | Tauri 2 + Solid + Kobalte + Tailwind. Ships as desktop app and as a Vite web build                                         | core                                       |
+| `@journey/k6-adapter`      | Transpiles `.journey.ts` → k6 script; `assert()` → k6 `check()`                                                            | —                                          |
+| `@journey/postman-adapter` | Serializes loaded `JourneyDef`/`StepDef` → Postman Collection v2.1.0 JSON + environment files                              | core (types only, devDep)                  |
 
 `@journey/docs` is the VitePress site (workspace member, not a library).
 
@@ -73,13 +74,14 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 ## Where to find what
 
 - **Run loop and APIs** → `packages/core/src/{runtime,http,expect,env,logger,history}.ts`
-- **CLI commands** → `packages/cli/src/commands/{init,generate,run,serve,exportK6,envList}.ts`
+- **CLI commands** → `packages/cli/src/commands/{init,generate,run,serve,exportK6,exportPostman,envList}.ts`
 - **CLI dev server (SSE backend)** → `packages/cli/src/server/{server,runner,runBroadcaster,specDrift,consolePatch}.ts`
 - **GUI pages** → `packages/gui/src/pages/{ProjectPage,EndpointsPage,JourneysPage,EnvironmentsPage,FilesPage,JourneyEditorPage,HistoryPage,DiffPage}.tsx`
 - **GUI shell** → `packages/gui/src/shell/{Shell,TopBar,Sidebar,ConsoleDock,CommandPalette,ProjectSwitcher,ImportDialog}.tsx`
 - **GUI run-event abstraction** → `packages/gui/src/api/runEvents.ts` (consumes the CLI SSE endpoint)
 - **Codegen** → `packages/codegen/src/{parse,emit-endpoints,names,types}.ts`
 - **k6 transpiler** → `packages/k6-adapter/src/`
+- **Postman serializer** → `packages/postman-adapter/src/`
 - **Working example** → `examples/petstore/` (primary mock at `server.mjs` on 5180, IDP mock at `auth-server.mjs` on 5182, three envs `local|ci|staging` under `environments/`). `pnpm dev:web` / `dev:tauri` run from a gitignored scratch copy at `examples/petstore.dev/` (auto-created on first run, rebuild with `pnpm dev:reset`); edits to canonical `examples/petstore/` only take effect after a reset.
 - **Docs (user-facing)** → `docs/guide/{getting-started,writing-journeys/*,cli/*,environments/*,gui/*}.md`, `docs/reference/{config,step-options,openapi-codegen,journey-api/*}.md`
 - **Design tokens** → `design/system/README.md`
