@@ -6,7 +6,7 @@ Guidance for Claude Code (and other agents) working in this repo. Keep this file
 
 Local-first, offline, open-source tool for scaffolding and running API tests / multi-step API flows from an OpenAPI spec. Replaces the Postman + acceptance suite + k6 triplication with one source of truth on disk.
 
-Status: alpha (`0.0.0`). All five packages build and run; a Tauri 2 desktop GUI on Solid + Kobalte + Tailwind sits on top of a single shared runtime core. Active surface is the GUI redesign (commits tagged `M0`–`M6g`).
+Status: alpha (`0.0.0`). All six packages build and run; a Tauri 2 desktop GUI on Solid + Kobalte + Tailwind sits on top of a single shared runtime core. Active surface is the GUI redesign (commits tagged `M0`–`M6g`).
 
 Product overview, runnable example, and architecture diagram live in [`README.md`](README.md). Workflow conventions live in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
@@ -14,7 +14,7 @@ Product overview, runnable example, and architecture diagram live in [`README.md
 
 | Path                 | What's there                                                                           |
 | -------------------- | -------------------------------------------------------------------------------------- |
-| `packages/`          | Five workspace packages (see below)                                                    |
+| `packages/`          | Six workspace packages (see below)                                                     |
 | `examples/petstore/` | Working Journey project — OpenAPI, journeys, mock server, generated types              |
 | `docs/`              | VitePress site (`guide/`, `reference/`, auto-generated `SOURCES.md`)                   |
 | `design/`            | Design tokens (`system/README.md`) and prototype (`iterations/01-prototype/`)          |

@@ -135,6 +135,9 @@ OpenAPI Spec
     │
     ▼
  k6 Adapter      (exports journeys as k6-compatible scripts)
+    │
+    ▼
+ Postman Adapter (exports journeys as Postman Collection v2.1.0 JSON)
 ```
 
 ---
@@ -149,6 +152,7 @@ journey generate                            # Regenerate endpoint/model files fr
 journey run <journey-file> [--env <name>]  # Run a specific journey
 journey run --all [--env <name>]           # Run all journeys in the project
 journey export k6 <journey-file>           # Export a journey as a k6 script
+journey export postman <journey-file>      # Export a journey as a Postman Collection v2.1.0
 journey env list                           # List available environments
 ```
 
@@ -175,6 +179,10 @@ Framework-agnostic TypeScript library shared by CLI, GUI, and k6 adapter. Execut
 
 Takes a `.journey.ts` file and emits a valid k6 script. Maps `assert()` callbacks to k6 `check()`. Enables load testing without rewriting flows from scratch.
 
+### Postman Adapter
+
+Serializes loaded `JourneyDef`/`StepDef` structures into Postman Collection v2.1.0 JSON and companion environment files. Enables import into Postman or Newman without rewriting flows.
+
 ---
 
 ## Design Principles
@@ -199,6 +207,7 @@ Takes a `.journey.ts` file and emits a valid k6 script. Maps `assert()` callback
 | GUI frontend   | Solid.js + Tailwind                            |
 | GUI components | Kobalte (accessible primitives)                |
 | k6 adapter     | Constrained subset → transpiled `.js` output   |
+| Postman adapter | Postman Collection v2.1.0 JSON + env files    |
 | Assertions     | Built-in `expect()` in `@journey/core`         |
 | Monorepo       | pnpm workspaces                                |
 | Packaging      | npm (CLI), Tauri platform installers (GUI)     |
