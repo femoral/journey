@@ -45,7 +45,10 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
       ? resolve(process.cwd(), opts.file)
       : join(opts.journeysDir, opts.file);
 
-  if (opts.loaded.config.tlsRejectUnauthorized === false) enableInsecureTls();
+  let dispatcher: unknown;
+  if (opts.loaded.config.tlsRejectUnauthorized === false) {
+    dispatcher = await enableInsecureTls();
+  }
 
   clearActiveEnvironment();
   const envName = opts.env ?? opts.loaded.config.defaultEnvironment;
@@ -62,6 +65,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
+  if (dispatcher !== undefined) ctx.dispatcher = dispatcher;
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
   let results;
   try {

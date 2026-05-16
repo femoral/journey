@@ -11,7 +11,7 @@ export interface ServeOptions {
 }
 
 export async function runServe(opts: ServeOptions): Promise<number> {
-  if (opts.insecure) enableInsecureTls();
+  if (opts.insecure) await enableInsecureTls();
   const srv = await startServer({
     projectDir: opts.projectDir,
     ...(opts.host !== undefined ? { host: opts.host } : {}),

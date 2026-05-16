@@ -33,23 +33,26 @@ export interface RunOptions {
 }
 
 /**
- * Disable TLS certificate verification for this process and print one
- * warning to stderr so the choice cannot leak silently into CI. Idempotent
- * — survives a watch-mode rerun without re-warning.
- *
- * Implementation note: we mutate `NODE_TLS_REJECT_UNAUTHORIZED` rather than
- * passing an undici `Dispatcher` because the CLI doesn't bundle `undici`
- * directly today. The CLI is a single process — no child processes inherit
- * the env. A follow-up issue will swap this for `setGlobalDispatcher` once
- * `undici` is on the dependency list.
+ * Build an undici `Agent` that disables TLS verification and install it as
+ * the process-wide global dispatcher so Node's built-in `fetch` honours it.
+ * Prints one warning to stderr so the choice cannot leak silently into CI.
+ * Idempotent — survives watch-mode reruns without re-warning or rebuilding
+ * the agent. Returns the agent so per-request callers can also drop it on
+ * `HttpContext.dispatcher` when they want explicit, non-global wiring.
  */
 let warnedAboutInsecure = false;
-export function enableInsecureTls(): void {
+let insecureAgent: unknown;
+export async function enableInsecureTls(): Promise<unknown> {
   if (!warnedAboutInsecure) {
     console.error("journey: WARNING — TLS verification disabled (--insecure)");
     warnedAboutInsecure = true;
   }
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  if (!insecureAgent) {
+    const { Agent, setGlobalDispatcher } = await import("undici");
+    insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
+    setGlobalDispatcher(insecureAgent as Parameters<typeof setGlobalDispatcher>[0]);
+  }
+  return insecureAgent;
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
@@ -82,7 +85,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();
   if (logger) ctx.logger = logger;
   if (opts.insecure || loaded.config.tlsRejectUnauthorized === false) {
-    enableInsecureTls();
+    ctx.dispatcher = await enableInsecureTls();
   }
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);

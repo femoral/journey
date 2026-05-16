@@ -112,7 +112,7 @@ For long-lived projects (developer machines hitting a known-private staging clus
 }
 ```
 
-Both paths mutate `NODE_TLS_REJECT_UNAUTHORIZED` for the current process only. Don't ship a project with `tlsRejectUnauthorized: false` to CI — the warning is your only signal.
+Both paths install a process-wide undici `Agent` with `rejectUnauthorized: false` as the global dispatcher, so Node's `fetch` honours it. Per-request callers (e.g. `journey serve`'s API runner) also receive the agent on `HttpContext.dispatcher`. Don't ship a project with `tlsRejectUnauthorized: false` to CI — the warning is your only signal.
 
 ## Running a subset of steps
 

@@ -85,74 +85,24 @@ journey("list pets", () => {
     }
   }, 30000);
 
-  it("--insecure warns once on stderr and disables TLS verification", async () => {
-    const cliDir = dirname(dirname(fileURLToPath(import.meta.url)));
-    const base = join(cliDir, ".test-tmp");
-    await mkdir(base, { recursive: true });
-    const parent = await mkdtemp(join(base, "insecure-"));
-    const projectDir = join(parent, "demo");
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const origEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    try {
-      await runInit({ dir: projectDir, spec: fixture });
-      const cfgPath = join(projectDir, "journey.config.json");
-      const cfg = JSON.parse(await readFile(cfgPath, "utf8"));
-      cfg.baseUrl = baseUrl;
-      await writeFile(cfgPath, JSON.stringify(cfg, null, 2));
-
-      const journeyFile = join(projectDir, "journeys", "noop.journey.ts");
-      await writeFile(
-        journeyFile,
-        `import { journey, step } from "@journey/core";
-import { endpoints } from "../generated/endpoints.js";
-journey("noop", () => {
-  step("fetch", { endpoint: endpoints.listPets });
-});
-`,
-      );
-
-      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      const code = await runCommand({ projectDir, files: [journeyFile], insecure: true });
-      expect(code).toBe(0);
-      const calls = errSpy.mock.calls.map((c) => String(c[0]));
-      const warnings = calls.filter((s) => s.includes("TLS verification disabled"));
-      // Warning is once-per-process: zero only if a previous test already ran insecure.
-      // Either way, the env mutation is the load-bearing assertion.
-      expect(warnings.length).toBeLessThanOrEqual(1);
-      expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe("0");
-    } finally {
-      errSpy.mockRestore();
-      if (origEnv === undefined) {
-        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      } else {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = origEnv;
-      }
-      await rm(parent, { recursive: true, force: true });
-    }
-  }, 30000);
-
-  it("prints the --insecure warning the first time it's enabled", async () => {
+  it("--insecure builds an undici Agent and installs it as global dispatcher", async () => {
     const { enableInsecureTls } = await import("../src/commands/run.js");
+    const { getGlobalDispatcher } = await import("undici");
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const origEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     try {
-      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      enableInsecureTls();
-      enableInsecureTls();
+      const agent = await enableInsecureTls();
+      const again = await enableInsecureTls();
+      // Idempotent — same instance on a second call, no second warning.
+      expect(again).toBe(agent);
+      expect(getGlobalDispatcher()).toBe(agent);
       const warnings = errSpy.mock.calls
         .map((c) => String(c[0]))
         .filter((s) => s.includes("TLS verification disabled"));
-      // Module-level latch means at most one warning total per process — possibly
-      // zero if a sibling test already tripped it.
+      // Module-level latch — at most one warning per process, possibly zero
+      // if a sibling test in the same Vitest worker already tripped it.
       expect(warnings.length).toBeLessThanOrEqual(1);
-      expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe("0");
     } finally {
       errSpy.mockRestore();
-      if (origEnv === undefined) {
-        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      } else {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = origEnv;
-      }
     }
   });
 });

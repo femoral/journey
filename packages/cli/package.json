@@ -20,7 +20,8 @@
     "@journey/k6-adapter": "workspace:^",
     "@journey/postman-adapter": "workspace:^",
     "commander": "^12.1.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "undici": "^8.3.0"
   },
   "devDependencies": {
     "@types/newman": "^5.3.6",
