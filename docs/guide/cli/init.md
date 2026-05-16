@@ -30,7 +30,10 @@ journey init <dir> --spec <path> [--force]
 3. Copies the spec to `<dir>/<basename of --spec>`.
 4. Writes an initial `journey.config.json` referencing the copied spec.
 5. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
-6. Runs code generation once, producing `generated/endpoints.ts` and `generated/models.ts`.
+6. Writes `package.json` (`"type": "module"`, depends on `@journey/core`, dev-depends on `@journey/cli`, both pinned to the running CLI's major version).
+7. Runs code generation once, producing `generated/endpoints.ts` and `generated/models.ts`.
+
+After init, `cd <dir> && pnpm install` (or `npm install`) — the printed "Next:" line reminds you. Without the install step, `journey run` fails with `Cannot find package '@journey/core'`.
 
 ## Output
 

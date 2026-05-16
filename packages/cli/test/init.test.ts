@@ -37,6 +37,29 @@ describe("journey init validation", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it("writes a runnable package.json with @journey/core dep and @journey/cli devDep", async () => {
+    const projectDir = join(parent, "demo");
+    await runInit({ dir: projectDir, spec: validSpec });
+    const pkg = JSON.parse(await readFile(join(projectDir, "package.json"), "utf8")) as {
+      name: string;
+      private: boolean;
+      type: string;
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.name).toBe("demo");
+    expect(pkg.private).toBe(true);
+    expect(pkg.type).toBe("module");
+    expect(pkg.dependencies["@journey/core"]).toMatch(/^\^\d/);
+    expect(pkg.devDependencies["@journey/cli"]).toMatch(/^\^\d/);
+    // Same version pinned for both so a published consumer can `pnpm install`
+    // and get a coherent core/cli pair out of the box.
+    expect(pkg.dependencies["@journey/core"]).toBe(pkg.devDependencies["@journey/cli"]);
+
+    const logs = logSpy.mock.calls.map((c) => String(c[0]));
+    expect(logs.some((l) => l.includes("pnpm install"))).toBe(true);
+  });
+
   it("rejects a spec missing both openapi and swagger fields BEFORE touching the target dir", async () => {
     const badSpec = join(parent, "bad.yaml");
     await writeFile(badSpec, "info:\n  title: nope\n");

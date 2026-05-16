@@ -1,5 +1,6 @@
-import { access, copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { access, copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { generate, loadSpec } from "@journey/codegen";
 
 export interface InitOptions {
@@ -16,6 +17,21 @@ async function isEmpty(dir: string): Promise<boolean> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return true;
     throw err;
   }
+}
+
+async function readCliVersion(): Promise<string> {
+  // Resolves to packages/cli/package.json in dev (src/) and to the published
+  // package.json sibling of dist/index.js when installed.
+  const here = dirname(fileURLToPath(import.meta.url));
+  for (const candidate of [join(here, "../../package.json"), join(here, "../package.json")]) {
+    try {
+      const pkg = JSON.parse(await readFile(candidate, "utf8")) as { version?: unknown };
+      if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
+    } catch {
+      // try next candidate
+    }
+  }
+  return "0.0.0";
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
@@ -64,6 +80,21 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
   await writeFile(join(projectDir, ".gitignore"), `.journey/cache/\nnode_modules/\n`, "utf8");
 
+  const cliVersion = await readCliVersion();
+  const versionRange = `^${cliVersion}`;
+  const pkg = {
+    name: basename(projectDir),
+    private: true,
+    type: "module",
+    dependencies: {
+      "@journey/core": versionRange,
+    },
+    devDependencies: {
+      "@journey/cli": versionRange,
+    },
+  };
+  await writeFile(join(projectDir, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+
   const generated = await generate({
     specPath: specDest,
     outDir: join(projectDir, "generated"),
@@ -76,4 +107,5 @@ export async function runInit(opts: InitOptions): Promise<void> {
       "journey: warning — spec parsed but contained 0 operations. The generated endpoints.ts will be empty.",
     );
   }
+  console.log("Next: cd into the project and run `pnpm install` (or `npm install`).");
 }
