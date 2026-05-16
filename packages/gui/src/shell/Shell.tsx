@@ -14,6 +14,7 @@ import {
   type RecentProject,
 } from "./recentProjects";
 import { api } from "../api/client";
+import { projectRefreshTick } from "../api/projectRefresh";
 import { RouteFade } from "../ui";
 import { createConsoleStore } from "./consoleStore";
 import { ConsoleContext } from "./consoleContext";
@@ -21,7 +22,7 @@ import { EnvContext, type EnvSelection } from "./envContext";
 import { loadSelectedEnv, saveSelectedEnv } from "./selectedEnv";
 
 export function Shell(props: { children?: JSX.Element }): JSX.Element {
-  const [project] = createResource(() => api.getProject());
+  const [project] = createResource(projectRefreshTick, () => api.getProject());
   const [drift] = createResource(() => api.getSpecDrift());
   const [envs] = createResource(() => api.getEnvironments());
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
@@ -165,6 +166,26 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
                 "min-height": 0,
               }}
             >
+              {project()?.config?.tlsRejectUnauthorized === false && (
+                <div
+                  data-testid="tls-insecure-banner"
+                  style={{
+                    padding: "6px 16px",
+                    "font-size": "11px",
+                    color: "var(--warn)",
+                    background: "var(--warn-bg)",
+                    "border-bottom": "1px solid var(--bd-1)",
+                    display: "flex",
+                    "align-items": "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span style={{ "font-weight": 600 }}>TLS verification disabled</span>
+                  <span style={{ color: "var(--fg-2)" }}>
+                    All HTTPS requests skip certificate validation. Reset in Project → Settings.
+                  </span>
+                </div>
+              )}
               <div style={{ flex: 1, "min-height": 0, overflow: "hidden" }}>
                 <RouteFade>
                   <div

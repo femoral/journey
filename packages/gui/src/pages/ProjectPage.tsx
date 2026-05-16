@@ -1,7 +1,17 @@
-import { For, Show, createMemo, createResource, type Accessor, type Component } from "solid-js";
+import {
+  For,
+  Show,
+  createMemo,
+  createResource,
+  createSignal,
+  type Accessor,
+  type Component,
+} from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { api, type DriftEndpoint, type ProjectSummary, type RunSummary } from "../api/client";
+import { bumpProjectRefresh, projectRefreshTick } from "../api/projectRefresh";
 import {
+  Checkbox,
   DriftRow,
   IconChevron,
   IconEndpoints,
@@ -18,9 +28,23 @@ import { experimentalEnabled } from "../experimental";
 
 export const ProjectPage: Component = () => {
   const navigate = useNavigate();
-  const [project] = createResource(api.getProject);
+  const [project] = createResource(projectRefreshTick, () => api.getProject());
   const [runs] = createResource(api.listRuns);
   const [drift] = createResource(api.getSpecDrift);
+  const [tlsError, setTlsError] = createSignal<string | undefined>(undefined);
+  const [tlsSaving, setTlsSaving] = createSignal(false);
+  const toggleTls = async (insecure: boolean): Promise<void> => {
+    setTlsError(undefined);
+    setTlsSaving(true);
+    try {
+      await api.patchProjectConfig({ tlsRejectUnauthorized: !insecure });
+      bumpProjectRefresh();
+    } catch (err) {
+      setTlsError((err as Error).message);
+    } finally {
+      setTlsSaving(false);
+    }
+  };
 
   const recentRuns = createMemo(() => (runs() ?? []).slice(0, 6));
   const last24h = createMemo(() => {
@@ -218,6 +242,66 @@ export const ProjectPage: Component = () => {
                           sub="from skeleton"
                           onClick={() => navigate("/editor")}
                         />
+                      </Show>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Settings">
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        display: "flex",
+                        "flex-direction": "column",
+                        gap: "6px",
+                      }}
+                      data-testid="project-settings"
+                    >
+                      <label
+                        data-testid="tls-toggle"
+                        style={{
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                          "font-size": "12px",
+                        }}
+                      >
+                        <Checkbox
+                          checked={p().config.tlsRejectUnauthorized === false}
+                          disabled={tlsSaving()}
+                          onChange={(v) => {
+                            void toggleTls(v);
+                          }}
+                          aria-label="Disable TLS certificate verification"
+                        />
+                        <span data-testid="tls-toggle-label">
+                          Disable TLS certificate verification
+                        </span>
+                      </label>
+                      <p
+                        style={{
+                          margin: 0,
+                          "font-size": "11px",
+                          color: "var(--fg-3)",
+                          "line-height": 1.4,
+                        }}
+                      >
+                        Lets the runner reach HTTPS endpoints fronted by a self-signed or corporate
+                        CA. Persists in <span class="mono">journey.config.json</span> as
+                        <span class="mono"> tlsRejectUnauthorized: false</span>. Same effect as
+                        passing <span class="mono">--insecure</span> on the CLI.
+                      </p>
+                      <Show when={tlsError()}>
+                        <p
+                          style={{
+                            margin: 0,
+                            "font-size": "11px",
+                            color: "var(--err)",
+                          }}
+                          data-testid="tls-toggle-error"
+                        >
+                          {tlsError()}
+                        </p>
                       </Show>
                     </div>
                   </Panel>

@@ -5,12 +5,17 @@ export interface ProjectSummary {
     spec: string;
     baseUrl?: string;
     defaultEnvironment?: string;
+    tlsRejectUnauthorized: boolean;
   };
   counts: {
     journeys: number;
     environments: number;
     endpoints: number;
   };
+}
+
+export interface ProjectConfigPatch {
+  tlsRejectUnauthorized?: boolean;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -125,6 +130,12 @@ export interface RunDetail {
 
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
+  patchProjectConfig: (patch: ProjectConfigPatch) =>
+    req<ProjectSummary>("/api/project/config", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
   getTree: () => req<ProjectTree>("/api/tree"),
   getEndpoints: () => req<EndpointListResponse>("/api/endpoints"),
   sendRequest: (body: ProxyRequestBody) =>
@@ -148,19 +159,14 @@ export const api = {
    * Pass `upToStepIdx` to stop after the Nth absolute step — used by the
    * "Run only this step" affordance in the Journeys timeline.
    */
-  startJourneyRun: (
-    file: string,
-    opts: { env?: string; upToStepIdx?: number } = {},
-  ) =>
+  startJourneyRun: (file: string, opts: { env?: string; upToStepIdx?: number } = {}) =>
     req<StartJourneyRunResponse>(`/api/journeys/${encodeURIComponent(file)}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         stream: true,
         ...(opts.env !== undefined ? { env: opts.env } : {}),
-        ...(opts.upToStepIdx !== undefined
-          ? { upToStepIdx: opts.upToStepIdx }
-          : {}),
+        ...(opts.upToStepIdx !== undefined ? { upToStepIdx: opts.upToStepIdx } : {}),
       }),
     }),
   getEnvironments: () => req<EnvironmentsResponse>("/api/environments"),
@@ -190,10 +196,9 @@ export const api = {
   getRun: (id: string) => req<RunDetail>(`/api/runs/${encodeURIComponent(id)}`),
   getSpecDrift: () => req<SpecDrift>("/api/spec/drift"),
   regenerate: () =>
-    req<{ operationCount: number; modelsPath: string; endpointsPath: string }>(
-      "/api/generate",
-      { method: "POST" },
-    ),
+    req<{ operationCount: number; modelsPath: string; endpointsPath: string }>("/api/generate", {
+      method: "POST",
+    }),
 };
 
 export interface DriftEndpoint {

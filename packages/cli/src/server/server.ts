@@ -1,7 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { listRuns, loadConfig, listEnvironments, readRun, resolveConfigPaths, type LoadedConfig } from "@journey/core";
+import {
+  JourneyConfigSchema,
+  listRuns,
+  loadConfig,
+  listEnvironments,
+  readRun,
+  resolveConfigPaths,
+  type LoadedConfig,
+} from "@journey/core";
 import { collectOperations, generate, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
 import { computeSpecDrift } from "./specDrift.js";
@@ -74,6 +82,7 @@ export async function buildProjectSummary(loaded: LoadedConfig): Promise<unknown
       ...(loaded.config.defaultEnvironment !== undefined
         ? { defaultEnvironment: loaded.config.defaultEnvironment }
         : {}),
+      tlsRejectUnauthorized: loaded.config.tlsRejectUnauthorized,
     },
     counts: {
       endpoints,
@@ -81,6 +90,45 @@ export async function buildProjectSummary(loaded: LoadedConfig): Promise<unknown
       environments: envs.length,
     },
   };
+}
+
+const PATCHABLE_CONFIG_KEYS = ["tlsRejectUnauthorized"] as const;
+type PatchableKey = (typeof PATCHABLE_CONFIG_KEYS)[number];
+
+/**
+ * Merge a partial config patch into the raw journey.config.json on disk.
+ * Only whitelisted keys (currently `tlsRejectUnauthorized`) may be patched
+ * from the API so a misbehaving client can't rewrite paths or the spec
+ * filename. The full merged document is validated against
+ * JourneyConfigSchema before being written.
+ */
+async function patchProjectConfig(
+  projectDir: string,
+  patch: Record<string, unknown>,
+): Promise<unknown> {
+  const configPath = join(projectDir, "journey.config.json");
+  const raw = await readFile(configPath, "utf8");
+  const current = JSON.parse(raw) as Record<string, unknown>;
+  for (const key of Object.keys(patch)) {
+    if (!(PATCHABLE_CONFIG_KEYS as readonly string[]).includes(key)) {
+      throw new Error(`config key "${key}" is not patchable via the API`);
+    }
+  }
+  const merged: Record<string, unknown> = { ...current };
+  for (const key of PATCHABLE_CONFIG_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      merged[key as PatchableKey] = patch[key];
+    }
+  }
+  const result = JourneyConfigSchema.safeParse(merged);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+      .join("; ");
+    throw new Error(`config patch failed validation: ${issues}`);
+  }
+  await writeFile(configPath, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+  return await buildProjectSummary(await loadConfig(projectDir));
 }
 
 interface TreeNode {
@@ -259,7 +307,7 @@ async function route(
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
+      "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
       "access-control-allow-headers": "content-type",
     });
     res.end();
@@ -270,6 +318,15 @@ async function route(
     if (url.pathname === "/api/project" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
       send(res, 200, await buildProjectSummary(loaded));
+      return;
+    }
+    if (url.pathname === "/api/project/config" && req.method === "PATCH") {
+      const body = (await readRequestBody(req)) as Record<string, unknown> | undefined;
+      if (!body || typeof body !== "object") {
+        send(res, 400, { error: "request body must be a JSON object" });
+        return;
+      }
+      send(res, 200, await patchProjectConfig(projectDir, body));
       return;
     }
     if (url.pathname === "/api/tree" && req.method === "GET") {
@@ -358,7 +415,8 @@ async function route(
           const raw = await readFile(join(environmentsDir, `${name}.json`), "utf8");
           const values = JSON.parse(raw) as Record<string, unknown>;
           const normalized: Record<string, string> = {};
-          for (const [k, v] of Object.entries(values)) normalized[k] = typeof v === "string" ? v : JSON.stringify(v);
+          for (const [k, v] of Object.entries(values))
+            normalized[k] = typeof v === "string" ? v : JSON.stringify(v);
           out.push({ name, values: normalized });
         } catch {
           out.push({ name, values: {} });
@@ -421,9 +479,7 @@ async function route(
         runId,
         logger: broadcaster.toLogger(),
         ...(body.env !== undefined ? { env: body.env } : {}),
-        ...(typeof body.upToStepIdx === "number"
-          ? { upToStepIdx: body.upToStepIdx }
-          : {}),
+        ...(typeof body.upToStepIdx === "number" ? { upToStepIdx: body.upToStepIdx } : {}),
         ...(debug ? { debug: true } : {}),
       });
       if (body.stream) {
@@ -465,7 +521,10 @@ async function route(
       const id = decodeURIComponent(runIdMatch[1]!);
       const cacheDir = join(projectDir, ".journey", "cache");
       const record = await readRun(cacheDir, id);
-      if (!record) { send(res, 404, { error: "run not found" }); return; }
+      if (!record) {
+        send(res, 404, { error: "run not found" });
+        return;
+      }
       send(res, 200, record);
       return;
     }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -80,6 +80,47 @@ paths:
     expect(body.config.name).toBe("demo");
     expect(body.config.baseUrl).toBe("https://api.example.com");
     expect(body.counts).toEqual({ endpoints: 2, journeys: 0, environments: 2 });
+  });
+
+  it("PATCH /api/project/config persists tlsRejectUnauthorized and rejects unknown keys", async () => {
+    // Default — schema fills tlsRejectUnauthorized: true even though the fixture didn't set it.
+    const initial = (await (await fetch(`${srv.url}/api/project`)).json()) as {
+      config: { tlsRejectUnauthorized: boolean };
+    };
+    expect(initial.config.tlsRejectUnauthorized).toBe(true);
+
+    // Flip off — written to disk + reflected in the summary.
+    const patch = await fetch(`${srv.url}/api/project/config`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tlsRejectUnauthorized: false }),
+    });
+    expect(patch.status).toBe(200);
+    const patched = (await patch.json()) as { config: { tlsRejectUnauthorized: boolean } };
+    expect(patched.config.tlsRejectUnauthorized).toBe(false);
+    const onDisk = JSON.parse(await readFile(`${projectDir}/journey.config.json`, "utf8")) as {
+      tlsRejectUnauthorized: boolean;
+      name: string;
+    };
+    expect(onDisk.tlsRejectUnauthorized).toBe(false);
+    expect(onDisk.name).toBe("demo"); // unrelated fields preserved
+
+    // Unknown patch key is rejected with 500 / clear error (route handler maps thrown errors).
+    const bad = await fetch(`${srv.url}/api/project/config`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ baseUrl: "https://elsewhere" }),
+    });
+    expect(bad.status).toBeGreaterThanOrEqual(400);
+    const badBody = (await bad.json()) as { error?: string };
+    expect(badBody.error).toMatch(/baseUrl/);
+
+    // Restore for downstream tests in this file.
+    await fetch(`${srv.url}/api/project/config`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tlsRejectUnauthorized: true }),
+    });
   });
 
   it("health check", async () => {
@@ -177,8 +218,7 @@ paths:
     });
     await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
     const targetAddr = target.address();
-    const targetPort =
-      typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
+    const targetPort = typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
 
     // Write a minimal journey file into the fixture's journeys dir.
     // No operationId — endpoint is treated as a descriptor so its baseUrl
@@ -274,12 +314,8 @@ export const endpoints = {
     const drift = (await (await fetch(`${srv.url}/api/spec/drift`)).json()) as Drift;
     expect(drift.hasSpec).toBe(true);
     expect(drift.hasGenerated).toBe(true);
-    expect(drift.added.map((e) => `${e.method} ${e.path}`).sort()).toEqual([
-      "GET /pets",
-    ]);
-    expect(drift.removed.map((e) => `${e.method} ${e.path}`).sort()).toEqual([
-      "DELETE /pets/{id}",
-    ]);
+    expect(drift.added.map((e) => `${e.method} ${e.path}`).sort()).toEqual(["GET /pets"]);
+    expect(drift.removed.map((e) => `${e.method} ${e.path}`).sort()).toEqual(["DELETE /pets/{id}"]);
     expect(drift.count).toBe(2);
 
     const regen = await fetch(`${srv.url}/api/generate`, { method: "POST" });
