@@ -57,11 +57,18 @@ export function resolveUrl(
   if (missing) {
     throw new Error(`Missing path param "${missing[1]}" for ${endpoint.method} ${endpoint.path}`);
   }
-  // Append the path under the full base — `new URL("/x", "https://h/api")` would
-  // drop `/api` because a leading slash makes the path origin-relative.
-  const baseWithSlash = base.endsWith("/") ? base : `${base}/`;
-  const relPath = path.startsWith("/") ? path.slice(1) : path;
-  const url = new URL(relPath, baseWithSlash);
+  // Empty path resolves to `base` verbatim — no forced trailing slash. Otherwise
+  // `new URL("", "https://h/foo/")` would echo the slash and break exact-path routes.
+  let url: URL;
+  if (path === "") {
+    url = new URL(base);
+  } else {
+    // Append the path under the full base — `new URL("/x", "https://h/api")` would
+    // drop `/api` because a leading slash makes the path origin-relative.
+    const baseWithSlash = base.endsWith("/") ? base : `${base}/`;
+    const relPath = path.startsWith("/") ? path.slice(1) : path;
+    url = new URL(relPath, baseWithSlash);
+  }
   if (query) {
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined) url.searchParams.append(k, String(v));
@@ -72,7 +79,10 @@ export function resolveUrl(
 
 export function buildRequest(opts: BuildRequestOptions, ctx: HttpContext): RequestSpec {
   const url = resolveUrl(opts.endpoint, ctx, opts.params, opts.query);
-  const headers: Record<string, string> = { ...(ctx.defaultHeaders ?? {}), ...(opts.headers ?? {}) };
+  const headers: Record<string, string> = {
+    ...(ctx.defaultHeaders ?? {}),
+    ...(opts.headers ?? {}),
+  };
   const hasBody = opts.body !== undefined;
   if (hasBody && !("content-type" in lower(headers))) {
     headers["Content-Type"] = "application/json";

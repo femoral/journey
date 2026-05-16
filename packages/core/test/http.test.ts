@@ -5,9 +5,9 @@ import { buildRequest, execute, resolveUrl } from "../src/http.js";
 describe("resolveUrl", () => {
   it("uses ctx baseUrl for refs and interpolates params", () => {
     const ep: Endpoint = { method: "GET", path: "/pets/{id}", operationId: "getPet" };
-    expect(
-      resolveUrl(ep, { baseUrl: "https://api.example.com" }, { id: 42 }, undefined),
-    ).toBe("https://api.example.com/pets/42");
+    expect(resolveUrl(ep, { baseUrl: "https://api.example.com" }, { id: 42 }, undefined)).toBe(
+      "https://api.example.com/pets/42",
+    );
   });
 
   it("descriptor baseUrl overrides ctx", () => {
@@ -26,8 +26,9 @@ describe("resolveUrl", () => {
 
   it("appends query", () => {
     const ep: Endpoint = { method: "GET", path: "/pets", operationId: "l" };
-    expect(resolveUrl(ep, { baseUrl: "https://x" }, undefined, { limit: 10, skip: undefined }))
-      .toBe("https://x/pets?limit=10");
+    expect(
+      resolveUrl(ep, { baseUrl: "https://x" }, undefined, { limit: 10, skip: undefined }),
+    ).toBe("https://x/pets?limit=10");
   });
 
   it("preserves a base path even when endpoint.path starts with /", () => {
@@ -36,15 +37,45 @@ describe("resolveUrl", () => {
       resolveUrl(ep, { baseUrl: "https://petstore3.swagger.io/api/v3" }, undefined, undefined),
     ).toBe("https://petstore3.swagger.io/api/v3/pet/findByStatus");
   });
+
+  it("empty path resolves to base without trailing slash", () => {
+    const ep: Endpoint = {
+      method: "POST",
+      path: "",
+      baseUrl: "https://api.example.com/auth/token",
+    };
+    expect(resolveUrl(ep, {}, undefined, undefined)).toBe("https://api.example.com/auth/token");
+  });
+
+  it("empty path preserves an existing trailing slash on base", () => {
+    const ep: Endpoint = {
+      method: "POST",
+      path: "",
+      baseUrl: "https://api.example.com/auth/token/",
+    };
+    expect(resolveUrl(ep, {}, undefined, undefined)).toBe("https://api.example.com/auth/token/");
+  });
+
+  it("empty path with query appends without forcing a slash", () => {
+    const ep: Endpoint = {
+      method: "POST",
+      path: "",
+      baseUrl: "https://api.example.com/auth/token",
+    };
+    expect(resolveUrl(ep, {}, undefined, { grant_type: "client_credentials" })).toBe(
+      "https://api.example.com/auth/token?grant_type=client_credentials",
+    );
+  });
 });
 
 describe("buildRequest + execute", () => {
   it("sets JSON content-type and calls fetchImpl", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true }), {
-        status: 201,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
     );
     const ctx = { baseUrl: "https://api.example.com", fetchImpl };
     const req = buildRequest(
