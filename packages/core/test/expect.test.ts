@@ -24,4 +24,31 @@ describe("expect()", () => {
     expect("abc-123").toMatch("abc");
     v(() => expect("abc").toMatch(/\d+/)).toThrow(AssertionError);
   });
+
+  it("toBeGreaterThan / toBeGreaterThanOrEqual", () => {
+    expect(5).toBeGreaterThan(4);
+    expect(5).toBeGreaterThanOrEqual(5);
+    v(() => expect(5).toBeGreaterThan(5)).toThrow(AssertionError);
+    v(() => expect(4).toBeGreaterThanOrEqual(5)).toThrow(AssertionError);
+    v(() => expect("5" as unknown as number).toBeGreaterThan(4)).toThrow(
+      /toBeGreaterThan is only supported on numbers/,
+    );
+  });
+
+  it("toBeLessThan / toBeLessThanOrEqual", () => {
+    expect(4).toBeLessThan(5);
+    expect(5).toBeLessThanOrEqual(5);
+    v(() => expect(5).toBeLessThan(5)).toThrow(AssertionError);
+    v(() => expect(6).toBeLessThanOrEqual(5)).toThrow(AssertionError);
+  });
+
+  it("toHaveLength on strings, arrays, and length-bearing objects", () => {
+    expect("abc").toHaveLength(3);
+    expect([1, 2, 3, 4]).toHaveLength(4);
+    expect({ length: 7 } as unknown as { length: number }).toHaveLength(7);
+    v(() => expect([1, 2]).toHaveLength(3)).toThrow(AssertionError);
+    v(() => expect(123 as unknown as number[]).toHaveLength(3)).toThrow(
+      /toHaveLength is only supported/,
+    );
+  });
 });

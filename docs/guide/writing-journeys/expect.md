@@ -18,18 +18,28 @@ interface Expectation<T> {
   toBeDefined(): void;
   toContain(expected: unknown): void;
   toMatch(expected: RegExp | string): void;
+  toBeGreaterThan(n: number): void;
+  toBeGreaterThanOrEqual(n: number): void;
+  toBeLessThan(n: number): void;
+  toBeLessThanOrEqual(n: number): void;
+  toHaveLength(n: number): void;
 }
 ```
 
 ## Matchers
 
-| Matcher         | Works on       | Semantics |
-|-----------------|----------------|-----------|
-| `toBe(x)`       | any value      | Identity check via `Object.is(value, x)`. |
-| `toEqual(x)`    | any value      | Recursive deep equality on plain objects and arrays. |
-| `toBeDefined()` | any value      | Passes as long as `value !== undefined`. |
-| `toContain(x)`  | string / array | On strings: `value.includes(x)`. On arrays: any element deep-equals `x`. Throws on other types. |
-| `toMatch(re)`   | string         | `re.test(value)`. Accepts `RegExp` or a string (wrapped in `new RegExp`). |
+| Matcher                     | Works on                              | Semantics                                                                                       |
+| --------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `toBe(x)`                   | any value                             | Identity check via `Object.is(value, x)`.                                                       |
+| `toEqual(x)`                | any value                             | Recursive deep equality on plain objects and arrays.                                            |
+| `toBeDefined()`             | any value                             | Passes as long as `value !== undefined`.                                                        |
+| `toContain(x)`              | string / array                        | On strings: `value.includes(x)`. On arrays: any element deep-equals `x`. Throws on other types. |
+| `toMatch(re)`               | string                                | `re.test(value)`. Accepts `RegExp` or a string (wrapped in `new RegExp`).                       |
+| `toBeGreaterThan(n)`        | number                                | `value > n`. Throws if `value` isn't a number.                                                  |
+| `toBeGreaterThanOrEqual(n)` | number                                | `value >= n`. Throws if `value` isn't a number.                                                 |
+| `toBeLessThan(n)`           | number                                | `value < n`. Throws if `value` isn't a number.                                                  |
+| `toBeLessThanOrEqual(n)`    | number                                | `value <= n`. Throws if `value` isn't a number.                                                 |
+| `toHaveLength(n)`           | string / array / `{ length: number }` | `value.length === n`. Throws if `value` has no numeric `length`.                                |
 
 ### `toBe` — identity
 
@@ -62,8 +72,8 @@ Passes for anything that isn't `undefined` — including `null`, `0`, `""`, `fal
 Dual-purpose by argument type:
 
 ```ts
-expect("hello world").toContain("world");        // string.includes
-expect([1, 2, 3]).toContain(2);                  // array element equals
+expect("hello world").toContain("world"); // string.includes
+expect([1, 2, 3]).toContain(2); // array element equals
 expect([{ id: 1 }, { id: 2 }]).toContain({ id: 1 }); // deep equal in array
 ```
 
@@ -77,6 +87,27 @@ expect(body.uuid).toMatch("^[a-f0-9-]{36}$"); // strings are wrapped in RegExp
 ```
 
 Throws `toMatch is only supported on strings` if `value` isn't a string.
+
+### Numeric matchers
+
+```ts
+expect(res.body.count).toBeGreaterThan(0);
+expect(res.body.price).toBeGreaterThanOrEqual(0);
+expect(durationMs).toBeLessThan(1000);
+expect(retries).toBeLessThanOrEqual(3);
+```
+
+Each one throws with a `(got <typeof>)` suffix if `value` isn't a number, so a `null` body field or a forgotten `.body.` access fails loudly rather than silently passing.
+
+### `toHaveLength`
+
+```ts
+expect(body.items).toHaveLength(3); // array
+expect(body.token).toHaveLength(36); // string
+expect(res.headers["set-cookie"]).toHaveLength(2);
+```
+
+Works on anything with a numeric `length` property (strings, arrays, `NodeList`-like). Throws if no such property exists — replaces the `expect(arr.length).toBe(n)` two-step.
 
 ## Error format
 

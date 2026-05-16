@@ -11,6 +11,11 @@ export interface Expectation<T> {
   toBeDefined(): void;
   toContain(expected: unknown): void;
   toMatch(expected: RegExp | string): void;
+  toBeGreaterThan(n: number): void;
+  toBeGreaterThanOrEqual(n: number): void;
+  toBeLessThan(n: number): void;
+  toBeLessThanOrEqual(n: number): void;
+  toHaveLength(n: number): void;
 }
 
 function format(value: unknown): string {
@@ -77,5 +82,46 @@ export function expect<T>(value: T): Expectation<T> {
         throw new AssertionError(`expected ${format(value)} to match ${re}`);
       }
     },
+    toBeGreaterThan(n) {
+      assertNumber(value, "toBeGreaterThan");
+      if (!(value > n)) {
+        throw new AssertionError(`expected ${format(value)} to be greater than ${n}`);
+      }
+    },
+    toBeGreaterThanOrEqual(n) {
+      assertNumber(value, "toBeGreaterThanOrEqual");
+      if (!(value >= n)) {
+        throw new AssertionError(`expected ${format(value)} to be greater than or equal to ${n}`);
+      }
+    },
+    toBeLessThan(n) {
+      assertNumber(value, "toBeLessThan");
+      if (!(value < n)) {
+        throw new AssertionError(`expected ${format(value)} to be less than ${n}`);
+      }
+    },
+    toBeLessThanOrEqual(n) {
+      assertNumber(value, "toBeLessThanOrEqual");
+      if (!(value <= n)) {
+        throw new AssertionError(`expected ${format(value)} to be less than or equal to ${n}`);
+      }
+    },
+    toHaveLength(n) {
+      const len = (value as { length?: unknown } | null | undefined)?.length;
+      if (typeof len !== "number") {
+        throw new AssertionError(
+          `toHaveLength is only supported on strings, arrays, and objects with a numeric .length`,
+        );
+      }
+      if (len !== n) {
+        throw new AssertionError(`expected ${format(value)} to have length ${n}, got ${len}`);
+      }
+    },
   };
+}
+
+function assertNumber(value: unknown, matcher: string): asserts value is number {
+  if (typeof value !== "number") {
+    throw new AssertionError(`${matcher} is only supported on numbers (got ${typeof value})`);
+  }
 }
