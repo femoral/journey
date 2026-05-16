@@ -182,6 +182,27 @@ describe("runtime", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("captures the full err.cause chain in StepResult.error on network failure", async () => {
+    const inner = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), {
+      code: "ECONNREFUSED",
+    });
+    const outer = new Error("fetch failed", { cause: inner });
+    const fetchImpl = vi.fn(async () => {
+      throw outer;
+    });
+
+    journey("net-fail", () => {
+      step("hit", { endpoint: { method: "GET", path: "/x", operationId: "x" } });
+    });
+
+    const [result] = await runAllRegistered({ baseUrl: "https://x", fetchImpl });
+    const stepErr = result!.steps[0]!.error!;
+    expect(stepErr).toContain("fetch failed");
+    expect(stepErr).toContain("connect ECONNREFUSED 127.0.0.1:443");
+    expect(stepErr).toContain("(ECONNREFUSED)");
+    expect(stepErr).toContain(" ← ");
+  });
+
   it("halts on first failing step", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: false }), {

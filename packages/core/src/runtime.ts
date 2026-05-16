@@ -1,5 +1,6 @@
 import type { Endpoint, ResponseOf } from "./endpoint.js";
 import { buildRequest, execute, type HttpContext, type HttpResponse } from "./http.js";
+import { describeError } from "./logger.js";
 
 /** Caller-supplied run metadata. runId is forwarded to every lifecycle event. */
 export interface RunMeta {
@@ -211,7 +212,7 @@ export async function runJourney(
     } catch (err) {
       ok = false;
       const durationMs = Date.now() - start;
-      const error = err instanceof Error ? err.message : String(err);
+      const error = describeError(err);
       results.push({ name: s.name, ok: false, error, durationMs });
       ctx.logger?.onStepEnd?.({
         runId,

@@ -25,17 +25,17 @@ interface JourneyLogger {
 }
 ```
 
-| Method        | Fired                                                              |
-|---------------|--------------------------------------------------------------------|
-| `onRunStart`  | Before any step executes. Carries the list of journey names.       |
-| `onRunEnd`    | After every journey completes or halts.                            |
-| `onStepStart` | Before a step's lazy inputs resolve.                               |
-| `onStepEnd`   | After a step finishes (including failures).                        |
-| `onRequest`   | Before `fetch`. Headers passed raw (no masking).                   |
-| `onResponse`  | After a successful `fetch`.                                        |
-| `onError`     | When `fetch` rejects (network error, abort).                       |
-| `onLog`       | When user code calls `console.log/warn/error` (if installed).      |
-| `info`        | Generic text channel used by `createConsoleLogger`.                |
+| Method        | Fired                                                         |
+| ------------- | ------------------------------------------------------------- |
+| `onRunStart`  | Before any step executes. Carries the list of journey names.  |
+| `onRunEnd`    | After every journey completes or halts.                       |
+| `onStepStart` | Before a step's lazy inputs resolve.                          |
+| `onStepEnd`   | After a step finishes (including failures).                   |
+| `onRequest`   | Before `fetch`. Headers passed raw (no masking).              |
+| `onResponse`  | After a successful `fetch`.                                   |
+| `onError`     | When `fetch` rejects (network error, abort).                  |
+| `onLog`       | When user code calls `console.log/warn/error` (if installed). |
+| `info`        | Generic text channel used by `createConsoleLogger`.           |
 
 ## Event types
 
@@ -138,3 +138,17 @@ function maskHeaders(
 `SECRET_HEADERS` defaults to `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, `proxy-authorization`. `maskHeaders` returns a new object with each listed header's value replaced by `***` (case-insensitive match).
 
 Pass a custom `masks` array to cover tenant-specific headers.
+
+## `describeError(err, depth?)`
+
+```ts
+function describeError(err: unknown, depth?: number): string;
+```
+
+Walks `err.cause` up to `depth` links (default `3`) and joins each link's message with `←`. Includes the `code` property in parentheses when present. Used by `createConsoleLogger`'s `onError` formatter and by the runtime to populate `StepResult.error`, so the underlying reason behind a Node `fetch failed` surfaces in console output and in `.journey/cache/runs/*.run.json`.
+
+```
+✗ POST https://idp.corp/oauth/token failed after 12ms: fetch failed ← unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE)
+```
+
+Common chains: `ECONNREFUSED`, `ENOTFOUND`, `UNABLE_TO_VERIFY_LEAF_SIGNATURE` (corporate CA — see `--insecure` on `journey run`).

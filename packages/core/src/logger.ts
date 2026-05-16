@@ -97,6 +97,25 @@ export const SECRET_HEADERS: ReadonlyArray<string> = [
   "proxy-authorization",
 ];
 
+/**
+ * Walks `err.cause` up to `depth` links and joins each message with ` ← `.
+ * Surfaces the real reason behind `fetch failed` (Node's fetch wraps undici
+ * errors, e.g. `ECONNREFUSED`, `ENOTFOUND`, OpenSSL cert errors). Includes
+ * the error `code` in parentheses when present.
+ */
+export function describeError(err: unknown, depth = 3): string {
+  const parts: string[] = [];
+  let cur: unknown = err;
+  while (cur !== null && cur !== undefined && parts.length < depth) {
+    const e = cur as { message?: unknown; code?: unknown; cause?: unknown };
+    const msg = typeof e.message === "string" ? e.message : String(cur);
+    const code = typeof e.code === "string" ? ` (${e.code})` : "";
+    parts.push(`${msg}${code}`);
+    cur = e.cause;
+  }
+  return parts.length === 0 ? String(err) : parts.join(" ← ");
+}
+
 export function maskHeaders(
   headers: Record<string, string>,
   masks: ReadonlyArray<string> = SECRET_HEADERS,
@@ -143,8 +162,7 @@ export function createConsoleLogger(opts: ConsoleLoggerOptions = {}): JourneyLog
       if (body) write(`  body    ${body}`);
     },
     onError(req, err, durationMs) {
-      const msg = err instanceof Error ? err.message : String(err);
-      write(`✗ ${req.method} ${req.url} failed after ${durationMs}ms: ${msg}`);
+      write(`✗ ${req.method} ${req.url} failed after ${durationMs}ms: ${describeError(err)}`);
     },
     info(msg) {
       write(msg);

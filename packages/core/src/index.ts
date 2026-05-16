@@ -40,6 +40,7 @@ export {
 export {
   SECRET_HEADERS,
   createConsoleLogger,
+  describeError,
   loggerFromEnv,
   maskHeaders,
   type ConsoleLoggerOptions,
