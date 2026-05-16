@@ -1,6 +1,6 @@
-import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import { generate } from "@journey/codegen";
+import { generate, loadSpec } from "@journey/codegen";
 
 export interface InitOptions {
   dir: string;
@@ -28,6 +28,16 @@ export async function runInit(opts: InitOptions): Promise<void> {
   }
 
   const specSource = isAbsolute(opts.spec) ? opts.spec : resolve(process.cwd(), opts.spec);
+  // Validate the spec BEFORE we mkdir / copy anything, so an invalid spec
+  // leaves the filesystem untouched. loadSpec throws on missing
+  // openapi/swagger root field or non-object YAML/JSON.
+  try {
+    await access(specSource);
+  } catch {
+    throw new Error(`Spec file not found: ${specSource}`);
+  }
+  await loadSpec(specSource);
+
   const specDestName = basename(specSource);
   const specDest = join(projectDir, specDestName);
 
@@ -52,11 +62,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     "utf8",
   );
 
-  await writeFile(
-    join(projectDir, ".gitignore"),
-    `.journey/cache/\nnode_modules/\n`,
-    "utf8",
-  );
+  await writeFile(join(projectDir, ".gitignore"), `.journey/cache/\nnode_modules/\n`, "utf8");
 
   const generated = await generate({
     specPath: specDest,
@@ -65,4 +71,9 @@ export async function runInit(opts: InitOptions): Promise<void> {
   console.log(
     `Initialized Journey project at ${projectDir} (${generated.operationCount} operations).`,
   );
+  if (generated.operationCount === 0) {
+    console.warn(
+      "journey: warning — spec parsed but contained 0 operations. The generated endpoints.ts will be empty.",
+    );
+  }
 }

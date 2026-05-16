@@ -17,19 +17,20 @@ journey init <dir> --spec <path> [--force]
 
 ## Arguments and flags
 
-| Argument / flag   | Type      | Default | Required | Purpose |
-|-------------------|-----------|---------|----------|---------|
-| `<dir>`           | path      | —       | Yes      | Target directory (created if missing). |
-| `--spec <path>`   | path      | —       | **Yes**  | OpenAPI spec file to read and copy into the project. |
-| `--force`         | boolean   | `false` | No       | Scaffold into a non-empty directory. |
+| Argument / flag | Type    | Default | Required | Purpose                                              |
+| --------------- | ------- | ------- | -------- | ---------------------------------------------------- |
+| `<dir>`         | path    | —       | Yes      | Target directory (created if missing).               |
+| `--spec <path>` | path    | —       | **Yes**  | OpenAPI spec file to read and copy into the project. |
+| `--force`       | boolean | `false` | No       | Scaffold into a non-empty directory.                 |
 
 ## Behaviour
 
-1. Creates `<dir>/` (if absent), plus `generated/`, `journeys/`, `environments/`, `.journey/cache/`.
-2. Copies the spec to `<dir>/<basename of --spec>`.
-3. Writes an initial `journey.config.json` referencing the copied spec.
-4. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
-5. Runs code generation once, producing `generated/endpoints.ts` and `generated/models.ts`.
+1. **Validates the spec first.** Loads `--spec` and rejects (exit `1`, nothing written) if the file is missing or has no `openapi` / `swagger` root field. Filesystem stays untouched on failure.
+2. Creates `<dir>/` (if absent), plus `generated/`, `journeys/`, `environments/`, `.journey/cache/`.
+3. Copies the spec to `<dir>/<basename of --spec>`.
+4. Writes an initial `journey.config.json` referencing the copied spec.
+5. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
+6. Runs code generation once, producing `generated/endpoints.ts` and `generated/models.ts`.
 
 ## Output
 
@@ -37,14 +38,14 @@ journey init <dir> --spec <path> [--force]
 Initialized Journey project at /abs/path (N operations).
 ```
 
-`N` is the number of OpenAPI operations discovered in the spec.
+`N` is the number of OpenAPI operations discovered in the spec. If `N` is `0`, an additional warning prints to stderr — the generated `endpoints.ts` is empty and `journey run` will only have descriptor endpoints to work with.
 
 ## Exit codes
 
-| Code | When |
-|------|------|
-| `0`  | Success. |
-| `1`  | Directory not empty without `--force`, spec not readable, generation failure. |
+| Code | When                                                                                                                  |
+| ---- | --------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success (including the 0-operations warning case).                                                                    |
+| `1`  | Directory not empty without `--force`, spec missing, spec invalid (no `openapi`/`swagger` field), generation failure. |
 
 ## Initial config
 
