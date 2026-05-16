@@ -23,7 +23,8 @@ async function readCliVersion(): Promise<string> {
   // Resolves to packages/cli/package.json in dev (src/) and to the published
   // package.json sibling of dist/index.js when installed.
   const here = dirname(fileURLToPath(import.meta.url));
-  for (const candidate of [join(here, "../../package.json"), join(here, "../package.json")]) {
+  const candidates = [join(here, "../../package.json"), join(here, "../package.json")];
+  for (const candidate of candidates) {
     try {
       const pkg = JSON.parse(await readFile(candidate, "utf8")) as { version?: unknown };
       if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
@@ -31,7 +32,10 @@ async function readCliVersion(): Promise<string> {
       // try next candidate
     }
   }
-  return "0.0.0";
+  throw new Error(
+    `Could not locate @journey/cli package.json (tried ${candidates.join(", ")}). ` +
+      `Refusing to scaffold a project.json with an unusable version range.`,
+  );
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {

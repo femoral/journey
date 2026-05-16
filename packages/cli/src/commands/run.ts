@@ -40,17 +40,16 @@ export interface RunOptions {
  * the agent. Returns the agent so per-request callers can also drop it on
  * `HttpContext.dispatcher` when they want explicit, non-global wiring.
  */
-let warnedAboutInsecure = false;
 let insecureAgent: unknown;
 export async function enableInsecureTls(): Promise<unknown> {
-  if (!warnedAboutInsecure) {
-    console.error("journey: WARNING — TLS verification disabled (--insecure)");
-    warnedAboutInsecure = true;
-  }
   if (!insecureAgent) {
     const { Agent, setGlobalDispatcher } = await import("undici");
     insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
     setGlobalDispatcher(insecureAgent as Parameters<typeof setGlobalDispatcher>[0]);
+    // Warn only after the agent is actually installed — otherwise a failed
+    // `import("undici")` would print the warning and leave the process
+    // unprotected, hiding the real failure on the retry.
+    console.error("journey: WARNING — TLS verification disabled (--insecure)");
   }
   return insecureAgent;
 }
