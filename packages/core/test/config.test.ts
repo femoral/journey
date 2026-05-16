@@ -64,6 +64,7 @@ describe("resolveBaseUrl", () => {
         environmentsDir: "environments",
         baseUrl: "http://from-config",
         runHistoryKeepCount: 20,
+        tlsRejectUnauthorized: true,
       }),
     ).toBe("http://from-config");
   });
@@ -77,6 +78,7 @@ describe("resolveBaseUrl", () => {
         journeysDir: "journeys",
         environmentsDir: "environments",
         runHistoryKeepCount: 20,
+        tlsRejectUnauthorized: true,
       }),
     ).toBe("http://from-env");
   });
@@ -89,6 +91,7 @@ describe("resolveBaseUrl", () => {
         journeysDir: "journeys",
         environmentsDir: "environments",
         runHistoryKeepCount: 20,
+        tlsRejectUnauthorized: true,
       }),
     ).toBeUndefined();
   });

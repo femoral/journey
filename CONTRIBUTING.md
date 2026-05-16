@@ -79,6 +79,18 @@ pnpm --filter @journey/docs sources:gen
 
 For prose docs under `docs/guide/` and `docs/reference/`, update them when you change user-visible behavior (CLI flags, step options, config schema, GUI page features).
 
+## Keep the vendored Claude skill in sync
+
+The `journey-api-testing` skill at [`skills/journey-api-testing/`](skills/journey-api-testing/) is the agent-facing companion to `docs/`. Any change to:
+
+- Runtime APIs exported from `@journey/core` (`journey()`, `step()`, `expect()`, `env()`, logger, history)
+- CLI commands or flags (`run`, `serve`, `init`, `generate`, `export …`)
+- Codegen output shape (`generated/endpoints.ts`, `generated/models.ts`)
+- `journey.config.json` schema
+- User-facing error messages
+
+must also update `skills/journey-api-testing/SKILL.md` (and its `references/patterns-and-troubleshooting.md` when the deeper sections are affected) in the same commit. The `docs-sync` agent audits the vendored skill alongside the four other agent-facing docs.
+
 ## When to update `CLAUDE.md`
 
 `CLAUDE.md` is the first file a fresh Claude session reads. It went stale once (claimed "pre-implementation" long after we shipped five packages); the cheap fix is to treat it as part of the diff whenever:

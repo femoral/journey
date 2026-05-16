@@ -21,14 +21,15 @@ Product overview, runnable example, and architecture diagram live in [`README.md
 | `scripts/`           | `gen-doc-sources.ts` — regenerates `docs/SOURCES.md` from package source               |
 | `.github/workflows/` | `ci.yml` (typecheck/test/build), `docs.yml` (VitePress + sources check + Pages deploy) |
 | `.claude/`           | Agent scaffolding: `commands/`, `agents/`, `settings.local.json`                       |
+| `skills/`            | Vendored Claude skills (`journey-api-testing`) — installable into `~/.claude/skills/`  |
 | `shell.nix`          | Reproducible dev shell — Node 22, pnpm 9.12, Rust, k6, webkit2gtk for Tauri            |
 
 ## Packages
 
-| Package               | Role                                                                                                                | Sibling deps              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `@journey/core`       | Runtime — exports `journey()`, `step()`, `env()`, `expect()`, logger, history, http, runtime; depends only on `zod` | —                         |
-| `@journey/codegen`    | OpenAPI → `generated/{models,endpoints}.ts` (wraps `openapi-typescript`)                                            | —                         |
+| Package                    | Role                                                                                                                       | Sibling deps                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `@journey/core`            | Runtime — exports `journey()`, `step()`, `env()`, `expect()`, logger, history, http, runtime; depends only on `zod`        | —                                          |
+| `@journey/codegen`         | OpenAPI → `generated/{models,endpoints}.ts` (wraps `openapi-typescript`)                                                   | —                                          |
 | `@journey/cli`             | `commander`-based CLI: `init`, `generate`, `run`, `serve` (SSE), `export k6`, `export postman`, `env list`. Bin: `journey` | core, codegen, k6-adapter, postman-adapter |
 | `@journey/gui`             | Tauri 2 + Solid + Kobalte + Tailwind. Ships as desktop app and as a Vite web build                                         | core                                       |
 | `@journey/k6-adapter`      | Transpiles `.journey.ts` → k6 script; `assert()` → k6 `check()`                                                            | —                                          |
@@ -100,6 +101,7 @@ Treat `CLAUDE.md` as part of the diff when you:
 - Change an architectural invariant or the surface contract of `@journey/core`.
 - Change commit conventions, branch model, or labels.
 - Move a load-bearing file path that's cited above.
+- Add or remove a vendored skill under `skills/`, or change the contract of one (e.g. CLI flags it documents, matchers it lists, error-catalogue entries).
 
 Drift on `CLAUDE.md` makes every fresh Claude session slower. The `docs-sync` agent helps catch it after the fact, but the cheap path is to update this file in the same commit as the change.
 
