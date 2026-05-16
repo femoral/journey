@@ -5,6 +5,7 @@ sources:
   - packages/codegen/src/index.ts
   - packages/codegen/src/parse.ts
   - packages/codegen/src/emit-endpoints.ts
+  - packages/codegen/src/lint.ts
   - packages/codegen/src/names.ts
   - packages/codegen/src/types.ts
   - packages/cli/src/commands/generate.ts
@@ -105,6 +106,22 @@ The codegen runner only writes to:
 - `<outDir>/endpoints.ts`
 
 It does not read or modify `journeys/`, `environments/`, or `.journey/cache/`. If you want to preserve hand-written shims alongside generated code, put them in a sibling directory (e.g. `endpoints-ext/`) and import from both.
+
+## Warnings
+
+The codegen runner emits non-fatal warnings to stderr; the run still completes.
+
+### Mixed path prefixes
+
+If most operations sit under one top-level segment but a small minority sit under another (≥ 80% / ≤ 20% split with at least 5 operations total), the runner emits:
+
+```
+journey: warning — 1 operation(s) use prefix '/api' while 30 use '/v1'
+```
+
+This catches the typical typo case — one operation written as `/api/v1/foo` while every other operation is under `/v1/...` — without flagging legitimately multi-prefix specs that use a balanced split. Combined with a `baseUrl` ending in `/api`, the odd one out would resolve to `/api/api/v1/foo`; the warning steers you to the spec before you notice the 404 in a journey run.
+
+Available programmatically as `findPrefixOutliers(operations)` from `@journey/codegen` — returns `null` when there's nothing to flag, otherwise a `PrefixLintFinding` with `majority`, `minority`, and `message`.
 
 ## Drift detection
 

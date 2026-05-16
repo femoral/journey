@@ -208,6 +208,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/codegen/src/index.ts`
 - `packages/codegen/src/parse.ts`
 - `packages/codegen/src/emit-endpoints.ts`
+- `packages/codegen/src/lint.ts`
 - `packages/codegen/src/names.ts`
 - `packages/codegen/src/types.ts`
 - `packages/cli/src/commands/generate.ts`
@@ -297,6 +298,10 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `guide/cli/generate.md`
 - `guide/cli/init.md`
+- `reference/openapi-codegen.md`
+
+### `packages/codegen/src/lint.ts`
+
 - `reference/openapi-codegen.md`
 
 ### `packages/codegen/src/names.ts`
