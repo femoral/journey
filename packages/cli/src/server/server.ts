@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   JourneyConfigSchema,
   listRuns,
@@ -303,6 +303,7 @@ async function route(
   res: ServerResponse,
   projectDir: string,
   debug: boolean,
+  setProjectDir: (next: string) => void,
 ): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -317,6 +318,25 @@ async function route(
     const url = new URL(req.url ?? "/", "http://local");
     if (url.pathname === "/api/project" && req.method === "GET") {
       const loaded = await loadConfig(projectDir);
+      send(res, 200, await buildProjectSummary(loaded));
+      return;
+    }
+    if (url.pathname === "/api/project/open" && req.method === "POST") {
+      const body = (await readRequestBody(req)) as { path?: unknown } | undefined;
+      const path = body?.path;
+      if (typeof path !== "string" || path.length === 0 || !isAbsolute(path)) {
+        send(res, 400, { error: "body.path must be an absolute filesystem path" });
+        return;
+      }
+      let loaded: LoadedConfig;
+      try {
+        loaded = await loadConfig(path);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        send(res, 400, { error: `Not a Journey project: ${message}` });
+        return;
+      }
+      setProjectDir(loaded.projectDir);
       send(res, 200, await buildProjectSummary(loaded));
       return;
     }
@@ -565,8 +585,13 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   const host = opts.host ?? "127.0.0.1";
   const port = opts.port ?? 5181;
 
+  const state = { projectDir: opts.projectDir };
+  const setProjectDir = (next: string): void => {
+    state.projectDir = next;
+  };
+
   const http: Server = createServer((req, res) => {
-    void route(req, res, opts.projectDir, opts.debug ?? false);
+    void route(req, res, state.projectDir, opts.debug ?? false, setProjectDir);
   });
 
   await new Promise<void>((resolve, reject) => {

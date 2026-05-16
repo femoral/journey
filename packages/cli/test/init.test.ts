@@ -37,27 +37,27 @@ describe("journey init validation", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it("writes a runnable package.json with @journey/core dep and @journey/cli devDep", async () => {
+  it("writes a minimal type:module package.json (no deps, no install step)", async () => {
     const projectDir = join(parent, "demo");
     await runInit({ dir: projectDir, spec: validSpec });
     const pkg = JSON.parse(await readFile(join(projectDir, "package.json"), "utf8")) as {
       name: string;
       private: boolean;
       type: string;
-      dependencies: Record<string, string>;
-      devDependencies: Record<string, string>;
+      dependencies?: unknown;
+      devDependencies?: unknown;
     };
-    expect(pkg.name).toBe("demo");
-    expect(pkg.private).toBe(true);
-    expect(pkg.type).toBe("module");
-    expect(pkg.dependencies["@journey/core"]).toMatch(/^\^\d/);
-    expect(pkg.devDependencies["@journey/cli"]).toMatch(/^\^\d/);
-    // Same version pinned for both so a published consumer can `pnpm install`
-    // and get a coherent core/cli pair out of the box.
-    expect(pkg.dependencies["@journey/core"]).toBe(pkg.devDependencies["@journey/cli"]);
-
+    expect(pkg).toEqual({ name: "demo", private: true, type: "module" });
+    expect(pkg.dependencies).toBeUndefined();
+    expect(pkg.devDependencies).toBeUndefined();
+    // init itself doesn't plant the node_modules link — that's the runner's job.
+    await expect(stat(join(projectDir, "node_modules"))).rejects.toMatchObject({ code: "ENOENT" });
+    const gitignore = await readFile(join(projectDir, ".gitignore"), "utf8");
+    // node_modules/ stays in .gitignore so the runtime-planted symlink
+    // never gets accidentally committed.
+    expect(gitignore).toMatch(/node_modules\//);
     const logs = logSpy.mock.calls.map((c) => String(c[0]));
-    expect(logs.some((l) => l.includes("pnpm install"))).toBe(true);
+    expect(logs.some((l) => l.includes("pnpm install"))).toBe(false);
   });
 
   it("rejects a spec missing both openapi and swagger fields BEFORE touching the target dir", async () => {

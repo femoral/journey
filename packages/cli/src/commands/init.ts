@@ -1,6 +1,5 @@
-import { access, copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { access, copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { generate, loadSpec } from "@journey/codegen";
 
 export interface InitOptions {
@@ -17,25 +16,6 @@ async function isEmpty(dir: string): Promise<boolean> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return true;
     throw err;
   }
-}
-
-async function readCliVersion(): Promise<string> {
-  // Resolves to packages/cli/package.json in dev (src/) and to the published
-  // package.json sibling of dist/index.js when installed.
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [join(here, "../../package.json"), join(here, "../package.json")];
-  for (const candidate of candidates) {
-    try {
-      const pkg = JSON.parse(await readFile(candidate, "utf8")) as { version?: unknown };
-      if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
-    } catch {
-      // try next candidate
-    }
-  }
-  throw new Error(
-    `Could not locate @journey/cli package.json (tried ${candidates.join(", ")}). ` +
-      `Refusing to scaffold a project.json with an unusable version range.`,
-  );
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
@@ -82,22 +62,20 @@ export async function runInit(opts: InitOptions): Promise<void> {
     "utf8",
   );
 
+  // node_modules/ is listed defensively: the runner plants a
+  // `node_modules/@journey/core` symlink on first run so user journey files can
+  // resolve their imports without a per-project `pnpm install`. We don't want
+  // that symlink to ever land in a commit.
   await writeFile(join(projectDir, ".gitignore"), `.journey/cache/\nnode_modules/\n`, "utf8");
 
-  const cliVersion = await readCliVersion();
-  const versionRange = `^${cliVersion}`;
-  const pkg = {
-    name: basename(projectDir),
-    private: true,
-    type: "module",
-    dependencies: {
-      "@journey/core": versionRange,
-    },
-    devDependencies: {
-      "@journey/cli": versionRange,
-    },
-  };
-  await writeFile(join(projectDir, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+  // Minimal package.json so Node treats .ts/.js files in the project as ESM.
+  // No dependencies, no install step — the runner symlinks @journey/core
+  // from the bundled CLI at runtime.
+  await writeFile(
+    join(projectDir, "package.json"),
+    `${JSON.stringify({ name: basename(projectDir), private: true, type: "module" }, null, 2)}\n`,
+    "utf8",
+  );
 
   const generated = await generate({
     specPath: specDest,
@@ -111,5 +89,4 @@ export async function runInit(opts: InitOptions): Promise<void> {
       "journey: warning — spec parsed but contained 0 operations. The generated endpoints.ts will be empty.",
     );
   }
-  console.log("Next: cd into the project and run `pnpm install` (or `npm install`).");
 }

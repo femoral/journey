@@ -19,6 +19,7 @@ import {
 import { tsImport } from "tsx/esm/api";
 import { enableInsecureTls } from "../commands/run.js";
 import { patchConsole } from "./consolePatch.js";
+import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface RunJourneyFileOptions {
   loaded: LoadedConfig;
@@ -57,6 +58,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
     setActiveEnvironment(envName, values);
   }
 
+  await ensureProjectCoreLink(opts.loaded.projectDir);
   clearRegistry();
   await tsImport(pathToFileURL(abs).href, import.meta.url);
 

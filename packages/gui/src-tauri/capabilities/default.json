@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default capabilities for the Journey window",
   "windows": ["main"],
-  "permissions": ["shell:allow-open"]
+  "permissions": ["shell:allow-open", "dialog:allow-open"]
 }

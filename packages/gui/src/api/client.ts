@@ -130,6 +130,12 @@ export interface RunDetail {
 
 export const api = {
   getProject: () => req<ProjectSummary>("/api/project"),
+  openProject: (path: string) =>
+    req<ProjectSummary>("/api/project/open", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path }),
+    }),
   patchProjectConfig: (patch: ProjectConfigPatch) =>
     req<ProjectSummary>("/api/project/config", {
       method: "PATCH",

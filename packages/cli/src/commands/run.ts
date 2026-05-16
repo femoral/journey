@@ -20,6 +20,7 @@ import {
 import { tsImport } from "tsx/esm/api";
 import { overallOk, printResults } from "../report.js";
 import { discoverJourneyFiles } from "../util/discover.js";
+import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface RunOptions {
   projectDir: string;
@@ -73,6 +74,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     throw new Error("No journey files to run.");
   }
 
+  await ensureProjectCoreLink(opts.projectDir);
   clearRegistry();
   for (const file of files) {
     await tsImport(pathToFileURL(file).href, import.meta.url);

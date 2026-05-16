@@ -15,6 +15,7 @@ import {
 } from "./recentProjects";
 import { api } from "../api/client";
 import { projectRefreshTick } from "../api/projectRefresh";
+import { openProjectAtPath, pickAndOpenProjectFolder } from "./openProjectFolder";
 import { RouteFade } from "../ui";
 import { createConsoleStore } from "./consoleStore";
 import { ConsoleContext } from "./consoleContext";
@@ -137,11 +138,28 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
             onClose={() => setSwitcherOpen(false)}
             projects={recents()}
             currentPath={project()?.projectDir}
-            onSwitch={(p) => {
-              console.info("[shell] project switch requested", p);
+            onSwitch={async (p) => {
+              if (p.path === project()?.projectDir) return;
+              const result = await openProjectAtPath(p.path);
+              if (result.ok) {
+                window.location.reload();
+                return;
+              }
+              if (result.reason === "invalid") {
+                window.alert(`Couldn't open project: ${result.message}`);
+              }
             }}
-            onOpenFolder={() => {
-              console.info("[shell] open folder requested");
+            onOpenFolder={async () => {
+              const result = await pickAndOpenProjectFolder();
+              if (result.ok) {
+                // Full reload rebinds every project-scoped resource (envs,
+                // tree, drift, recents memo) to the new backend state.
+                window.location.reload();
+                return;
+              }
+              if (result.reason === "invalid") {
+                window.alert(`Couldn't open project: ${result.message}`);
+              }
             }}
             onInitNew={() => {
               console.info("[shell] init new project requested");

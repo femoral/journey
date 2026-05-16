@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../src/server/server.js";
 
@@ -9,13 +9,7 @@ describe("journey serve — /api/project", () => {
   let projectDir: string;
 
   beforeAll(async () => {
-    // Colocate the fixture under packages/cli/.test-tmp so the tsx-loaded
-    // journey file can resolve `@journey/core` via the pnpm workspace link
-    // in packages/cli/node_modules. The OS tmpdir has no such link.
-    const cliDir = dirname(dirname(fileURLToPath(import.meta.url)));
-    const base = join(cliDir, ".test-tmp");
-    await mkdir(base, { recursive: true });
-    projectDir = await mkdtemp(join(base, "journey-serve-"));
+    projectDir = await mkdtemp(join(tmpdir(), "journey-serve-"));
     await mkdir(join(projectDir, "generated"), { recursive: true });
     await mkdir(join(projectDir, "journeys"), { recursive: true });
     await mkdir(join(projectDir, "environments"), { recursive: true });

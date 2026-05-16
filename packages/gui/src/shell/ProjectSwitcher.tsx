@@ -2,6 +2,7 @@ import type { JSX } from "solid-js";
 import { For, Show, createEffect, onCleanup } from "solid-js";
 import { IconFolder, IconPlus } from "../ui/icons";
 import type { RecentProject } from "./recentProjects";
+import { isTauri } from "../api/runEvents";
 
 export type ProjectSwitcherProps = {
   open: boolean;
@@ -96,10 +97,7 @@ export function ProjectSwitcher(props: ProjectSwitcherProps): JSX.Element {
                       (e.currentTarget as HTMLElement).style.background = "transparent";
                   }}
                 >
-                  <IconFolder
-                    size={13}
-                    style={{ color: active() ? "var(--ac)" : "var(--fg-2)" }}
-                  />
+                  <IconFolder size={13} style={{ color: active() ? "var(--ac)" : "var(--fg-2)" }} />
                   <div style={{ flex: 1, "min-width": 0 }}>
                     <div class="mono" style={{ "font-size": "13px", "font-weight": 500 }}>
                       {p.name}
@@ -129,33 +127,35 @@ export function ProjectSwitcher(props: ProjectSwitcherProps): JSX.Element {
             "padding-top": "4px",
           }}
         >
-          <button
-            onClick={() => {
-              props.onOpenFolder();
-              props.onClose();
-            }}
-            style={{
-              width: "100%",
-              display: "flex",
-              "align-items": "center",
-              gap: "10px",
-              padding: "7px 8px",
-              "border-radius": "4px",
-              color: "var(--fg-1)",
-              "font-size": "12px",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "var(--bg-2)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-            }}
-          >
-            <IconFolder size={13} style={{ color: "var(--fg-2)" }} />
-            <span>Open folder…</span>
-            <span style={{ flex: 1 }} />
-            <Kbd>⌘O</Kbd>
-          </button>
+          <Show when={isTauri()}>
+            <button
+              onClick={() => {
+                props.onOpenFolder();
+                props.onClose();
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                "align-items": "center",
+                gap: "10px",
+                padding: "7px 8px",
+                "border-radius": "4px",
+                color: "var(--fg-1)",
+                "font-size": "12px",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "var(--bg-2)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+              }}
+            >
+              <IconFolder size={13} style={{ color: "var(--fg-2)" }} />
+              <span>Open folder…</span>
+              <span style={{ flex: 1 }} />
+              <Kbd>⌘O</Kbd>
+            </button>
+          </Show>
           <button
             onClick={() => {
               props.onInitNew();

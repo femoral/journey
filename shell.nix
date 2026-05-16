@@ -95,11 +95,26 @@ pkgs.mkShell {
 
   GDK_BACKEND = "x11";
 
-  # XDG for WSLg — make sure glib/gio find schemas
-  XDG_DATA_DIRS = pkgs.lib.makeSearchPathOutput "out" "share" [
-    pkgs.gsettings-desktop-schemas
-    pkgs.gtk3
-  ];
+  # Nixpkgs ships each pkg's GSettings schemas under
+  # `<out>/share/gsettings-schemas/<pname-version>/glib-2.0/schemas/`. GLib
+  # scans `<XDG_DATA_DIR>/glib-2.0/schemas/`, so each provider's subdir has
+  # to be on XDG_DATA_DIRS individually — pointing at `<out>/share` finds
+  # nothing. Without this, GTK aborts on first widget that reads desktop
+  # settings (e.g. the native file chooser from tauri-plugin-dialog) with
+  # "No GSettings schemas are installed on the system".
+  XDG_DATA_DIRS =
+    let
+      schemaProviders = with pkgs; [
+        gsettings-desktop-schemas
+        gtk3
+        webkitgtk_4_1
+        glib-networking
+      ];
+      schemaDirs = pkgs.lib.concatStringsSep ":" (
+        map (p: "${p}/share/gsettings-schemas/${p.name}") schemaProviders
+      );
+    in
+    schemaDirs;
 
   shellHook = ''
     echo "journey-dev shell"

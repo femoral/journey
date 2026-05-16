@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { runInit } from "../src/commands/init.js";
@@ -37,13 +38,7 @@ afterAll(async () => {
 
 describe("CLI e2e", () => {
   it("init → generate → env list → run", async () => {
-    // Scaffold inside packages/cli so the temp project can resolve
-    // `@journey/core` via packages/cli/node_modules (pnpm workspace link).
-    // test/ → packages/cli → use .test-tmp *inside* packages/cli
-    const cliDir = dirname(dirname(fileURLToPath(import.meta.url)));
-    const base = join(cliDir, ".test-tmp");
-    await mkdir(base, { recursive: true });
-    const parent = await mkdtemp(join(base, "e2e-"));
+    const parent = await mkdtemp(join(tmpdir(), "journey-e2e-"));
     const projectDir = join(parent, "demo");
     try {
       await runInit({ dir: projectDir, spec: fixture });

@@ -71,6 +71,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **Codegen is one-way.** `pnpm journey generate` writes only under `generated/`; never touches `journeys/`. Don't hand-edit `generated/*.ts`.
 - **One runtime core, multiple surfaces.** CLI, GUI, and k6 adapter all consume `@journey/core`. Don't fork run-loop logic per surface.
 - **Local-first / zero lock-in.** No cloud, no login. Project files are diffable JSON / YAML / TS.
+- **A Journey project carries no dependencies.** Init writes only a minimal `package.json` (`type: "module"`) — no `@journey/core` dep, no install step. The runner plants a `node_modules/@journey/core` symlink to the CLI-bundled core on first run via `ensureProjectCoreLink` (`packages/cli/src/util/projectCoreLink.ts`). Don't re-introduce per-project deps or `pnpm install` prompts.
 
 ## Where to find what
 
