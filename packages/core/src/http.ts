@@ -16,6 +16,13 @@ export interface HttpContext {
   fetchImpl?: typeof fetch;
   /** Optional logger called before/after each request. */
   logger?: JourneyLogger;
+  /**
+   * Optional undici `Dispatcher` (typed as `unknown` so core stays
+   * dependency-free). When set, it is forwarded to `fetch` as `init.dispatcher`
+   * so callers can disable TLS verification, route through a proxy, or pin a
+   * client cert. The CLI's `--insecure` flag uses this.
+   */
+  dispatcher?: unknown;
 }
 
 export interface RequestSpec {
@@ -112,6 +119,12 @@ export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpR
   const init: RequestInit = { method: req.method, headers: req.headers };
   if (req.body !== undefined) {
     init.body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+  }
+  if (ctx.dispatcher !== undefined) {
+    // `dispatcher` is a Node/undici extension typed as `Dispatcher` by
+    // @types/node; we accept `unknown` from callers so core doesn't pull in
+    // undici types. Cast through `Record<string, unknown>` to attach it.
+    (init as unknown as Record<string, unknown>).dispatcher = ctx.dispatcher;
   }
   let abort: AbortController | undefined;
   let timer: NodeJS.Timeout | undefined;

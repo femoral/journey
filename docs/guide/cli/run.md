@@ -13,18 +13,19 @@ sources:
 Run one or more journeys. The main command.
 
 ```sh
-journey run [files...] [--env <name>] [--all] [--debug] [--watch]
+journey run [files...] [--env <name>] [--all] [--debug] [--watch] [--insecure]
 ```
 
 ## Arguments and flags
 
-| Argument / flag | Type     | Default                      | Required | Purpose |
-|-----------------|----------|------------------------------|----------|---------|
-| `[files...]`    | paths    | —                            | No¹      | Specific journey files to run. Relative paths resolve against `cwd`. |
-| `--env <name>`  | string   | `config.defaultEnvironment`  | No       | Load `environments/<name>.json` before running. |
-| `--all`         | boolean  | `false`                      | No       | Run every `*.journey.ts` in `journeys/`. |
-| `--debug`       | boolean  | `false`                      | No       | Log every request/response to stderr. Also triggered by `DEBUG=journey`. |
-| `--watch`       | boolean  | `false`                      | No       | Rerun on changes to `.ts` / `.json` files in the watched directories. |
+| Argument / flag | Type    | Default                     | Required | Purpose                                                                                                                                                                                                           |
+| --------------- | ------- | --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[files...]`    | paths   | —                           | No¹      | Specific journey files to run. Relative paths resolve against `cwd`.                                                                                                                                              |
+| `--env <name>`  | string  | `config.defaultEnvironment` | No       | Load `environments/<name>.json` before running.                                                                                                                                                                   |
+| `--all`         | boolean | `false`                     | No       | Run every `*.journey.ts` in `journeys/`.                                                                                                                                                                          |
+| `--debug`       | boolean | `false`                     | No       | Log every request/response to stderr. Also triggered by `DEBUG=journey`.                                                                                                                                          |
+| `--watch`       | boolean | `false`                     | No       | Rerun on changes to `.ts` / `.json` files in the watched directories.                                                                                                                                             |
+| `--insecure`    | boolean | `false`                     | No       | Disable TLS certificate verification. For self-signed certs or corporate CAs Node doesn't trust. Prints one warning to stderr per process. Equivalent to `tlsRejectUnauthorized: false` in `journey.config.json`. |
 
 ¹ Either pass file paths or use `--all`. With neither, the command errors: `No journey files to run.`
 
@@ -51,9 +52,9 @@ journey run [files...] [--env <name>] [--all] [--debug] [--watch]
 
 ## Exit codes
 
-| Code | When |
-|------|------|
-| `0`  | Every step in every journey passed. |
+| Code | When                                            |
+| ---- | ----------------------------------------------- |
+| `0`  | Every step in every journey passed.             |
 | `1`  | Any step failed, config/environment load error. |
 
 ## `--watch` mode
@@ -88,6 +89,30 @@ Secret headers are masked automatically. The `DEBUG=journey` environment variabl
 Each invocation writes `.journey/cache/runs/<id>.run.json`, where `<id>` is an ISO timestamp with colons replaced by hyphens. The record contains every `JourneyResult` — journey name, step statuses, request method and URL, response (on success), error (on failure), and duration.
 
 `config.runHistoryKeepCount` (default 20) caps the retained count. The GUI's **Run history** page reads from the same directory.
+
+## `--insecure` (TLS verification)
+
+Node bundles its own root store and does not consult the OS trust store, so internal HTTPS endpoints fronted by a corporate CA fail with `fetch failed ← unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE)` even when a browser reaches them fine.
+
+```sh
+journey run --insecure --all
+```
+
+Skips certificate validation for **this invocation**. A single warning prints to stderr the first time it engages:
+
+```
+journey: WARNING — TLS verification disabled (--insecure)
+```
+
+For long-lived projects (developer machines hitting a known-private staging cluster), set the same toggle in config so you don't have to remember the flag:
+
+```json
+{
+  "tlsRejectUnauthorized": false
+}
+```
+
+Both paths mutate `NODE_TLS_REJECT_UNAUTHORIZED` for the current process only. Don't ship a project with `tlsRejectUnauthorized: false` to CI — the warning is your only signal.
 
 ## Running a subset of steps
 

@@ -52,11 +52,22 @@ export function buildProgram(): Command {
     .option("--all", "Run all journeys in the project", false)
     .option("--debug", "Log every request and response to stderr", false)
     .option("--watch", "Rerun on file changes", false)
+    .option(
+      "--insecure",
+      "Disable TLS certificate verification (for self-signed / corporate CAs)",
+      false,
+    )
     .description("Run one or more journeys (or --all)")
     .action(
       (
         files: string[],
-        options: { env?: string; all?: boolean; debug?: boolean; watch?: boolean },
+        options: {
+          env?: string;
+          all?: boolean;
+          debug?: boolean;
+          watch?: boolean;
+          insecure?: boolean;
+        },
       ) =>
         handle(() =>
           runCommand({
@@ -66,6 +77,7 @@ export function buildProgram(): Command {
             ...(options.env !== undefined ? { env: options.env } : {}),
             ...(options.debug !== undefined ? { debug: options.debug } : {}),
             ...(options.watch !== undefined ? { watch: options.watch } : {}),
+            ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
           }),
         ),
     );
@@ -146,20 +158,34 @@ export function buildProgram(): Command {
     .option("--host <host>", "Host (default 127.0.0.1)")
     .option("--project <dir>", "Project directory (default: cwd)")
     .option("--debug", "Log every request/response while running journeys", false)
+    .option(
+      "--insecure",
+      "Disable TLS certificate verification for journey runs triggered via the API",
+      false,
+    )
     .description("Run the GUI backend API for the current project")
-    .action((options: { port?: number; host?: string; project?: string; debug?: boolean }) => {
-      const projectDir = options.project
-        ? resolvePath(process.cwd(), options.project)
-        : process.cwd();
-      return handle(() =>
-        runServe({
-          projectDir,
-          ...(options.port !== undefined ? { port: options.port } : {}),
-          ...(options.host !== undefined ? { host: options.host } : {}),
-          ...(options.debug !== undefined ? { debug: options.debug } : {}),
-        }),
-      );
-    });
+    .action(
+      (options: {
+        port?: number;
+        host?: string;
+        project?: string;
+        debug?: boolean;
+        insecure?: boolean;
+      }) => {
+        const projectDir = options.project
+          ? resolvePath(process.cwd(), options.project)
+          : process.cwd();
+        return handle(() =>
+          runServe({
+            projectDir,
+            ...(options.port !== undefined ? { port: options.port } : {}),
+            ...(options.host !== undefined ? { host: options.host } : {}),
+            ...(options.debug !== undefined ? { debug: options.debug } : {}),
+            ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
+          }),
+        );
+      },
+    );
 
   const envCmd = program.command("env").description("Environment management");
   envCmd

@@ -13,17 +13,18 @@ sources:
 Start the HTTP backend the GUI talks to. Also usable standalone for custom UIs or scripting against a running project.
 
 ```sh
-journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug]
+journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecure]
 ```
 
 ## Flags
 
-| Flag              | Type     | Default        | Required | Purpose |
-|-------------------|----------|----------------|----------|---------|
-| `--port <n>`      | number   | `5181`         | No       | TCP port to listen on. |
-| `--host <host>`   | string   | `127.0.0.1`    | No       | Host to bind to. Default is localhost-only. |
-| `--project <dir>` | path     | `cwd`          | No       | Project directory (absolute or relative to `cwd`). |
-| `--debug`         | boolean  | `false`        | No       | Log every request/response while running journeys. |
+| Flag              | Type    | Default     | Required | Purpose                                                                                                                                      |
+| ----------------- | ------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <n>`      | number  | `5181`      | No       | TCP port to listen on.                                                                                                                       |
+| `--host <host>`   | string  | `127.0.0.1` | No       | Host to bind to. Default is localhost-only.                                                                                                  |
+| `--project <dir>` | path    | `cwd`       | No       | Project directory (absolute or relative to `cwd`).                                                                                           |
+| `--debug`         | boolean | `false`     | No       | Log every request/response while running journeys.                                                                                           |
+| `--insecure`      | boolean | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`. |
 
 ## Behaviour
 
@@ -44,10 +45,10 @@ Shutting down…
 
 ## Exit codes
 
-| Code | When |
-|------|------|
+| Code | When                              |
+| ---- | --------------------------------- |
 | `0`  | Clean shutdown (signal received). |
-| `1`  | Config read error, port in use. |
+| `1`  | Config read error, port in use.   |
 
 ## Typical usage
 

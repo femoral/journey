@@ -28,6 +28,28 @@ export interface RunOptions {
   env?: string;
   debug?: boolean;
   watch?: boolean;
+  /** When true, disable TLS certificate verification. Survives a recursive watch-mode rerun. */
+  insecure?: boolean;
+}
+
+/**
+ * Disable TLS certificate verification for this process and print one
+ * warning to stderr so the choice cannot leak silently into CI. Idempotent
+ * — survives a watch-mode rerun without re-warning.
+ *
+ * Implementation note: we mutate `NODE_TLS_REJECT_UNAUTHORIZED` rather than
+ * passing an undici `Dispatcher` because the CLI doesn't bundle `undici`
+ * directly today. The CLI is a single process — no child processes inherit
+ * the env. A follow-up issue will swap this for `setGlobalDispatcher` once
+ * `undici` is on the dependency list.
+ */
+let warnedAboutInsecure = false;
+export function enableInsecureTls(): void {
+  if (!warnedAboutInsecure) {
+    console.error("journey: WARNING — TLS verification disabled (--insecure)");
+    warnedAboutInsecure = true;
+  }
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
@@ -59,6 +81,9 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();
   if (logger) ctx.logger = logger;
+  if (opts.insecure || loaded.config.tlsRejectUnauthorized === false) {
+    enableInsecureTls();
+  }
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);
 

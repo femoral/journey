@@ -1,13 +1,17 @@
 import { startServer } from "../server/server.js";
+import { enableInsecureTls } from "./run.js";
 
 export interface ServeOptions {
   projectDir: string;
   port?: number;
   host?: string;
   debug?: boolean;
+  /** Disable TLS verification for journey runs triggered through the API. */
+  insecure?: boolean;
 }
 
 export async function runServe(opts: ServeOptions): Promise<number> {
+  if (opts.insecure) enableInsecureTls();
   const srv = await startServer({
     projectDir: opts.projectDir,
     ...(opts.host !== undefined ? { host: opts.host } : {}),

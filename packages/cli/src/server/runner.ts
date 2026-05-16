@@ -17,6 +17,7 @@ import {
   type LoadedConfig,
 } from "@journey/core";
 import { tsImport } from "tsx/esm/api";
+import { enableInsecureTls } from "../commands/run.js";
 import { patchConsole } from "./consolePatch.js";
 
 export interface RunJourneyFileOptions {
@@ -43,6 +44,8 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
     : opts.file.includes("/") || opts.file.includes("\\")
       ? resolve(process.cwd(), opts.file)
       : join(opts.journeysDir, opts.file);
+
+  if (opts.loaded.config.tlsRejectUnauthorized === false) enableInsecureTls();
 
   clearActiveEnvironment();
   const envName = opts.env ?? opts.loaded.config.defaultEnvironment;

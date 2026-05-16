@@ -68,6 +68,19 @@ describe("resolveUrl", () => {
   });
 });
 
+describe("HttpContext.dispatcher", () => {
+  it("forwards ctx.dispatcher to fetch as init.dispatcher", async () => {
+    const dispatcher = { tag: "fake-agent" };
+    const seen: Array<{ init?: unknown }> = [];
+    const fetchImpl = vi.fn(async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      seen.push({ init });
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    await execute({ method: "GET", url: "https://x/ping", headers: {} }, { fetchImpl, dispatcher });
+    expect((seen[0]!.init as { dispatcher?: unknown }).dispatcher).toBe(dispatcher);
+  });
+});
+
 describe("buildRequest + execute", () => {
   it("sets JSON content-type and calls fetchImpl", async () => {
     const fetchImpl = vi.fn(

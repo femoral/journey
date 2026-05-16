@@ -30,6 +30,25 @@ describe("loadConfig", () => {
     await writeFile(join(dir, "journey.config.json"), JSON.stringify({ baseUrl: "not-a-url" }));
     await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
   });
+
+  it("tlsRejectUnauthorized defaults to true and accepts explicit booleans", async () => {
+    await writeFile(join(dir, "journey.config.json"), JSON.stringify({ name: "x" }));
+    let loaded = await loadConfig(dir);
+    expect(loaded.config.tlsRejectUnauthorized).toBe(true);
+
+    await writeFile(
+      join(dir, "journey.config.json"),
+      JSON.stringify({ name: "x", tlsRejectUnauthorized: false }),
+    );
+    loaded = await loadConfig(dir);
+    expect(loaded.config.tlsRejectUnauthorized).toBe(false);
+
+    await writeFile(
+      join(dir, "journey.config.json"),
+      JSON.stringify({ name: "x", tlsRejectUnauthorized: "yes" }),
+    );
+    await expect(loadConfig(dir)).rejects.toThrow(/failed validation/);
+  });
 });
 
 describe("resolveBaseUrl", () => {
