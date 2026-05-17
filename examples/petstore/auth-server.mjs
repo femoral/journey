@@ -11,6 +11,19 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 const SECRET = process.env.AUTH_SECRET ?? "journey-shared-dev-secret";
 const TOKEN_TTL_SECONDS = 3600;
 
+// Simulated latency so the GUI/CLI can observe in-flight states. Override via
+// MOCK_DELAY_MIN_MS / MOCK_DELAY_MAX_MS; set both to 0 to disable.
+const DELAY_MIN_MS = Number(process.env.MOCK_DELAY_MIN_MS ?? 200);
+const DELAY_MAX_MS = Number(process.env.MOCK_DELAY_MAX_MS ?? 1000);
+
+function simulateLatency() {
+  const lo = Math.max(0, DELAY_MIN_MS);
+  const hi = Math.max(lo, DELAY_MAX_MS);
+  if (hi === 0) return Promise.resolve();
+  const ms = lo + Math.random() * (hi - lo);
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 // MOCK_USERS=user1:pass1,user2:pass2  (default covers all three example envs)
 const RAW_USERS =
   process.env.MOCK_USERS ?? "alice:wonderland,ci-bot:ci-secret,staging-user:staging-pass";
@@ -103,6 +116,7 @@ function requireBearer(req) {
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, null);
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
+  await simulateLatency();
 
   if (req.method === "POST" && url.pathname === "/auth/login") {
     const body = await readJson(req);
@@ -134,6 +148,7 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`IDP mock listening at http://${HOST}:${PORT}`);
   console.log(`  users: ${[...users.keys()].join(", ")}`);
+  console.log(`  simulated latency: ${DELAY_MIN_MS}–${DELAY_MAX_MS}ms per request`);
 });
 
 const shutdown = () => server.close(() => process.exit(0));

@@ -8,6 +8,19 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 5180);
 const HOST = process.env.HOST ?? "127.0.0.1";
 
+// Simulated latency so the GUI/CLI can observe in-flight states. Override via
+// MOCK_DELAY_MIN_MS / MOCK_DELAY_MAX_MS; set both to 0 to disable.
+const DELAY_MIN_MS = Number(process.env.MOCK_DELAY_MIN_MS ?? 200);
+const DELAY_MAX_MS = Number(process.env.MOCK_DELAY_MAX_MS ?? 1000);
+
+function simulateLatency() {
+  const lo = Math.max(0, DELAY_MIN_MS);
+  const hi = Math.max(lo, DELAY_MAX_MS);
+  if (hi === 0) return Promise.resolve();
+  const ms = lo + Math.random() * (hi - lo);
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 // AUTH_SECRET is shared with the IDP mock (auth-server.mjs). Both must agree
 // on this value for HMAC-signed bearer verification to succeed.
 const AUTH_SECRET = process.env.AUTH_SECRET ?? "journey-shared-dev-secret";
@@ -240,6 +253,7 @@ const routes = [
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, null);
   const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
+  await simulateLatency();
   for (const route of routes) {
     if (route.method !== req.method) continue;
     const m = route.re.exec(url.pathname);
@@ -259,6 +273,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Petstore mock listening at http://${HOST}:${PORT}`);
   console.log(`  seeded ${pets.size} pets`);
   console.log(`  bearer tokens verified via shared AUTH_SECRET (issued by IDP mock)`);
+  console.log(`  simulated latency: ${DELAY_MIN_MS}–${DELAY_MAX_MS}ms per request`);
 });
 
 const shutdown = () => {
