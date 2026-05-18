@@ -165,6 +165,18 @@ export async function runJourney(
   const journeyIdx = opts.journeyIdx ?? 0;
   const stepIdxOffset = opts.stepIdxOffset ?? 0;
 
+  // Announce the resolved plan up front so subscribers (notably the GUI) can
+  // pre-render the full step list — including any helper-injected steps that a
+  // static parse of the source would miss — without waiting for each
+  // `onStepStart` to arrive.
+  ctx.logger?.onPlanned?.({
+    runId,
+    journeyIdx,
+    journeyName: def.name,
+    stepIdxOffset,
+    steps: steps.map((s) => ({ name: s.name })),
+  });
+
   const results: StepResult[] = [];
   const journeyStart = Date.now();
   let ok = true;

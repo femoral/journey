@@ -6,6 +6,7 @@ import type {
   RequestLog,
   ResponseLog,
   RunEndEvent,
+  RunPlannedEvent,
   RunStartEvent,
   StepEndEvent,
   StepStartEvent,
@@ -19,6 +20,14 @@ import type {
  */
 export type RunEvent =
   | { kind: "run:start"; runId: string; journeyNames: string[] }
+  | {
+      kind: "step:planned";
+      runId: string;
+      journeyIdx: number;
+      journeyName: string;
+      stepIdxOffset: number;
+      steps: ReadonlyArray<{ name: string }>;
+    }
   | {
       kind: "step:start";
       runId: string;
@@ -115,6 +124,16 @@ export class RunBroadcaster {
     return {
       onRunStart: (e: RunStartEvent) => {
         this.emit({ kind: "run:start", runId: e.runId, journeyNames: e.journeyNames });
+      },
+      onPlanned: (e: RunPlannedEvent) => {
+        this.emit({
+          kind: "step:planned",
+          runId: e.runId,
+          journeyIdx: e.journeyIdx,
+          journeyName: e.journeyName,
+          stepIdxOffset: e.stepIdxOffset,
+          steps: e.steps,
+        });
       },
       onStepStart: (e: StepStartEvent) => {
         this.currentStepIdx = e.stepIdx;

@@ -50,6 +50,7 @@ export {
   type LogEvent,
   type RunStartEvent,
   type RunEndEvent,
+  type RunPlannedEvent,
   type StepStartEvent,
   type StepEndEvent,
 } from "./logger.js";

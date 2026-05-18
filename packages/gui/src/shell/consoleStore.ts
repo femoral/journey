@@ -84,6 +84,10 @@ export function createConsoleStore(): ConsoleStore {
       case "run:start":
         setActiveRunId(event.runId);
         break;
+      case "step:planned":
+        // The console dock renders per-step entries lazily on `step:start`; the
+        // planned list itself is consumed by the JourneysPage timeline.
+        break;
       case "step:start": {
         const id = `${event.runId}:${event.stepIdx}`;
         upsert(

@@ -56,6 +56,11 @@ interface JourneyRuntimeState {
   inFlight: Set<number>;
   sourceChecksum?: string;
   stale?: boolean;
+  // Resolved step list broadcast by the runner on `step:planned`. When set, it
+  // wins over the regex-parsed source for the timeline, so journeys whose
+  // bodies inject steps via helpers render the real plan from the first frame
+  // of the run instead of growing in place as `step:start` events arrive.
+  plannedSteps?: ParsedStep[];
 }
 
 function emptyRuntimeState(): JourneyRuntimeState {
@@ -220,7 +225,10 @@ export const JourneysPage: Component = () => {
     store.delete(file);
     setJourneyStates((prev) => ({
       ...prev,
-      [file]: { runState: "running", inFlight: new Set<number>() },
+      [file]: {
+        runState: "running",
+        inFlight: new Set<number>(),
+      },
     }));
     subs.get(file)?.close();
     subs.delete(file);
@@ -253,13 +261,34 @@ export const JourneysPage: Component = () => {
       const sub = runEvents.subscribe(runId, (event) => {
         cons.ingest(event);
         switch (event.kind) {
+          case "step:planned": {
+            // This page renders one journey per file; ignore additional
+            // journeys that might run in the same SSE stream.
+            if (event.journeyIdx !== 0) break;
+            const parsed = idleSource()?.parsed ?? [];
+            // Preserve parsed endpoint hints for steps whose names match the
+            // source; helper-injected steps simply lack an endpoint until the
+            // matching `request` SSE frame arrives.
+            const merged: ParsedStep[] = event.steps.map((s) => {
+              const match = parsed.find((p) => p.name === s.name);
+              const entry: ParsedStep = { name: s.name, start: 0, end: 0 };
+              if (match?.endpoint !== undefined) entry.endpoint = match.endpoint;
+              return entry;
+            });
+            updateJourneyState(file, { plannedSteps: merged });
+            break;
+          }
           case "step:start": {
             journeyName = event.journeyName;
             // Pre-fill request with the resolved endpoint so the MethodBadge
             // and URL row stay rendered between step:start and the actual
-            // `request` SSE frame (avoids first-step flicker).
+            // `request` SSE frame (avoids first-step flicker). Prefer the
+            // planned list (covers helper-injected steps) over the source
+            // parse.
             const initial: StepResult = { name: event.name, ok: false, durationMs: 0 };
-            const parsed = idleSource()?.parsed[event.stepIdx];
+            const plannedList = untrack(() => journeyStates()[file]?.plannedSteps);
+            const lookup = plannedList ?? idleSource()?.parsed ?? [];
+            const parsed = lookup[event.stepIdx];
             const resolved = parsed ? resolveIdleEndpoint(parsed.endpoint) : undefined;
             if (resolved) initial.request = resolved;
             liveSteps.push(initial);
@@ -464,7 +493,7 @@ export const JourneysPage: Component = () => {
         >
           {(file) => {
             const state = (): JourneyRuntimeState => current() ?? emptyRuntimeState();
-            const idle = () => idleSource()?.parsed ?? [];
+            const idle = () => state().plannedSteps ?? idleSource()?.parsed ?? [];
             const stepCount = () =>
               Math.max(state().results?.[0]?.steps.length ?? 0, idle().length);
             return (

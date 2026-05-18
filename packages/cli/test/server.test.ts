@@ -272,6 +272,12 @@ journey("smoke", () => {
 
       const kinds = events.map((e) => e.kind);
       expect(kinds[0]).toBe("run:start");
+      // step:planned arrives before any step:start so the GUI can pre-render
+      // the resolved step list.
+      const plannedIdx = kinds.indexOf("step:planned");
+      const firstStepStart = kinds.indexOf("step:start");
+      expect(plannedIdx).toBeGreaterThanOrEqual(0);
+      expect(plannedIdx).toBeLessThan(firstStepStart);
       expect(kinds).toContain("step:start");
       expect(kinds).toContain("request");
       expect(kinds).toContain("response");

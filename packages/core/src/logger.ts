@@ -37,6 +37,29 @@ export interface RunEndEvent {
 }
 
 /**
+ * Fired once per journey, right after `runJourney` has finished collecting the
+ * step list (a single execution of `def.body()`) and before any `onStepStart`.
+ * The full ordered step list is known at this point — subscribers can use it to
+ * pre-render a timeline without waiting for each `step:start` to arrive.
+ *
+ * Particularly useful for journeys whose bodies inject steps via helpers (e.g.
+ * `registerAuthStep()` calling `step()` from inside the body): a static parse
+ * of the source can't see those, but `onPlanned` does.
+ *
+ * `stepIdxOffset` is the absolute index of the first step in this journey
+ * within the surrounding `runAllRegistered` call; consumers can use it to map
+ * positions in `steps` back to the monotonic `stepIdx` values that subsequent
+ * `step:start` / `step:end` events will carry.
+ */
+export interface RunPlannedEvent {
+  runId: string;
+  journeyIdx: number;
+  journeyName: string;
+  stepIdxOffset: number;
+  steps: ReadonlyArray<{ name: string }>;
+}
+
+/**
  * Fired when a step starts executing, before any lazy-resolved headers/query/
  * body are materialized and before `onRequest`. `stepIdx` is monotonic across
  * the whole run, not just within a journey — this way consumers don't need to
@@ -73,6 +96,7 @@ export interface LogEvent {
 export interface JourneyLogger {
   onRunStart?(event: RunStartEvent): void;
   onRunEnd?(event: RunEndEvent): void;
+  onPlanned?(event: RunPlannedEvent): void;
   onStepStart?(event: StepStartEvent): void;
   onStepEnd?(event: StepEndEvent): void;
   onRequest?(req: RequestLog): void;

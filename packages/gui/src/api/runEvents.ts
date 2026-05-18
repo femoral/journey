@@ -14,6 +14,14 @@
 export type RunEvent =
   | { kind: "run:start"; runId: string; journeyNames: string[] }
   | {
+      kind: "step:planned";
+      runId: string;
+      journeyIdx: number;
+      journeyName: string;
+      stepIdxOffset: number;
+      steps: ReadonlyArray<{ name: string }>;
+    }
+  | {
       kind: "step:start";
       runId: string;
       journeyIdx: number;

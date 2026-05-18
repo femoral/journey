@@ -57,6 +57,60 @@ describe("runtime", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer t1");
   });
 
+  it("emits step:planned with the resolved step list before any step:start", async () => {
+    const events: string[] = [];
+    const planned: Array<{ journeyName: string; steps: string[]; stepIdxOffset: number }> = [];
+    const logger: JourneyLogger = {
+      onPlanned(e) {
+        planned.push({
+          journeyName: e.journeyName,
+          steps: e.steps.map((s) => s.name),
+          stepIdxOffset: e.stepIdxOffset,
+        });
+        events.push(`planned:${e.journeyName}:${e.steps.map((s) => s.name).join(",")}`);
+      },
+      onStepStart(e) {
+        events.push(`stepStart#${e.stepIdx}:${e.name}`);
+      },
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    // Helper-injected step: simulates the registerAuthStep pattern that a
+    // static parse of the source can't see, so the GUI relies on the
+    // step:planned event to render the full list before each step:start.
+    function registerAuthStep(): void {
+      step("auth", { endpoint: { method: "GET", path: "/auth", operationId: "auth" } });
+    }
+
+    journey("first", () => {
+      registerAuthStep();
+      step("a", { endpoint: { method: "GET", path: "/a", operationId: "a" } });
+    });
+    journey("second", () => {
+      step("b", { endpoint: { method: "GET", path: "/b", operationId: "b" } });
+    });
+
+    await runAllRegistered({ baseUrl: "https://x", fetchImpl, logger });
+
+    // step:planned fires for each journey before that journey's first step:start.
+    expect(events).toEqual([
+      "planned:first:auth,a",
+      "stepStart#0:auth",
+      "stepStart#1:a",
+      "planned:second:b",
+      "stepStart#2:b",
+    ]);
+    expect(planned).toEqual([
+      { journeyName: "first", steps: ["auth", "a"], stepIdxOffset: 0 },
+      { journeyName: "second", steps: ["b"], stepIdxOffset: 2 },
+    ]);
+  });
+
   it("emits run and step lifecycle events with a shared runId", async () => {
     const events: string[] = [];
     let seenRunId: string | undefined;
