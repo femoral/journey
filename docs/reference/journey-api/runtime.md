@@ -26,6 +26,8 @@ function step<E extends Endpoint>(name: string, options: StepOptions<E>): void;
 
 Registers a step inside a journey body. Throws if called outside a `journey()` body. Full field list in the [Step options reference](../step-options).
 
+`step()` may be called from a helper function that the journey body invokes — the runtime collects every `step()` that fires during a single body evaluation, regardless of call site. See the [reusable auth-helper pattern](../../guide/writing-journeys/patterns#reusable-helper-that-injects-a-step) for the canonical shape. The runtime broadcasts the resolved list via [`onPlanned`](./logging#runplannedevent) before iterating, so consumers (CLI, GUI, exporters) see helper-injected steps from the first frame.
+
 ## `runAllRegistered(ctx, opts?)`
 
 ```ts
@@ -50,6 +52,14 @@ function runJourney(
 ```
 
 Run a single journey without touching the registry. Does **not** emit `onRunStart` / `onRunEnd` — the caller is responsible if it wants them.
+
+## `collectSteps(def)`
+
+```ts
+function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepDef>>;
+```
+
+Evaluates `def.body()` once, capturing every `step()` call into an ordered list and returning it without executing the steps. Used by `journey export postman` to walk steps without performing HTTP, and available to custom tooling that needs a structural view of a journey. Side effects from the body itself still run each time it's evaluated — keep ID generation, env reads, and outbound HTTP **inside** step hooks (`headers`, `body`, `assert`, `after`) rather than at top level, so a `collectSteps` call followed by a `runJourney` call (which re-evaluates the body) doesn't fire them twice.
 
 ## `getRegisteredJourneys()`
 

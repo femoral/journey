@@ -95,6 +95,7 @@ export default defineConfig({
           items: [
             { text: "Runtime", link: "/reference/journey-api/runtime" },
             { text: "HTTP", link: "/reference/journey-api/http" },
+            { text: "Fetch", link: "/reference/journey-api/fetch" },
             { text: "Endpoints", link: "/reference/journey-api/endpoints" },
             { text: "Environment", link: "/reference/journey-api/environment" },
             { text: "Assertions", link: "/reference/journey-api/assertions" },

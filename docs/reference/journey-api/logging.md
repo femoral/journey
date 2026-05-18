@@ -15,6 +15,7 @@ Pluggable logger attached to `HttpContext.logger`. The runtime calls methods on 
 interface JourneyLogger {
   onRunStart?(event: RunStartEvent): void;
   onRunEnd?(event: RunEndEvent): void;
+  onPlanned?(event: RunPlannedEvent): void;
   onStepStart?(event: StepStartEvent): void;
   onStepEnd?(event: StepEndEvent): void;
   onRequest?(req: RequestLog): void;
@@ -29,6 +30,7 @@ interface JourneyLogger {
 | ------------- | ------------------------------------------------------------- |
 | `onRunStart`  | Before any step executes. Carries the list of journey names.  |
 | `onRunEnd`    | After every journey completes or halts.                       |
+| `onPlanned`   | Once per journey, before its first `onStepStart`.             |
 | `onStepStart` | Before a step's lazy inputs resolve.                          |
 | `onStepEnd`   | After a step finishes (including failures).                   |
 | `onRequest`   | Before `fetch`. Headers passed raw (no masking).              |
@@ -50,6 +52,14 @@ interface RunEndEvent {
   ok: boolean;
   durationMs: number;
   results: ReadonlyArray<{ name: string; ok: boolean }>;
+}
+
+interface RunPlannedEvent {
+  runId: string;
+  journeyIdx: number;
+  journeyName: string;
+  stepIdxOffset: number;
+  steps: ReadonlyArray<{ name: string }>;
 }
 
 interface StepStartEvent {
@@ -90,6 +100,8 @@ interface LogEvent {
 ```
 
 `stepIdx` being monotonic across journeys means subscribers can key streams by step index without caring which journey the step belongs to.
+
+`RunPlannedEvent` fires after `runJourney` evaluates the journey body and collects steps, but before any `onStepStart`. The resolved step list reflects every `step()` call that fired during body evaluation — including ones from helpers like the [reusable auth-helper pattern](../../guide/writing-journeys/patterns#reusable-helper-that-injects-a-step) — so subscribers can pre-render a timeline rather than appending step rows as `step:start` events arrive. `stepIdxOffset` is the absolute index of this journey's first step within the surrounding `runAllRegistered` run; map a position `i` in `steps` to its eventual `stepIdx` value with `stepIdxOffset + i`.
 
 ## `createConsoleLogger(opts?)`
 

@@ -1,8 +1,10 @@
 ---
 title: Patterns
-description: Common journey shapes — auth-token capture, external fixture seeding, conditional assertions, inline debug logging.
+description: Common journey shapes — auth-token capture, external fixture seeding, conditional assertions, helper-injected steps, observable hook HTTP.
 sources:
   - packages/core/src/runtime.ts
+  - packages/core/src/fetch.ts
+  - packages/cli/src/server/runBroadcaster.ts
   - examples/petstore/journeys/pet-crud-flow.journey.ts
 ---
 
@@ -138,29 +140,61 @@ step("create pet", {
 
 Leave these in until the feature is shipping, then delete — no production code runs journeys, so there's no lint rule enforcing quiet logs.
 
-## Run-once setup that other steps depend on
+## Reusable helper that injects a step
 
-`journey run --all` runs each `.journey.ts` file sequentially, but there is no "one-time setup" hook across files. Put shared setup at the top of the journey body if it's cheap (e.g. an auth step); factor it into a helper function if multiple journeys need it.
+`journey run --all` runs each `.journey.ts` file sequentially, but there is no "one-time setup" hook across files. For shared setup — almost always an auth step — write a helper that calls `step()` from inside the `journey()` body. The runtime collects every `step()` call that fires during a single body evaluation, so a helper invocation is indistinguishable from a literal `step()` from the runtime's point of view.
 
 ```ts
-function authStep() {
-  return step("auth", {
+function registerAuthStep(setToken: (t: string) => void) {
+  step("auth", {
     endpoint: endpoints.login,
     body: { username: env("USER"), password: env("PASS") },
     after(res) {
-      token = (res.body as { token: string }).token;
+      setToken((res.body as { token: string }).token);
     },
   });
 }
 
 journey("flow A", () => {
   let token = "";
-  authStep();
-  // … more steps that use `token`
+  registerAuthStep((t) => (token = t));
+  step("authed call", {
+    endpoint: endpoints.protectedResource,
+    headers: () => ({ Authorization: `Bearer ${token}` }),
+  });
 });
 ```
 
 Closures still work because `token` is in scope where the helper is called.
+
+The GUI's step timeline knows about helper-injected steps: every run starts with a `step:planned` SSE event (see [Logging — `RunPlannedEvent`](../../reference/journey-api/logging)) carrying the resolved step list, so the timeline renders the auth step from the first frame — there is no "list grows mid-run" effect even though the source has no literal `step("auth", …)` at file scope.
+
+## Making upstream calls from hooks visible
+
+An auth helper often needs to mint a token by calling several upstream services from inside the step's `after` hook. Plain `globalThis.fetch` works but is invisible to the Debug Console and run history because it bypasses the runtime's logger. Import `fetch` from `@journey/core` instead — same signature, same behaviour, but routes through the active run's logger when called inside any step hook:
+
+```ts
+import { fetch } from "@journey/core";
+
+function registerAuthStep(setToken: (t: string) => void) {
+  step("auth", {
+    endpoint: { method: "GET", path: "/health" },
+    async after() {
+      // Each fetch below appears in the Debug Console / run history,
+      // attributed to the surrounding `auth` step.
+      const opaque = await fetch(env("PASSPORT_URL")).then((r) => r.text());
+      const jwt = await fetch(env("TOKENINFO_URL"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${opaque}` },
+        body: JSON.stringify({}),
+      }).then((r) => r.json());
+      setToken(jwt.access_token);
+    },
+  });
+}
+```
+
+When called outside any run (e.g. at module load) the wrapper delegates to `globalThis.fetch` with no behaviour change, so the same helper module is reusable from ad-hoc scripts. See [Journey API → Fetch](../../reference/journey-api/fetch) for the full reference.
 
 ## Two journeys in one file
 

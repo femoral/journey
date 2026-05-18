@@ -73,6 +73,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **One runtime core, multiple surfaces.** CLI, GUI, and k6 adapter all consume `@journey/core`. Don't fork run-loop logic per surface.
 - **Local-first / zero lock-in.** No cloud, no login. Project files are diffable JSON / YAML / TS.
 - **A Journey project carries no dependencies.** Init writes only a minimal `package.json` (`type: "module"`) — no `@journey/core` dep, no install step. The runner plants a `node_modules/@journey/core` symlink to the CLI-bundled core on first run via `ensureProjectCoreLink` (`packages/cli/src/util/projectCoreLink.ts`). Don't re-introduce per-project deps or `pnpm install` prompts.
+- **Helpers may inject `step()` from inside a `journey()` body.** The runtime collects every `step()` call that fires during a single body evaluation, and `runJourney` broadcasts the resolved list via `onPlanned` (`step:planned` over SSE) before iterating — surfaces (GUI, exporters, custom subscribers) see helper-injected steps from the first frame. Helpers performing HTTP from inside step hooks should `import { fetch } from "@journey/core"` instead of `globalThis.fetch` so their calls land on the active run's logger.
 
 ## Where to find what
 

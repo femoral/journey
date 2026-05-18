@@ -142,6 +142,8 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/writing-journeys/patterns.md` — Patterns
 
 - `packages/core/src/runtime.ts`
+- `packages/core/src/fetch.ts`
+- `packages/cli/src/server/runBroadcaster.ts`
 - `examples/petstore/journeys/pet-crud-flow.journey.ts`
 
 ### `guide/writing-journeys/request-inputs.md` — Request inputs — params, query, headers, body
@@ -182,6 +184,11 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `reference/journey-api/environment.md` — Environment
 
 - `packages/core/src/env.ts`
+
+### `reference/journey-api/fetch.md` — Fetch
+
+- `packages/core/src/fetch.ts`
+- `packages/core/src/runtime.ts`
 
 ### `reference/journey-api/history.md` — History
 
@@ -277,6 +284,10 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 - `guide/cli/index.md`
 - `guide/cli/run.md`
 
+### `packages/cli/src/server/runBroadcaster.ts`
+
+- `guide/writing-journeys/patterns.md`
+
 ### `packages/cli/src/server/runner.ts`
 
 - `guide/cli/serve.md`
@@ -344,6 +355,11 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 - `guide/writing-journeys/expect.md`
 - `reference/journey-api/assertions.md`
 
+### `packages/core/src/fetch.ts`
+
+- `guide/writing-journeys/patterns.md`
+- `reference/journey-api/fetch.md`
+
 ### `packages/core/src/history.ts`
 
 - `guide/cli/run.md`
@@ -377,6 +393,7 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 - `guide/writing-journeys/patterns.md`
 - `guide/writing-journeys/request-inputs.md`
 - `guide/writing-journeys/state.md`
+- `reference/journey-api/fetch.md`
 - `reference/journey-api/runtime.md`
 - `reference/step-options.md`
 
