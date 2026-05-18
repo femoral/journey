@@ -1,15 +1,28 @@
 import {
   For,
+  Index,
+  Match,
   Show,
+  Switch,
+  batch,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
   onCleanup,
+  untrack,
   type Component,
   type JSX,
 } from "solid-js";
 import { api, type JourneyResult, type RunSummary, type StepResult } from "../api/client";
 import { runEvents } from "../api/runEvents";
+import { parseSteps, type ParsedStep } from "../util/parseSteps";
+import {
+  createLocalStorageRunStateStore,
+  fnv1a,
+  type CachedRun,
+  type RunStateStore,
+} from "../state/runStateStore";
 import { useNavigate } from "@solidjs/router";
 import { useConsole } from "../shell/consoleContext";
 import { useEnvSelection } from "../shell/envContext";
@@ -36,24 +49,57 @@ import {
 
 type UiRunState = "idle" | "running" | "done";
 
+interface JourneyRuntimeState {
+  results?: JourneyResult[];
+  runState: UiRunState;
+  error?: string;
+  inFlight: Set<number>;
+  sourceChecksum?: string;
+  stale?: boolean;
+}
+
+function emptyRuntimeState(): JourneyRuntimeState {
+  return { runState: "idle", inFlight: new Set<number>() };
+}
+
 export const JourneysPage: Component = () => {
   const cons = useConsole();
   const envSel = useEnvSelection();
   const navigate = useNavigate();
   const [list, { refetch: refetchList }] = createResource(api.getJourneys);
   const [selected, setSelected] = createSignal<string | undefined>(undefined);
-  const [results, setResults] = createSignal<JourneyResult[] | undefined>(undefined);
-  const [error, setError] = createSignal<string | undefined>(undefined);
-  const [runState, setRunState] = createSignal<UiRunState>("idle");
+  const [journeyStates, setJourneyStates] = createSignal<Record<string, JourneyRuntimeState>>({});
   const [filter, setFilter] = createSignal("");
 
   // /api/runs is loaded solely to annotate the left-side journey list with a
   // relative "last run" timestamp; comparison + full history live on /history.
   const [runs, { refetch: refetchRuns }] = createResource(api.listRuns);
 
-  // Active SSE subscription — aborted on unmount or on a fresh run kickoff.
-  let activeSub: { close: () => void } | undefined;
-  onCleanup(() => activeSub?.close());
+  // Project info — used to namespace the localStorage cache so switching
+  // projects doesn't leak last-run state across them.
+  const [project] = createResource(() => api.getProject());
+  const store: RunStateStore = createLocalStorageRunStateStore();
+  createEffect(() => {
+    const p = project();
+    if (!p?.projectDir) return;
+    store.setProjectId(p.projectDir);
+    // Drop in-memory state + close active subs when project changes; the new
+    // project's cache will hydrate on first journey pick.
+    untrack(() => {
+      setJourneyStates({});
+      subs.forEach((s) => s.close());
+      subs.clear();
+    });
+  });
+
+  // Per-journey SSE subscriptions. Survive navigation away from the page-level
+  // selected journey so multi-journey runs can stream in the background; all
+  // are closed on page unmount.
+  const subs = new Map<string, { close: () => void }>();
+  onCleanup(() => {
+    subs.forEach((s) => s.close());
+    subs.clear();
+  });
 
   const filteredFiles = createMemo(() => {
     const q = filter().toLowerCase();
@@ -61,34 +107,141 @@ export const JourneysPage: Component = () => {
     return q ? files.filter((f) => f.toLowerCase().includes(q)) : files;
   });
 
+  function updateJourneyState(
+    file: string,
+    patch:
+      | Partial<JourneyRuntimeState>
+      | ((prev: JourneyRuntimeState) => Partial<JourneyRuntimeState>),
+  ) {
+    setJourneyStates((prev) => {
+      const cur = prev[file] ?? emptyRuntimeState();
+      const next = typeof patch === "function" ? patch(cur) : patch;
+      return { ...prev, [file]: { ...cur, ...next } };
+    });
+  }
+
+  // Endpoint catalog used to pre-resolve idle steps' method + URL before any
+  // run. Map keyed by the generated endpoint identifier (e.g. "findPetsByStatus").
+  const [endpointsRes] = createResource(() => api.getEndpoints());
+  const endpointMap = createMemo(() => {
+    const list = endpointsRes()?.endpoints ?? [];
+    const m = new Map<string, { method: string; path: string }>();
+    for (const ep of list) m.set(ep.name, { method: ep.method, path: ep.path });
+    return m;
+  });
+  // Prefer the selected environment's BASE_URL when /api/endpoints returns no
+  // configured baseUrl (petstore-style projects set BASE_URL via env vars, not
+  // journey.config.json). Falls back to the endpoint catalog value, then "".
+  const baseUrl = (): string => {
+    const envBase = envSel?.envValues?.()?.["BASE_URL"];
+    if (envBase) return envBase;
+    return endpointsRes()?.baseUrl ?? "";
+  };
+
+  function resolveIdleEndpoint(
+    token: string | undefined,
+  ): { method: string; url: string } | undefined {
+    if (!token) return undefined;
+    // Reference form: `endpoints.findPetsByStatus` / `e.findById` etc.
+    // parseSteps captures up to comma or newline, so the token may include
+    // trailing `});` — just match the leading identifier(s).
+    const refMatch = token.match(/^\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)?([A-Za-z_$][\w$]*)\b/);
+    if (refMatch) {
+      const ep = endpointMap().get(refMatch[1]!);
+      if (ep) return { method: ep.method, url: `${baseUrl()}${ep.path}` };
+    }
+    // Inline form: `{ method: "GET", path: "/foo" }`
+    const methodMatch = token.match(/method\s*:\s*["']([A-Z]+)["']/);
+    const pathMatch = token.match(/path\s*:\s*["']([^"']+)["']/);
+    if (methodMatch && pathMatch) {
+      return { method: methodMatch[1]!, url: `${baseUrl()}${pathMatch[1]!}` };
+    }
+    return undefined;
+  }
+
+  // Parsed step list + checksum for the currently selected journey. Used both
+  // to render the idle step list before any run and to detect drift between a
+  // cached run and the current on-disk source.
+  const [idleSource] = createResource(selected, async (file) => {
+    try {
+      const { source } = await api.getJourneySource(file);
+      const src = source ?? "";
+      return { source: src, parsed: parseSteps(src), checksum: fnv1a(src) };
+    } catch {
+      return { source: "", parsed: [] as ParsedStep[], checksum: "" };
+    }
+  });
+
+  // When the parsed source resolves, flag a stale cache (checksum drift)
+  // without dropping the displayed results — user still sees prior context.
+  createEffect(() => {
+    const file = selected();
+    if (!file) return;
+    const idle = idleSource();
+    if (!idle) return;
+    const state = untrack(() => journeyStates()[file]);
+    if (!state) return;
+    if (state.sourceChecksum && idle.checksum && state.sourceChecksum !== idle.checksum) {
+      if (!state.stale) updateJourneyState(file, { stale: true });
+    }
+  });
+
+  const current = (): JourneyRuntimeState | undefined => {
+    const f = selected();
+    return f ? journeyStates()[f] : undefined;
+  };
+
   const pickJourney = (file: string) => {
     setSelected(file);
-    setResults(undefined);
-    setError(undefined);
-    setRunState("idle");
+    setJourneyStates((prev) => {
+      if (prev[file]) return prev; // preserve in-memory state (e.g. background run)
+      const cached = store.get(file);
+      if (cached) {
+        // Cached "running" means a run was in flight when the app closed; we
+        // can't resume the SSE stream, so present as a completed snapshot
+        // until the user re-runs.
+        const hydrated: JourneyRuntimeState = {
+          results: cached.results,
+          runState: "done",
+          inFlight: new Set<number>(),
+          sourceChecksum: cached.sourceChecksum,
+        };
+        if (cached.error !== undefined) hydrated.error = cached.error;
+        return { ...prev, [file]: hydrated };
+      }
+      return { ...prev, [file]: emptyRuntimeState() };
+    });
   };
 
   const run = async (opts: { upToStepIdx?: number } = {}) => {
     const file = selected();
     if (!file) return;
-    setRunState("running");
-    setError(undefined);
-    setResults(undefined);
-    activeSub?.close();
+    // Invalidate any cached run for this journey and reset its in-memory state.
+    store.delete(file);
+    setJourneyStates((prev) => ({
+      ...prev,
+      [file]: { runState: "running", inFlight: new Set<number>() },
+    }));
+    subs.get(file)?.close();
+    subs.delete(file);
 
-    // Local scratch updated from SSE events; copied to the results signal on
-    // every mutation so the step timeline rerenders as steps complete.
+    // Capture the current source checksum so a successful run persists with
+    // the version it actually ran against — used later to detect drift.
+    const sourceChecksum = idleSource()?.checksum ?? "";
+
     const liveSteps: StepResult[] = [];
     let journeyName = file.replace(/\.journey\.ts$/, "");
     const publish = (ok: boolean, durationMs: number) => {
-      setResults([
-        {
-          name: journeyName,
-          ok,
-          steps: liveSteps.map((s) => ({ ...s })),
-          durationMs,
-        },
-      ]);
+      updateJourneyState(file, {
+        results: [
+          {
+            name: journeyName,
+            ok,
+            steps: liveSteps.map((s) => ({ ...s })),
+            durationMs,
+          },
+        ],
+      });
     };
 
     try {
@@ -97,14 +250,29 @@ export const JourneysPage: Component = () => {
         ...opts,
         ...(env !== undefined ? { env } : {}),
       });
-      activeSub = runEvents.subscribe(runId, (event) => {
+      const sub = runEvents.subscribe(runId, (event) => {
         cons.ingest(event);
         switch (event.kind) {
-          case "step:start":
+          case "step:start": {
             journeyName = event.journeyName;
-            liveSteps.push({ name: event.name, ok: false, durationMs: 0 });
-            publish(false, 0);
+            // Pre-fill request with the resolved endpoint so the MethodBadge
+            // and URL row stay rendered between step:start and the actual
+            // `request` SSE frame (avoids first-step flicker).
+            const initial: StepResult = { name: event.name, ok: false, durationMs: 0 };
+            const parsed = idleSource()?.parsed[event.stepIdx];
+            const resolved = parsed ? resolveIdleEndpoint(parsed.endpoint) : undefined;
+            if (resolved) initial.request = resolved;
+            liveSteps.push(initial);
+            batch(() => {
+              updateJourneyState(file, (prev) => {
+                const next = new Set(prev.inFlight);
+                next.add(event.stepIdx);
+                return { inFlight: next };
+              });
+              publish(false, 0);
+            });
             break;
+          }
           case "request": {
             const s = liveSteps[event.stepIdx];
             if (s) s.request = { method: event.method, url: event.url };
@@ -129,25 +297,54 @@ export const JourneysPage: Component = () => {
               s.durationMs = event.durationMs;
               if (event.error !== undefined) s.error = event.error;
             }
-            publish(false, 0);
+            batch(() => {
+              updateJourneyState(file, (prev) => {
+                const next = new Set(prev.inFlight);
+                next.delete(event.stepIdx);
+                return { inFlight: next };
+              });
+              publish(false, 0);
+            });
             break;
           }
-          case "run:end":
-            publish(event.ok, event.durationMs);
-            setRunState("done");
-            activeSub?.close();
-            activeSub = undefined;
+          case "run:end": {
+            batch(() => {
+              publish(event.ok, event.durationMs);
+              updateJourneyState(file, {
+                runState: "done",
+                inFlight: new Set<number>(),
+                sourceChecksum,
+                stale: false,
+              });
+            });
+            subs.get(file)?.close();
+            subs.delete(file);
+            const finalState = journeyStates()[file];
+            if (finalState?.results) {
+              const cached: CachedRun = {
+                results: finalState.results,
+                runState: "done",
+                sourceChecksum,
+                finishedAt: new Date().toISOString(),
+              };
+              if (finalState.error !== undefined) cached.error = finalState.error;
+              store.set(file, cached);
+            }
             void refetchRuns();
             void refetchList();
             break;
+          }
           case "error":
-            setError(event.message);
+            updateJourneyState(file, { error: event.message });
             break;
         }
       });
+      subs.set(file, sub);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setRunState("idle");
+      updateJourneyState(file, {
+        error: e instanceof Error ? e.message : String(e),
+        runState: "idle",
+      });
     }
   };
 
@@ -222,14 +419,18 @@ export const JourneysPage: Component = () => {
             }
           >
             <For each={filteredFiles()}>
-              {(file) => (
-                <JourneyRow
-                  file={file}
-                  lastRun={(runs() ?? []).find((r) => r.journeyNames.includes(file))}
-                  active={selected() === file}
-                  onClick={() => pickJourney(file)}
-                />
-              )}
+              {(file) => {
+                const live = journeyStates()[file]?.runState;
+                return (
+                  <JourneyRow
+                    file={file}
+                    lastRun={(runs() ?? []).find((r) => r.journeyNames.includes(file))}
+                    {...(live ? { liveRunState: live } : {})}
+                    active={selected() === file}
+                    onClick={() => pickJourney(file)}
+                  />
+                );
+              }}
             </For>
           </Show>
         </div>
@@ -261,46 +462,57 @@ export const JourneysPage: Component = () => {
             </div>
           }
         >
-          {(file) => (
-            <>
-              <JourneyHeader
-                file={file()}
-                steps={results()?.[0]?.steps.length ?? 0}
-                runState={runState()}
-                onRun={() => void run()}
-                onViewHistory={() => navigate("/history")}
-              />
-
-              <Show when={error()}>
-                <div
-                  data-testid="run-error"
-                  style={{
-                    padding: "10px 20px",
-                    "font-size": "12px",
-                    color: "var(--err)",
-                    "border-bottom": "1px solid var(--bd-1)",
-                    background: "var(--err-bg)",
-                  }}
-                >
-                  {error()}
-                </div>
-              </Show>
-
-              <div style={{ flex: 1, overflow: "auto" }}>
-                <StepTimeline
-                  runState={runState()}
-                  results={results()}
-                  onRunOnly={(stepIdx) => void run({ upToStepIdx: stepIdx })}
-                  onSendViaEndpoints={(step) => {
-                    if (!step.request) return;
-                    navigate(
-                      `/endpoints?method=${encodeURIComponent(step.request.method)}&url=${encodeURIComponent(step.request.url)}`,
-                    );
-                  }}
+          {(file) => {
+            const state = (): JourneyRuntimeState => current() ?? emptyRuntimeState();
+            const idle = () => idleSource()?.parsed ?? [];
+            const stepCount = () =>
+              Math.max(state().results?.[0]?.steps.length ?? 0, idle().length);
+            return (
+              <>
+                <JourneyHeader
+                  file={file()}
+                  steps={stepCount()}
+                  runState={state().runState}
+                  {...(state().stale ? { stale: true } : {})}
+                  onRun={() => void run()}
+                  onViewHistory={() => navigate("/history")}
                 />
-              </div>
-            </>
-          )}
+
+                <Show when={state().error}>
+                  <div
+                    data-testid="run-error"
+                    style={{
+                      padding: "10px 20px",
+                      "font-size": "12px",
+                      color: "var(--err)",
+                      "border-bottom": "1px solid var(--bd-1)",
+                      background: "var(--err-bg)",
+                    }}
+                  >
+                    {state().error}
+                  </div>
+                </Show>
+
+                <div style={{ flex: 1, overflow: "auto" }}>
+                  <StepTimeline
+                    runState={state().runState}
+                    results={state().results}
+                    idleSteps={idle()}
+                    inFlight={state().inFlight}
+                    stale={state().stale ?? false}
+                    resolveEndpoint={resolveIdleEndpoint}
+                    onRunOnly={(stepIdx) => void run({ upToStepIdx: stepIdx })}
+                    onSendViaEndpoints={(step) => {
+                      if (!step.request) return;
+                      navigate(
+                        `/endpoints?method=${encodeURIComponent(step.request.method)}&url=${encodeURIComponent(step.request.url)}`,
+                      );
+                    }}
+                  />
+                </div>
+              </>
+            );
+          }}
         </Show>
       </section>
     </div>
@@ -310,11 +522,13 @@ export const JourneysPage: Component = () => {
 function JourneyRow(props: {
   file: string;
   lastRun: RunSummary | undefined;
+  liveRunState?: UiRunState;
   active: boolean;
   onClick: () => void;
 }): JSX.Element {
   const name = () => props.file.replace(/\.journey\.ts$/, "");
   const state = (): RunState => {
+    if (props.liveRunState === "running") return "running";
     if (!props.lastRun) return "idle";
     return props.lastRun.ok ? "pass" : "fail";
   };
@@ -385,6 +599,7 @@ function JourneyHeader(props: {
   file: string;
   steps: number;
   runState: UiRunState;
+  stale?: boolean;
   onRun: () => void;
   onViewHistory: () => void;
 }): JSX.Element {
@@ -426,6 +641,16 @@ function JourneyHeader(props: {
             <Show when={props.steps > 0}>
               {" · "}
               {props.steps} {props.steps === 1 ? "step" : "steps"}
+            </Show>
+            <Show when={props.stale}>
+              {" · "}
+              <span
+                data-testid="stale-badge"
+                title="Journey source changed since this run"
+                style={{ color: "var(--warn, var(--fg-3))" }}
+              >
+                stale — source changed
+              </span>
             </Show>
           </div>
         </div>
@@ -498,16 +723,78 @@ function JourneyHeader(props: {
   );
 }
 
+interface MergedRow {
+  step: StepResult;
+  state: RunState;
+  index: number;
+  inFlight: boolean;
+  defaultExpanded: boolean;
+}
+
 function StepTimeline(props: {
   runState: UiRunState;
   results: JourneyResult[] | undefined;
+  idleSteps: ParsedStep[];
+  inFlight: Set<number>;
+  stale: boolean;
+  resolveEndpoint: (token: string | undefined) => { method: string; url: string } | undefined;
   onRunOnly: (stepIdx: number) => void;
   onSendViaEndpoints: (step: StepResult) => void;
 }): JSX.Element {
-  const allSteps = createMemo<StepResult[]>(() => {
+  const liveSteps = createMemo<StepResult[]>(() => {
     const rs = props.results ?? [];
     return rs.flatMap((r) => r.steps);
   });
+  const rows = createMemo<MergedRow[]>(() => {
+    const live = liveSteps();
+    const idle = props.idleSteps;
+    const len = Math.max(live.length, idle.length);
+    const out: MergedRow[] = [];
+    for (let i = 0; i < len; i++) {
+      const liveStep = live[i];
+      const inFlight = props.inFlight.has(i);
+      if (liveStep) {
+        // Ended = no longer in flight AND has a recorded outcome (pass, or a
+        // non-zero duration / explicit error from step:end). Bare !ok with no
+        // duration means we're still mid-run for this step.
+        let s: RunState;
+        if (inFlight) s = "running";
+        else if (liveStep.ok) s = "pass";
+        else if (liveStep.durationMs > 0 || liveStep.error !== undefined) s = "fail";
+        else s = "running";
+        // Fall back to the pre-resolved idle endpoint when live row exists but
+        // hasn't received its `request` SSE frame yet (avoids verb/URL flicker
+        // between `step:start` and `request`).
+        let step = liveStep;
+        if (!liveStep.request) {
+          const parsed = idle[i];
+          const resolved = parsed ? props.resolveEndpoint(parsed.endpoint) : undefined;
+          if (resolved) step = { ...liveStep, request: resolved };
+        }
+        out.push({
+          step,
+          state: s,
+          index: i,
+          inFlight,
+          defaultExpanded: s === "fail",
+        });
+      } else {
+        const parsed = idle[i]!;
+        const resolved = props.resolveEndpoint(parsed.endpoint);
+        const idleStep: StepResult = { name: parsed.name, ok: false, durationMs: 0 };
+        if (resolved) idleStep.request = resolved;
+        out.push({
+          step: idleStep,
+          state: "idle",
+          index: i,
+          inFlight: false,
+          defaultExpanded: false,
+        });
+      }
+    }
+    return out;
+  });
+  const allSteps = createMemo<StepResult[]>(() => rows().map((r) => r.step));
 
   return (
     <div
@@ -575,17 +862,19 @@ function StepTimeline(props: {
               background: "var(--bd-2)",
             }}
           />
-          <For each={allSteps()}>
-            {(step, i) => (
+          <Index each={rows()}>
+            {(row, i) => (
               <StepCard
-                step={step}
-                index={i()}
-                defaultExpanded={!step.ok}
-                onRunOnly={() => props.onRunOnly(i())}
-                onSendViaEndpoints={() => props.onSendViaEndpoints(step)}
+                step={row().step}
+                index={i}
+                state={row().state}
+                inFlight={row().inFlight}
+                defaultExpanded={row().defaultExpanded}
+                onRunOnly={() => props.onRunOnly(i)}
+                onSendViaEndpoints={() => props.onSendViaEndpoints(row().step)}
               />
             )}
-          </For>
+          </Index>
         </div>
       </Show>
     </div>
@@ -595,12 +884,22 @@ function StepTimeline(props: {
 function StepCard(props: {
   step: StepResult;
   index: number;
+  state: RunState;
+  inFlight: boolean;
   defaultExpanded: boolean;
   onRunOnly: () => void;
   onSendViaEndpoints: () => void;
 }): JSX.Element {
   const [expanded, setExpanded] = createSignal(props.defaultExpanded);
-  const state = (): RunState => (props.step.ok ? "pass" : "fail");
+  // Auto-expand the first time this card enters the "fail" state so the user
+  // sees the error without an extra click. Subsequent toggles are honored.
+  let didAutoExpand = props.defaultExpanded;
+  createEffect(() => {
+    if (props.state === "fail" && !didAutoExpand) {
+      didAutoExpand = true;
+      setExpanded(true);
+    }
+  });
   return (
     <div
       style={{
@@ -612,7 +911,7 @@ function StepCard(props: {
       data-testid={`step-card-${props.index}`}
     >
       <div style={{ "padding-top": "4px", "z-index": 1 }}>
-        <StepIcon state={state()} index={props.index} />
+        <StepIcon state={props.state} index={props.index} />
       </div>
       <div
         style={{
@@ -661,23 +960,21 @@ function StepCard(props: {
             >
               {props.step.name}
             </span>
-            <Show when={props.step.request?.url}>
-              {(url) => (
-                <span
-                  class="mono"
-                  style={{
-                    "font-size": "10px",
-                    color: "var(--fg-3)",
-                    overflow: "hidden",
-                    "text-overflow": "ellipsis",
-                    "white-space": "nowrap",
-                    "max-width": "100%",
-                  }}
-                >
-                  {url()}
-                </span>
-              )}
-            </Show>
+            <span
+              class="mono"
+              style={{
+                "font-size": "10px",
+                color: "var(--fg-3)",
+                overflow: "hidden",
+                "text-overflow": "ellipsis",
+                "white-space": "nowrap",
+                "max-width": "100%",
+                "min-height": "14px",
+                "line-height": "14px",
+              }}
+            >
+              {props.step.request?.url ?? " "}
+            </span>
           </div>
           <Show when={props.step.response}>{(res) => <StatusPill status={res().status} />}</Show>
           <span
@@ -689,7 +986,7 @@ function StepCard(props: {
               "text-align": "right",
             }}
           >
-            {props.step.durationMs}ms
+            {props.state === "idle" ? "—" : `${props.step.durationMs}ms`}
           </span>
           <IconChevron
             size={11}
@@ -703,6 +1000,7 @@ function StepCard(props: {
         <Show when={expanded()}>
           <StepDetail
             step={props.step}
+            inFlight={props.inFlight}
             onRunOnly={props.onRunOnly}
             onSendViaEndpoints={props.onSendViaEndpoints}
           />
@@ -722,57 +1020,56 @@ function StepIcon(props: { state: RunState; index: number }): JSX.Element {
     "align-items": "center",
     "justify-content": "center",
   } as const;
-  if (props.state === "pass") {
-    return (
-      <div
-        style={{
-          ...base,
-          border: "1.5px solid var(--ok)",
-          color: "var(--ok)",
-        }}
-      >
-        <IconCheck size={11} />
-      </div>
-    );
-  }
-  if (props.state === "fail") {
-    return (
-      <div
-        style={{
-          ...base,
-          border: "1.5px solid var(--err)",
-          color: "var(--err)",
-        }}
-      >
-        <IconX size={11} />
-      </div>
-    );
-  }
-  if (props.state === "running") {
-    return (
-      <div
-        style={{
-          ...base,
-          border: "1.5px solid var(--ac)",
-          "box-shadow": "0 0 0 3px var(--ac-bg)",
-        }}
-      >
-        <RunDot state="running" size={6} />
-      </div>
-    );
-  }
   return (
-    <div
-      class="mono"
-      style={{
-        ...base,
-        border: "1.5px solid var(--bd-2)",
-        color: "var(--fg-3)",
-        "font-size": "10px",
-      }}
+    <Switch
+      fallback={
+        <div
+          class="mono"
+          style={{
+            ...base,
+            border: "1.5px solid var(--bd-2)",
+            color: "var(--fg-3)",
+            "font-size": "10px",
+          }}
+        >
+          {props.index + 1}
+        </div>
+      }
     >
-      {props.index + 1}
-    </div>
+      <Match when={props.state === "pass"}>
+        <div
+          style={{
+            ...base,
+            border: "1.5px solid var(--ok)",
+            color: "var(--ok)",
+          }}
+        >
+          <IconCheck size={11} />
+        </div>
+      </Match>
+      <Match when={props.state === "fail"}>
+        <div
+          style={{
+            ...base,
+            border: "1.5px solid var(--err)",
+            color: "var(--err)",
+          }}
+        >
+          <IconX size={11} />
+        </div>
+      </Match>
+      <Match when={props.state === "running"}>
+        <div
+          style={{
+            ...base,
+            border: "1.5px solid var(--ac)",
+            "box-shadow": "0 0 0 3px var(--ac-bg)",
+          }}
+        >
+          <RunDot state="running" size={6} />
+        </div>
+      </Match>
+    </Switch>
   );
 }
 
@@ -780,6 +1077,7 @@ type DetailTab = "request" | "response" | "logs";
 
 function StepDetail(props: {
   step: StepResult;
+  inFlight: boolean;
   onRunOnly: () => void;
   onSendViaEndpoints: () => void;
 }): JSX.Element {
@@ -887,7 +1185,9 @@ function StepDetail(props: {
           <Show
             when={props.step.request}
             fallback={
-              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>No request recorded.</div>
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
+                {props.inFlight ? "Awaiting request…" : "No request recorded."}
+              </div>
             }
           >
             <pre
@@ -907,7 +1207,9 @@ function StepDetail(props: {
           <Show
             when={props.step.response}
             fallback={
-              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>No response recorded.</div>
+              <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
+                {props.inFlight ? "Awaiting response…" : "No response recorded."}
+              </div>
             }
           >
             <pre

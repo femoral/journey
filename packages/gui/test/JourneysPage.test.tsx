@@ -6,7 +6,31 @@ import { ConsoleContext } from "../src/shell/consoleContext";
 import { createConsoleStore } from "../src/shell/consoleStore";
 import { EnvContext, type EnvSelection } from "../src/shell/envContext";
 
-const list = { journeysDir: "/tmp/demo/journeys", files: ["auth.journey.ts"] };
+const list = {
+  journeysDir: "/tmp/demo/journeys",
+  files: ["auth.journey.ts", "checkout.journey.ts"],
+};
+
+const project = {
+  projectDir: "/tmp/demo",
+  config: { spec: "openapi.yaml", tlsRejectUnauthorized: true },
+  counts: { journeys: 2, environments: 0, endpoints: 0 },
+};
+
+const authSource = `journey("auth", (j) => {
+  j.step("login", { endpoint: e.login });
+});`;
+
+const checkoutSource = `journey("checkout", (j) => {
+  j.step("addItem", { endpoint: endpoints.addItem });
+  j.step("pay", { endpoint: endpoints.pay });
+});`;
+
+function sourceFor(file: string): string {
+  if (file === "auth.journey.ts") return authSource;
+  if (file === "checkout.journey.ts") return checkoutSource;
+  return "";
+}
 
 function sseFrames(events: unknown[]): string {
   return events.map((e) => `data: ${JSON.stringify(e)}`).join("\n\n") + "\n\n";
@@ -24,6 +48,35 @@ function streamResponse(text: string): Response {
     status: 200,
     headers: { "content-type": "text/event-stream" },
   });
+}
+
+interface ControllableStream {
+  response: Response;
+  push(chunk: string): void;
+  close(): void;
+}
+
+function controllableStreamResponse(initial: string): ControllableStream {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+      c.enqueue(encoder.encode(initial));
+    },
+  });
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }),
+    push(chunk) {
+      controller.enqueue(encoder.encode(chunk));
+    },
+    close() {
+      controller.close();
+    },
+  };
 }
 
 const runEventsFrames = sseFrames([
@@ -72,16 +125,30 @@ const runEventsFrames = sseFrames([
 
 type Captured = { runBody?: unknown };
 
-function stubFetch(captured?: Captured) {
+interface StubOpts {
+  captured?: Captured;
+  runEvents?: string | Response;
+  runIdByFile?: Record<string, string>;
+}
+
+function stubFetch(opts: StubOpts = {}) {
+  const captured = opts.captured;
+  const eventsBody = opts.runEvents ?? runEventsFrames;
+  const runIdByFile = opts.runIdByFile ?? {};
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
-      if (url.endsWith("/api/runs/r1/events")) {
-        return streamResponse(runEventsFrames);
+      const eventMatch = url.match(/\/api\/runs\/([^/]+)\/events$/);
+      if (eventMatch) {
+        if (typeof eventsBody === "string") return streamResponse(eventsBody);
+        return eventsBody;
       }
       let body: unknown;
-      if (url.endsWith("/run")) {
+      const runMatch = url.match(/\/api\/journeys\/([^/]+)\/run$/);
+      const sourceMatch = url.match(/\/api\/journeys\/([^/]+)$/);
+      if (runMatch) {
+        const file = decodeURIComponent(runMatch[1]!);
         if (captured && typeof init?.body === "string") {
           try {
             captured.runBody = JSON.parse(init.body);
@@ -89,9 +156,21 @@ function stubFetch(captured?: Captured) {
             captured.runBody = init.body;
           }
         }
-        body = { runId: "r1" };
+        body = { runId: runIdByFile[file] ?? "r1" };
+      } else if (sourceMatch && (init?.method ?? "GET") === "GET") {
+        const file = decodeURIComponent(sourceMatch[1]!);
+        body = { file, source: sourceFor(file) };
       } else if (url.endsWith("/api/journeys")) body = list;
       else if (url.endsWith("/api/runs")) body = [];
+      else if (url.endsWith("/api/project")) body = project;
+      else if (url.endsWith("/api/endpoints"))
+        body = {
+          baseUrl: "https://api.test",
+          endpoints: [
+            { name: "addItem", method: "POST", path: "/cart/items", parameters: [] },
+            { name: "pay", method: "POST", path: "/cart/pay", parameters: [] },
+          ],
+        };
       else body = {};
       return new Response(JSON.stringify(body), {
         status: 200,
@@ -119,13 +198,16 @@ function renderWithConsole(opts: { env?: EnvSelection } = {}) {
 }
 
 describe("JourneysPage", () => {
-  beforeEach(() => stubFetch());
+  beforeEach(() => {
+    localStorage.clear();
+    stubFetch();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("forwards the EnvContext selection when starting a run", async () => {
     const captured: Captured = {};
     vi.unstubAllGlobals();
-    stubFetch(captured);
+    stubFetch({ captured });
     const env: EnvSelection = {
       selectedEnv: () => "ci",
       setSelectedEnv: () => {},
@@ -157,11 +239,145 @@ describe("JourneysPage", () => {
       expect(screen.getByText("login")).toBeTruthy();
       expect(screen.getByText("200")).toBeTruthy();
     });
+    // Step icon must transition from idle to pass — the idle badge renders the
+    // index "1" as text; after pass, IconCheck renders an SVG instead.
+    const stepCard = screen.getByTestId("step-card-0");
+    expect(stepCard.querySelector("svg")).toBeTruthy();
+    expect(stepCard.textContent?.includes("login")).toBe(true);
     // The shared console store received every frame from the SSE stream.
     await waitFor(() => {
       expect(store.entries().length).toBe(1);
       expect(store.entries()[0]?.state).toBe("pass");
       expect(store.entries()[0]?.status).toBe(200);
+    });
+  });
+
+  it("renders parsed steps in an idle state before any run", async () => {
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("checkout.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("checkout.journey.ts"));
+    await waitFor(() => {
+      expect(screen.getByText("addItem")).toBeTruthy();
+      expect(screen.getByText("pay")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("empty-run")).toBeNull();
+    // Idle rows show "—" duration rather than 0ms.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    // Pre-resolved method + URL arrive after /api/endpoints resolves.
+    await waitFor(() => {
+      expect(screen.getAllByText("POST").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("https://api.test/cart/items")).toBeTruthy();
+      expect(screen.getByText("https://api.test/cart/pay")).toBeTruthy();
+    });
+  });
+
+  it("shows the awaiting-response copy while a step is in flight", async () => {
+    vi.unstubAllGlobals();
+    const partialFrames = sseFrames([
+      { kind: "run:start", runId: "r1", journeyNames: ["auth"] },
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "auth",
+        stepIdx: 0,
+        name: "login",
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 0,
+        method: "POST",
+        url: "https://x/login",
+        headers: {},
+      },
+    ]);
+    // Use a controllable stream so the run never reaches step:end while we
+    // assert. close() at the end of the test is implicit via afterEach.
+    const stream = controllableStreamResponse(partialFrames);
+    stubFetch({ runEvents: stream.response });
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    const runBtn = await waitFor(() => screen.getByTestId("run-button"));
+    fireEvent.click(runBtn);
+    // login should appear from the live step:start frame
+    await waitFor(() => {
+      expect(screen.getByText("login")).toBeTruthy();
+    });
+    // Expand the step card to inspect the detail panel — defaultExpanded is
+    // false for in-flight steps (only failures auto-expand).
+    const stepCard = screen.getByTestId("step-card-0");
+    const toggle = stepCard.querySelector("button[aria-expanded]") as HTMLButtonElement;
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(screen.getByText("Awaiting response…")).toBeTruthy();
+    });
+    stream.close();
+  });
+
+  it("preserves last-run results when switching journeys and back", async () => {
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("run-button")));
+    await waitFor(() => {
+      expect(screen.getByText("200")).toBeTruthy();
+    });
+    // Switch to checkout — its idle steps should show.
+    fireEvent.click(screen.getByText("checkout.journey.ts"));
+    await waitFor(() => {
+      expect(screen.getByText("addItem")).toBeTruthy();
+    });
+    expect(screen.queryByText("200")).toBeNull();
+    // Switch back to auth — completed-run results should still be visible
+    // without re-running.
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    await waitFor(() => {
+      expect(screen.getByText("200")).toBeTruthy();
+      expect(screen.getByText("login")).toBeTruthy();
+    });
+  });
+
+  it("flags cached results as stale when source checksum drifts", async () => {
+    // Seed localStorage as if a prior run happened against different source.
+    const key = "journey:runState:v1:/tmp/demo:auth.journey.ts";
+    const cached = {
+      results: [
+        {
+          name: "auth",
+          ok: true,
+          durationMs: 10,
+          steps: [
+            {
+              name: "login",
+              ok: true,
+              durationMs: 10,
+              request: { method: "POST", url: "https://x/login" },
+              response: { status: 200, headers: {}, body: {} },
+            },
+          ],
+        },
+      ],
+      runState: "done",
+      sourceChecksum: "deadbeef",
+      finishedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify(cached));
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    await waitFor(() => {
+      expect(screen.getByTestId("stale-badge")).toBeTruthy();
+      expect(screen.getByText("login")).toBeTruthy();
     });
   });
 });

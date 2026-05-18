@@ -18,6 +18,7 @@ import {
   SortableProvider,
 } from "@thisbeyond/solid-dnd";
 import { api } from "../api/client";
+import { parseSteps, type ParsedStep } from "../util/parseSteps";
 import {
   IconDot,
   IconEditor,
@@ -41,44 +42,6 @@ journey(${JSON.stringify(name)}, () => {
   });
 });
 `;
-
-interface ParsedStep {
-  name: string;
-  endpoint?: string;
-  start: number;
-  end: number;
-}
-
-/**
- * Regex-based step extraction with character offsets into the source string.
- * Uses a balanced-brace counter to find each step's closing brace, which is
- * more robust than the original `\n\s*\}\s*\)` approach for nested code.
- */
-function parseSteps(source: string): ParsedStep[] {
-  const steps: ParsedStep[] = [];
-  const re = /step\(\s*"([^"]+)"\s*,\s*\{/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source))) {
-    const stepStart = m.index;
-    const name = m[1]!;
-    let braces = 1;
-    let i = stepStart + m[0].length;
-    while (i < source.length && braces > 0) {
-      if (source[i] === "{") braces++;
-      else if (source[i] === "}") braces--;
-      i++;
-    }
-    if (source[i] === ")") i++;
-    if (source[i] === ";") i++;
-    const stepEnd = i;
-    const inner = source.slice(stepStart, stepEnd);
-    const epMatch = inner.match(/endpoint:\s*([^,\n]+)/);
-    const entry: ParsedStep = { name, start: stepStart, end: stepEnd };
-    if (epMatch) entry.endpoint = epMatch[1]!.trim();
-    steps.push(entry);
-  }
-  return steps;
-}
 
 function reorderSource(source: string, steps: ParsedStep[], from: number, to: number): string {
   if (from === to) return source;
@@ -173,13 +136,7 @@ const StepItem: Component<{
 
 function DragHandle(): JSX.Element {
   return (
-    <svg
-      width="8"
-      height="14"
-      viewBox="0 0 8 14"
-      style={{ "flex-shrink": 0 }}
-      aria-hidden="true"
-    >
+    <svg width="8" height="14" viewBox="0 0 8 14" style={{ "flex-shrink": 0 }} aria-hidden="true">
       {[0, 4, 8, 12].map((y) => (
         <g>
           <circle cx="2" cy={y + 1} r="0.8" fill="var(--fg-3)" />
@@ -265,10 +222,7 @@ export const JourneyEditorPage: Component = () => {
   };
 
   return (
-    <div
-      style={{ display: "flex", height: "100%", "min-height": 0 }}
-      data-testid="editor-page"
-    >
+    <div style={{ display: "flex", height: "100%", "min-height": 0 }} data-testid="editor-page">
       <aside
         style={{
           width: "240px",
@@ -348,20 +302,16 @@ export const JourneyEditorPage: Component = () => {
                         "border-radius": "4px",
                         "font-size": "12px",
                         background: active() ? "var(--bg-3)" : "transparent",
-                        "border-left": active()
-                          ? "2px solid var(--ac)"
-                          : "2px solid transparent",
+                        "border-left": active() ? "2px solid var(--ac)" : "2px solid transparent",
                         color: "var(--fg-1)",
                       }}
                       onMouseEnter={(e) => {
                         if (!active())
-                          (e.currentTarget as HTMLElement).style.background =
-                            "var(--bg-1)";
+                          (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
                       }}
                       onMouseLeave={(e) => {
                         if (!active())
-                          (e.currentTarget as HTMLElement).style.background =
-                            "transparent";
+                          (e.currentTarget as HTMLElement).style.background = "transparent";
                       }}
                     >
                       {file}
@@ -417,7 +367,10 @@ export const JourneyEditorPage: Component = () => {
               onDragEnd={onDragEnd}
               onAddStep={() => setAddStepOpen(true)}
             />
-            <Show when={mode() === "Visual"} fallback={<SourceView source={source()} onInput={setSource} />}>
+            <Show
+              when={mode() === "Visual"}
+              fallback={<SourceView source={source()} onInput={setSource} />}
+            >
               <Inspector
                 step={parsedSteps()[activeStep()]}
                 onRename={(newName) => {
@@ -606,9 +559,7 @@ function StepListPane(props: {
           <IconPlus size={11} /> Add step
         </button>
       </div>
-      <div
-        style={{ flex: 1, overflow: "auto", padding: "6px 10px 10px" }}
-      >
+      <div style={{ flex: 1, overflow: "auto", padding: "6px 10px 10px" }}>
         <Show
           when={props.steps.length > 0}
           fallback={
@@ -719,14 +670,8 @@ function Inspector(props: {
                 gap: "4px",
               }}
             >
-              <span
-                style={{ "font-size": "12px", color: "var(--fg-2)" }}
-              >
-                Selected step
-              </span>
-              <span
-                style={{ "font-size": "16px", "font-weight": 600, color: "var(--fg-0)" }}
-              >
+              <span style={{ "font-size": "12px", color: "var(--fg-2)" }}>Selected step</span>
+              <span style={{ "font-size": "16px", "font-weight": 600, color: "var(--fg-0)" }}>
                 {s().name}
               </span>
               <Show when={s().endpoint}>
@@ -745,14 +690,8 @@ function Inspector(props: {
               }}
               role="tablist"
             >
-              {(
-                ["Config", "Assertions", "Extract", "Hooks"] as InspectorTab[]
-              ).map((id) => (
-                <MiniTab
-                  active={tab() === id}
-                  onClick={() => setTab(id)}
-                  label={id}
-                />
+              {(["Config", "Assertions", "Extract", "Hooks"] as InspectorTab[]).map((id) => (
+                <MiniTab active={tab() === id} onClick={() => setTab(id)} label={id} />
               ))}
             </div>
             <div
@@ -807,10 +746,7 @@ function Inspector(props: {
                       <button
                         type="button"
                         data-testid="inspector-rename"
-                        disabled={
-                          !draftName().trim() ||
-                          draftName() === s().name
-                        }
+                        disabled={!draftName().trim() || draftName() === s().name}
                         onClick={() => props.onRename(draftName().trim())}
                         style={{
                           padding: "5px 12px",
@@ -819,11 +755,7 @@ function Inspector(props: {
                           "border-radius": "4px",
                           "font-size": "11px",
                           "font-weight": 600,
-                          opacity:
-                            !draftName().trim() ||
-                            draftName() === s().name
-                              ? 0.5
-                              : 1,
+                          opacity: !draftName().trim() || draftName() === s().name ? 0.5 : 1,
                         }}
                       >
                         Rename
@@ -831,9 +763,8 @@ function Inspector(props: {
                     </div>
                   </div>
                   <p style={{ margin: 0, "font-size": "11px" }}>
-                    Inline editing of <span class="mono">endpoint</span>,
-                    headers, and body are still Source-mode-only — this pane
-                    will grow once the scripted form lands.
+                    Inline editing of <span class="mono">endpoint</span>, headers, and body are
+                    still Source-mode-only — this pane will grow once the scripted form lands.
                   </p>
                 </div>
               </Show>
@@ -848,9 +779,7 @@ function Inspector(props: {
                 </p>
               </Show>
               <Show when={tab() === "Hooks"}>
-                <p style={{ margin: 0 }}>
-                  Pre/post script editors ship in M6e.
-                </p>
+                <p style={{ margin: 0 }}>Pre/post script editors ship in M6e.</p>
               </Show>
               <div
                 style={{
@@ -896,10 +825,7 @@ function Inspector(props: {
   );
 }
 
-function SourceView(props: {
-  source: string;
-  onInput: (s: string) => void;
-}): JSX.Element {
+function SourceView(props: { source: string; onInput: (s: string) => void }): JSX.Element {
   let preEl: HTMLPreElement | undefined;
   const syncScroll = (ta: HTMLTextAreaElement) => {
     if (!preEl) return;
