@@ -79,11 +79,30 @@ export interface JourneyResult {
 interface SharedState {
   registry: JourneyDef[];
   collecting: StepDef[] | undefined;
+  /**
+   * The HttpContext driving the currently-executing journey. `runJourney`
+   * sets this before iterating steps and clears it afterwards so user-facing
+   * helpers (e.g. the instrumented `fetch` export) can route their I/O
+   * through the active run's logger without needing the ctx threaded as an
+   * argument.
+   */
+  currentCtx: HttpContext | undefined;
 }
 const STATE_KEY = Symbol.for("@journey/core::runtime-state");
 const globals = globalThis as unknown as { [STATE_KEY]?: SharedState };
 const state: SharedState =
-  globals[STATE_KEY] ?? (globals[STATE_KEY] = { registry: [], collecting: undefined });
+  globals[STATE_KEY] ??
+  (globals[STATE_KEY] = { registry: [], collecting: undefined, currentCtx: undefined });
+
+/**
+ * Returns the HttpContext bound to the currently-executing journey, or
+ * undefined when called outside a run. Consumed by the instrumented `fetch`
+ * helper so that ad-hoc HTTP calls made from inside step hooks land on the
+ * same logger as the steps themselves.
+ */
+export function getCurrentCtx(): HttpContext | undefined {
+  return state.currentCtx;
+}
 
 export function journey(name: string, body: () => void | Promise<void>): void;
 export function journey(
@@ -181,61 +200,70 @@ export async function runJourney(
   const journeyStart = Date.now();
   let ok = true;
 
-  for (let i = 0; i < steps.length; i++) {
-    const s = steps[i]!;
-    const stepIdx = stepIdxOffset + i;
-    if (opts.upToStepIdx !== undefined && stepIdx > opts.upToStepIdx) break;
-    const start = Date.now();
-    ctx.logger?.onStepStart?.({
-      runId,
-      journeyIdx,
-      journeyName: def.name,
-      stepIdx,
-      name: s.name,
-    });
-    try {
-      const headers = await resolveLazy(s.options.headers);
-      const query = await resolveLazy(s.options.query);
-      const body = await resolveLazy(s.options.body);
-      const params = await resolveLazy(s.options.params);
-      const req = buildRequest(
-        {
-          endpoint: s.options.endpoint,
-          ...(params !== undefined ? { params } : {}),
-          ...(query !== undefined ? { query } : {}),
-          ...(headers !== undefined ? { headers } : {}),
-          ...(body !== undefined ? { body } : {}),
-          ...(s.options.timeoutMs !== undefined ? { timeoutMs: s.options.timeoutMs } : {}),
-        },
-        ctx,
-      );
-      const response = await execute(req, ctx);
-      if (s.options.assert) await s.options.assert(response as HttpResponse<never>);
-      if (s.options.after) await s.options.after(response as HttpResponse<never>);
-      const durationMs = Date.now() - start;
-      results.push({
-        name: s.name,
-        ok: true,
-        request: { method: req.method, url: req.url },
-        response,
-        durationMs,
-      });
-      ctx.logger?.onStepEnd?.({ runId, journeyIdx, stepIdx, ok: true, durationMs });
-    } catch (err) {
-      ok = false;
-      const durationMs = Date.now() - start;
-      const error = describeError(err);
-      results.push({ name: s.name, ok: false, error, durationMs });
-      ctx.logger?.onStepEnd?.({
+  // Expose the active ctx so helpers can call into the run's logger (e.g.
+  // `import { fetch } from "@journey/core"` inside an `after` hook). Restored
+  // in finally so nested or sequential journeys don't see a stale ctx.
+  const prevCtx = state.currentCtx;
+  state.currentCtx = ctx;
+  try {
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i]!;
+      const stepIdx = stepIdxOffset + i;
+      if (opts.upToStepIdx !== undefined && stepIdx > opts.upToStepIdx) break;
+      const start = Date.now();
+      ctx.logger?.onStepStart?.({
         runId,
         journeyIdx,
+        journeyName: def.name,
         stepIdx,
-        ok: false,
-        durationMs,
-        error,
+        name: s.name,
       });
-      break;
+      try {
+        const headers = await resolveLazy(s.options.headers);
+        const query = await resolveLazy(s.options.query);
+        const body = await resolveLazy(s.options.body);
+        const params = await resolveLazy(s.options.params);
+        const req = buildRequest(
+          {
+            endpoint: s.options.endpoint,
+            ...(params !== undefined ? { params } : {}),
+            ...(query !== undefined ? { query } : {}),
+            ...(headers !== undefined ? { headers } : {}),
+            ...(body !== undefined ? { body } : {}),
+            ...(s.options.timeoutMs !== undefined ? { timeoutMs: s.options.timeoutMs } : {}),
+          },
+          ctx,
+        );
+        const response = await execute(req, ctx);
+        if (s.options.assert) await s.options.assert(response as HttpResponse<never>);
+        if (s.options.after) await s.options.after(response as HttpResponse<never>);
+        const durationMs = Date.now() - start;
+        results.push({
+          name: s.name,
+          ok: true,
+          request: { method: req.method, url: req.url },
+          response,
+          durationMs,
+        });
+        ctx.logger?.onStepEnd?.({ runId, journeyIdx, stepIdx, ok: true, durationMs });
+      } catch (err) {
+        ok = false;
+        const durationMs = Date.now() - start;
+        const error = describeError(err);
+        results.push({ name: s.name, ok: false, error, durationMs });
+        ctx.logger?.onStepEnd?.({
+          runId,
+          journeyIdx,
+          stepIdx,
+          ok: false,
+          durationMs,
+          error,
+        });
+        break;
+      }
     }
+  } finally {
+    state.currentCtx = prevCtx;
   }
 
   return { name: def.name, ok, steps: results, durationMs: Date.now() - journeyStart };

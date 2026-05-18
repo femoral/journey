@@ -65,9 +65,12 @@ export {
   type RequestSpec,
 } from "./http.js";
 
+export { fetch } from "./fetch.js";
+
 export {
   clearRegistry,
   collectSteps,
+  getCurrentCtx,
   getRegisteredJourneys,
   journey,
   runAllRegistered,
