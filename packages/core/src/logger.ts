@@ -56,7 +56,7 @@ export interface RunPlannedEvent {
   journeyIdx: number;
   journeyName: string;
   stepIdxOffset: number;
-  steps: ReadonlyArray<{ name: string }>;
+  steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
 }
 
 /**

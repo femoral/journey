@@ -19,7 +19,7 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{ name: string }>;
+      steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
     }
   | {
       kind: "step:start";
@@ -33,6 +33,7 @@ export type RunEvent =
       kind: "request";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       method: string;
       url: string;
       headers: Record<string, string>;
@@ -42,6 +43,7 @@ export type RunEvent =
       kind: "response";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       status: number;
       headers: Record<string, string>;
       body: unknown;
@@ -51,6 +53,7 @@ export type RunEvent =
       kind: "error";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       message: string;
       durationMs: number;
     }
@@ -127,6 +130,7 @@ export class SseRunEventSource implements RunEventSource {
             kind: "error",
             runId,
             stepIdx: -1,
+            requestIdx: -1,
             message: `SSE subscribe failed: ${res.status}`,
             durationMs: 0,
           });
@@ -159,6 +163,7 @@ export class SseRunEventSource implements RunEventSource {
           kind: "error",
           runId,
           stepIdx: -1,
+          requestIdx: -1,
           message: err instanceof Error ? err.message : String(err),
           durationMs: 0,
         });

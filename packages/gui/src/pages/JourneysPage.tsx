@@ -266,13 +266,20 @@ export const JourneysPage: Component = () => {
             // journeys that might run in the same SSE stream.
             if (event.journeyIdx !== 0) break;
             const parsed = idleSource()?.parsed ?? [];
-            // Preserve parsed endpoint hints for steps whose names match the
-            // source; helper-injected steps simply lack an endpoint until the
-            // matching `request` SSE frame arrives.
+            // Prefer the runtime-supplied method+path (covers helper-injected
+            // steps); fall back to the source parse for cases where the
+            // runtime descriptor is less informative (unlikely).
             const merged: ParsedStep[] = event.steps.map((s) => {
-              const match = parsed.find((p) => p.name === s.name);
               const entry: ParsedStep = { name: s.name, start: 0, end: 0 };
-              if (match?.endpoint !== undefined) entry.endpoint = match.endpoint;
+              if (s.method && s.path) {
+                // Synthesize an inline-descriptor token so resolveIdleEndpoint
+                // can produce the MethodBadge + URL subtext using its existing
+                // parser.
+                entry.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
+              } else {
+                const match = parsed.find((p) => p.name === s.name);
+                if (match?.endpoint !== undefined) entry.endpoint = match.endpoint;
+              }
               return entry;
             });
             updateJourneyState(file, { plannedSteps: merged });

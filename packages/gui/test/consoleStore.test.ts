@@ -12,7 +12,7 @@ function runEvents(events: RunEvent[]): ReturnType<typeof createConsoleStore> {
 }
 
 describe("consoleStore.ingest", () => {
-  it("builds one entry per step with request + response", () => {
+  it("builds one entry per request with method/url/status from the surrounding step", () => {
     const store = runEvents([
       { kind: "run:start", runId: "r1", journeyNames: ["j"] },
       {
@@ -27,6 +27,7 @@ describe("consoleStore.ingest", () => {
         kind: "request",
         runId: "r1",
         stepIdx: 0,
+        requestIdx: 0,
         method: "POST",
         url: "https://x/login",
         headers: { Authorization: "Bearer secret" },
@@ -36,6 +37,7 @@ describe("consoleStore.ingest", () => {
         kind: "response",
         runId: "r1",
         stepIdx: 0,
+        requestIdx: 0,
         status: 200,
         headers: { "content-type": "application/json" },
         body: { token: "t" },
@@ -73,7 +75,87 @@ describe("consoleStore.ingest", () => {
     expect(entry?.size).toBeGreaterThan(0);
   });
 
-  it("flips state to fail and records error on a failed step", () => {
+  it("appends a separate entry per request when a step makes multiple HTTP calls", () => {
+    // Mirrors the auth-helper flow: the step's primary request, then two
+    // helper-issued fetches inside the after hook (different requestIdx values).
+    const store = runEvents([
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "j",
+        stepIdx: 0,
+        name: "auth",
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 0,
+        method: "GET",
+        url: "https://api/health",
+        headers: {},
+      },
+      {
+        kind: "response",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 0,
+        status: 200,
+        headers: {},
+        body: { ok: true },
+        durationMs: 5,
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 1,
+        method: "POST",
+        url: "https://idp/token",
+        headers: {},
+      },
+      {
+        kind: "response",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 1,
+        status: 200,
+        headers: {},
+        body: { jwt: "x" },
+        durationMs: 7,
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 2,
+        method: "POST",
+        url: "https://idp/customer-key",
+        headers: {},
+      },
+      {
+        kind: "response",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 2,
+        status: 200,
+        headers: {},
+        body: { key: "y" },
+        durationMs: 9,
+      },
+    ]);
+    expect(store.entries()).toHaveLength(3);
+    expect(store.entries().map((e) => e.url)).toEqual([
+      "https://api/health",
+      "https://idp/token",
+      "https://idp/customer-key",
+    ]);
+    // All three rows are labeled with the surrounding step.
+    expect(store.entries().every((e) => e.stepName === "auth")).toBe(true);
+  });
+
+  it("creates a fail entry on error frame and records the message in logs", () => {
     const store = runEvents([
       {
         kind: "step:start",
@@ -87,7 +169,8 @@ describe("consoleStore.ingest", () => {
         kind: "error",
         runId: "r1",
         stepIdx: 0,
-        message: "assertion failed",
+        requestIdx: 0,
+        message: "ECONNREFUSED",
         durationMs: 5,
       },
       {
@@ -97,17 +180,17 @@ describe("consoleStore.ingest", () => {
         stepIdx: 0,
         ok: false,
         durationMs: 5,
-        error: "assertion failed",
+        error: "ECONNREFUSED",
       },
     ]);
     const [entry] = store.entries();
     expect(entry?.state).toBe("fail");
-    expect(entry?.error).toBe("assertion failed");
+    expect(entry?.error).toBe("ECONNREFUSED");
     expect(store.logs()).toHaveLength(1);
     expect(store.logs()[0]?.level).toBe("error");
   });
 
-  it("keeps monotonic stepIdx entries in insertion order", () => {
+  it("appends entries in request firing order across multiple steps", () => {
     const store = runEvents([
       {
         kind: "step:start",
@@ -118,12 +201,30 @@ describe("consoleStore.ingest", () => {
         name: "a",
       },
       {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 0,
+        requestIdx: 0,
+        method: "GET",
+        url: "https://x/a",
+        headers: {},
+      },
+      {
         kind: "step:start",
         runId: "r1",
         journeyIdx: 0,
         journeyName: "j",
         stepIdx: 1,
         name: "b",
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 1,
+        requestIdx: 1,
+        method: "GET",
+        url: "https://x/b",
+        headers: {},
       },
     ]);
     expect(store.entries().map((e) => e.stepName)).toEqual(["a", "b"]);

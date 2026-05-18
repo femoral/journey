@@ -193,7 +193,11 @@ export async function runJourney(
     journeyIdx,
     journeyName: def.name,
     stepIdxOffset,
-    steps: steps.map((s) => ({ name: s.name })),
+    steps: steps.map((s) => ({
+      name: s.name,
+      method: s.options.endpoint.method,
+      path: s.options.endpoint.path,
+    })),
   });
 
   const results: StepResult[] = [];

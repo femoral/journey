@@ -26,7 +26,7 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{ name: string }>;
+      steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
     }
   | {
       kind: "step:start";
@@ -40,6 +40,7 @@ export type RunEvent =
       kind: "request";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       method: string;
       url: string;
       headers: Record<string, string>;
@@ -49,6 +50,7 @@ export type RunEvent =
       kind: "response";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       status: number;
       headers: Record<string, string>;
       body: unknown;
@@ -58,6 +60,7 @@ export type RunEvent =
       kind: "error";
       runId: string;
       stepIdx: number;
+      requestIdx: number;
       message: string;
       durationMs: number;
     }
@@ -103,6 +106,11 @@ export class RunBroadcaster {
   private readonly events: RunEvent[] = [];
   private readonly subscribers = new Set<Subscriber>();
   private currentStepIdx = -1;
+  private nextRequestSeq = 0;
+  // Tags each in-flight RequestLog with its monotonic sequence so onResponse /
+  // onError emit the matching `requestIdx`. Per-step uniqueness isn't enough —
+  // helpers (auth bootstrap, fan-out) make multiple requests inside one step.
+  private readonly requestSeqs = new WeakMap<RequestLog, number>();
   private completed = false;
   private completedAt: number | undefined;
 
@@ -147,32 +155,37 @@ export class RunBroadcaster {
         });
       },
       onRequest: (req: RequestLog) => {
+        const requestIdx = this.nextRequestSeq++;
+        this.requestSeqs.set(req, requestIdx);
         this.emit({
           kind: "request",
           runId: this.runId,
           stepIdx: this.currentStepIdx,
+          requestIdx,
           method: req.method,
           url: req.url,
           headers: req.headers,
           ...(req.body !== undefined ? { body: req.body } : {}),
         });
       },
-      onResponse: (_req: RequestLog, res: ResponseLog) => {
+      onResponse: (req: RequestLog, res: ResponseLog) => {
         this.emit({
           kind: "response",
           runId: this.runId,
           stepIdx: this.currentStepIdx,
+          requestIdx: this.requestSeqs.get(req) ?? -1,
           status: res.status,
           headers: res.headers,
           body: res.body,
           durationMs: res.durationMs,
         });
       },
-      onError: (_req: RequestLog, err: unknown, durationMs: number) => {
+      onError: (req: RequestLog, err: unknown, durationMs: number) => {
         this.emit({
           kind: "error",
           runId: this.runId,
           stepIdx: this.currentStepIdx,
+          requestIdx: this.requestSeqs.get(req) ?? -1,
           message: err instanceof Error ? err.message : String(err),
           durationMs,
         });
@@ -228,6 +241,7 @@ export class RunBroadcaster {
       kind: "error",
       runId: this.runId,
       stepIdx: -1,
+      requestIdx: -1,
       message,
       durationMs: 0,
     });
