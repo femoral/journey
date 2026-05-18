@@ -66,11 +66,7 @@ export function createConsoleStore(): ConsoleStore {
   // Map from `${runId}:${stepIdx}` -> array index for O(1) updates.
   const index = new Map<string, number>();
 
-  const upsert = (
-    id: string,
-    patch: Partial<ConsoleEntry>,
-    init: () => ConsoleEntry,
-  ) => {
+  const upsert = (id: string, patch: Partial<ConsoleEntry>, init: () => ConsoleEntry) => {
     const i = index.get(id);
     if (i === undefined) {
       const entry = { ...init(), ...patch };
@@ -163,19 +159,15 @@ export function createConsoleStore(): ConsoleStore {
       }
       case "error": {
         const id = `${event.runId}:${event.stepIdx}`;
-        upsert(
+        upsert(id, { error: event.message, state: "fail" }, () => ({
           id,
-          { error: event.message, state: "fail" },
-          () => ({
-            id,
-            runId: event.runId,
-            stepIdx: event.stepIdx,
-            stepName: `step ${event.stepIdx + 1}`,
-            error: event.message,
-            state: "fail",
-            timestamp: Date.now(),
-          }),
-        );
+          runId: event.runId,
+          stepIdx: event.stepIdx,
+          stepName: `step ${event.stepIdx + 1}`,
+          error: event.message,
+          state: "fail",
+          timestamp: Date.now(),
+        }));
         setLogs([
           ...logs(),
           {
@@ -273,9 +265,7 @@ export function toCurl(entry: ConsoleEntry): string {
   }
   if (entry.requestBody !== undefined && entry.requestBody !== null) {
     const body =
-      typeof entry.requestBody === "string"
-        ? entry.requestBody
-        : JSON.stringify(entry.requestBody);
+      typeof entry.requestBody === "string" ? entry.requestBody : JSON.stringify(entry.requestBody);
     parts.push(`--data '${body.replace(/'/g, "'\\''")}'`);
   }
   parts.push(`'${entry.url}'`);

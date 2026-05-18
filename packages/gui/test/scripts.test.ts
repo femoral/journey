@@ -4,20 +4,19 @@ import { runPostScript, runPreScript } from "../src/pages/scripts";
 describe("runPreScript", () => {
   it("mutates ctx.headers and logs", async () => {
     const ctx = { headers: {} as Record<string, string>, query: {}, body: undefined, env: {} };
-    const r = await runPreScript(
-      `headers['X-Trace'] = 'abc'; log('setting trace');`,
-      ctx,
-    );
+    const r = await runPreScript(`headers['X-Trace'] = 'abc'; log('setting trace');`, ctx);
     expect(r.ok).toBe(true);
     expect(ctx.headers["X-Trace"]).toBe("abc");
     expect(r.logs).toEqual([{ level: "info", text: "setting trace" }]);
   });
 
   it("captures thrown errors", async () => {
-    const r = await runPreScript(
-      `throw new Error('nope');`,
-      { headers: {}, query: {}, body: undefined, env: {} },
-    );
+    const r = await runPreScript(`throw new Error('nope');`, {
+      headers: {},
+      query: {},
+      body: undefined,
+      env: {},
+    });
     expect(r.ok).toBe(false);
     expect(r.error).toContain("nope");
   });

@@ -25,12 +25,12 @@ Every HTTP request made during a run. Entries show method, URL, status, response
 
 **Keyboard navigation:**
 
-| Key         | Action |
-|-------------|--------|
-| `j` / down  | Select next entry |
-| `k` / up    | Select previous entry |
-| `Enter`     | Expand / collapse details |
-| `c`         | Copy entry as cURL |
+| Key        | Action                    |
+| ---------- | ------------------------- |
+| `j` / down | Select next entry         |
+| `k` / up   | Select previous entry     |
+| `Enter`    | Expand / collapse details |
+| `c`        | Copy entry as cURL        |
 
 **Per-entry detail** (when expanded):
 

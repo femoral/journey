@@ -39,9 +39,9 @@ No environments found in /abs/path/environments
 
 ## Exit codes
 
-| Code | When |
-|------|------|
-| `0`  | Success (even when no environments exist). |
+| Code | When                                              |
+| ---- | ------------------------------------------------- |
+| `0`  | Success (even when no environments exist).        |
 | `1`  | Config not loadable, unexpected filesystem error. |
 
 ## Notes

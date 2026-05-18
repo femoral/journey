@@ -87,9 +87,7 @@ describe("HistoryPage", () => {
 
   it("renders run stats, the list, and loads the selected run's detail", async () => {
     render(() => <HistoryPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId("history-count").textContent).toBe("3 runs"),
-    );
+    await waitFor(() => expect(screen.getByTestId("history-count").textContent).toBe("3 runs"));
     expect(screen.getByText("67%")).toBeTruthy(); // 2 pass / 3
     expect(screen.getByText("780ms")).toBeTruthy(); // avg of 820, 1100, 420
     expect(screen.getByTestId("history-row-run-a")).toBeTruthy();

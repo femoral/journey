@@ -9,9 +9,7 @@ export type IconProps = {
   title?: string;
 } & Omit<JSX.SvgSVGAttributes<SVGSVGElement>, "style">;
 
-function Base(
-  props: IconProps & { children: JSX.Element },
-): JSX.Element {
+function Base(props: IconProps & { children: JSX.Element }): JSX.Element {
   const merged = mergeProps({ size: 16, stroke: 1.5 }, props);
   const [local, rest] = splitProps(merged, ["size", "stroke", "children", "title"]);
   return (

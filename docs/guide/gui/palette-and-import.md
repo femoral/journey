@@ -20,12 +20,12 @@ Open with ⌘K (Ctrl+K on Windows/Linux), or the search icon in the top bar. A k
 
 Navigation is keyboard-first:
 
-| Key         | Action |
-|-------------|--------|
-| Type        | Filter |
-| ↑ / ↓       | Move selection |
-| `Enter`     | Open |
-| `Esc`       | Close |
+| Key     | Action         |
+| ------- | -------------- |
+| Type    | Filter         |
+| ↑ / ↓   | Move selection |
+| `Enter` | Open           |
+| `Esc`   | Close          |
 
 Selected result jumps to the corresponding page. For endpoints and journeys, the palette routes into the page that makes sense — an endpoint opens the Endpoints page with that operation selected; a journey opens the Journeys page with it highlighted.
 

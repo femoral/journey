@@ -29,13 +29,13 @@ interface Expectation<T> {
 }
 ```
 
-| Method            | Works on       | Check |
-|-------------------|----------------|-------|
-| `toBe(x)`         | any            | `Object.is(value, x)`. |
-| `toEqual(x)`      | any            | Recursive deep equality. |
-| `toBeDefined()`   | any            | `value !== undefined`. |
-| `toContain(x)`    | string, array  | `.includes` on strings; deep-equal element check on arrays. Throws on other types. |
-| `toMatch(re)`     | string         | `re.test(value)`. Accepts `RegExp` or a string (wrapped in `new RegExp`). |
+| Method          | Works on      | Check                                                                              |
+| --------------- | ------------- | ---------------------------------------------------------------------------------- |
+| `toBe(x)`       | any           | `Object.is(value, x)`.                                                             |
+| `toEqual(x)`    | any           | Recursive deep equality.                                                           |
+| `toBeDefined()` | any           | `value !== undefined`.                                                             |
+| `toContain(x)`  | string, array | `.includes` on strings; deep-equal element check on arrays. Throws on other types. |
+| `toMatch(re)`   | string        | `re.test(value)`. Accepts `RegExp` or a string (wrapped in `new RegExp`).          |
 
 ## `AssertionError`
 

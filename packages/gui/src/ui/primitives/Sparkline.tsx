@@ -28,17 +28,10 @@ export function Sparkline(props: SparklineProps): JSX.Element {
   });
 
   return (
-    <svg
-      width="100%"
-      height={h()}
-      viewBox={`0 0 ${w()} ${h()}`}
-      preserveAspectRatio="none"
-    >
+    <svg width="100%" height={h()} viewBox={`0 0 ${w()} ${h()}`} preserveAspectRatio="none">
       <path d={`${path().d} L${w()} ${h()} L0 ${h()} Z`} fill="var(--ac-bg)" />
       <path d={path().d} stroke="var(--ac)" stroke-width="1.5" fill="none" />
-      <For each={path().pts}>
-        {(p) => <circle cx={p[0]} cy={p[1]} r="2" fill="var(--ac)" />}
-      </For>
+      <For each={path().pts}>{(p) => <circle cx={p[0]} cy={p[1]} r="2" fill="var(--ac)" />}</For>
     </svg>
   );
 }

@@ -1,11 +1,6 @@
 import { For, Show, createResource, createSignal, type Component } from "solid-js";
 import { api, type DriftEndpoint, type SpecDrift } from "../api/client";
-import {
-  IconRefresh,
-  MethodBadge,
-  Panel,
-  type HttpMethod,
-} from "../ui";
+import { IconRefresh, MethodBadge, Panel, type HttpMethod } from "../ui";
 
 export const DiffPage: Component = () => {
   const [drift, { refetch }] = createResource(() => api.getSpecDrift());
@@ -27,10 +22,7 @@ export const DiffPage: Component = () => {
   };
 
   return (
-    <div
-      style={{ padding: "24px 32px", overflow: "auto", height: "100%" }}
-      data-testid="diff-page"
-    >
+    <div style={{ padding: "24px 32px", overflow: "auto", height: "100%" }} data-testid="diff-page">
       <div
         style={{
           display: "flex",
@@ -49,10 +41,7 @@ export const DiffPage: Component = () => {
         >
           Spec drift
         </h1>
-        <span
-          class="mono"
-          style={{ color: "var(--fg-3)", "font-size": "12px" }}
-        >
+        <span class="mono" style={{ color: "var(--fg-3)", "font-size": "12px" }}>
           openapi spec ↔ generated/endpoints.ts
         </span>
       </div>
@@ -66,16 +55,10 @@ export const DiffPage: Component = () => {
           gap: "12px",
         }}
       >
-        <Show
-          when={drift()}
-          fallback={<span>Loading…</span>}
-        >
+        <Show when={drift()} fallback={<span>Loading…</span>}>
           {(d) => (
             <>
-              <Show
-                when={d().count > 0}
-                fallback={<span>In sync. No drift detected.</span>}
-              >
+              <Show when={d().count > 0} fallback={<span>In sync. No drift detected.</span>}>
                 <span>
                   {d().count} {d().count === 1 ? "endpoint" : "endpoints"} drifted —{" "}
                   {d().added.length} added, {d().removed.length} removed.
@@ -100,17 +83,14 @@ export const DiffPage: Component = () => {
                   cursor: busy() ? "wait" : "pointer",
                 }}
               >
-                <IconRefresh size={11} />{" "}
-                {busy() ? "Regenerating…" : "Run journey generate"}
+                <IconRefresh size={11} /> {busy() ? "Regenerating…" : "Run journey generate"}
               </button>
               <Show when={status()}>
                 <span
                   class="mono"
                   style={{
                     "font-size": "11px",
-                    color: status()?.startsWith("Regenerated")
-                      ? "var(--ok)"
-                      : "var(--err)",
+                    color: status()?.startsWith("Regenerated") ? "var(--ok)" : "var(--err)",
                   }}
                 >
                   {status()}
@@ -133,9 +113,8 @@ export const DiffPage: Component = () => {
                     color: "var(--fg-3)",
                   }}
                 >
-                  The OpenAPI spec referenced in journey.config.json couldn't
-                  be loaded. Fix the <span class="mono">spec</span> path, then
-                  come back.
+                  The OpenAPI spec referenced in journey.config.json couldn't be loaded. Fix the{" "}
+                  <span class="mono">spec</span> path, then come back.
                 </div>
               </Panel>
             </Show>
@@ -148,9 +127,8 @@ export const DiffPage: Component = () => {
                     color: "var(--fg-3)",
                   }}
                 >
-                  <span class="mono">generated/endpoints.ts</span> doesn't
-                  exist. Click <span style={{ color: "var(--ac)" }}>Run journey generate</span>{" "}
-                  to create it.
+                  <span class="mono">generated/endpoints.ts</span> doesn't exist. Click{" "}
+                  <span style={{ color: "var(--ac)" }}>Run journey generate</span> to create it.
                 </div>
               </Panel>
             </Show>
@@ -239,10 +217,7 @@ function DriftList(props: {
               >
                 {e.path}
               </span>
-              <span
-                class="mono"
-                style={{ "font-size": "11px", color: "var(--fg-3)" }}
-              >
+              <span class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
                 {e.operationId}
               </span>
             </div>

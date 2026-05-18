@@ -110,10 +110,10 @@ export class SseRunEventSource implements RunEventSource {
 
     void (async () => {
       try {
-        const res = await fetch(
-          `${this.baseUrl}/api/runs/${encodeURIComponent(runId)}/events`,
-          { signal: controller.signal, headers: { accept: "text/event-stream" } },
-        );
+        const res = await fetch(`${this.baseUrl}/api/runs/${encodeURIComponent(runId)}/events`, {
+          signal: controller.signal,
+          headers: { accept: "text/event-stream" },
+        });
         if (!res.ok || !res.body) {
           onEvent({
             kind: "error",

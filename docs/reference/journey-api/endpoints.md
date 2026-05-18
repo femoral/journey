@@ -45,9 +45,7 @@ Hand-written escape hatch for operations outside the spec. Response type is `unk
 ## `HttpMethod`
 
 ```ts
-type HttpMethod =
-  | "GET" | "POST" | "PUT" | "PATCH"
-  | "DELETE" | "HEAD" | "OPTIONS";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 ```
 
 ## `ResponseOf<E>`
@@ -70,6 +68,8 @@ Runtime guard — returns `true` when the endpoint has an `operationId`. Useful 
 if (isEndpointRef(step.endpoint)) {
   console.log(`${step.endpoint.method} ${step.endpoint.path} (op ${step.endpoint.operationId})`);
 } else {
-  console.log(`${step.endpoint.method} ${step.endpoint.path} on ${step.endpoint.baseUrl ?? "<default>"}`);
+  console.log(
+    `${step.endpoint.method} ${step.endpoint.path} on ${step.endpoint.baseUrl ?? "<default>"}`,
+  );
 }
 ```

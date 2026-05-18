@@ -42,7 +42,9 @@ export function findRelativeImports(
     const base = dirname(fromFile);
     const abs = isAbsolute(spec) ? spec : resolve(base, spec);
     const withExt = abs.endsWith(".ts") || abs.endsWith(".js") ? abs : null;
-    const candidates = withExt ? [withExt] : [`${abs}.ts`, `${abs}.js`, abs.replace(/\.js$/, ".ts")];
+    const candidates = withExt
+      ? [withExt]
+      : [`${abs}.ts`, `${abs}.js`, abs.replace(/\.js$/, ".ts")];
     out.push({ specifier: spec, sourcePath: candidates[0]! });
   }
   return out;
@@ -60,9 +62,10 @@ export async function inlineRelativeImports(
   let out = journeySource;
   for (const imp of imports) {
     // Best-effort file resolution: try the exact path, then .ts, then .js
-    const tryPaths = imp.sourcePath.endsWith(".ts") || imp.sourcePath.endsWith(".js")
-      ? [imp.sourcePath, imp.sourcePath.replace(/\.js$/, ".ts")]
-      : [`${imp.sourcePath}.ts`, `${imp.sourcePath}.js`];
+    const tryPaths =
+      imp.sourcePath.endsWith(".ts") || imp.sourcePath.endsWith(".js")
+        ? [imp.sourcePath, imp.sourcePath.replace(/\.js$/, ".ts")]
+        : [`${imp.sourcePath}.ts`, `${imp.sourcePath}.js`];
     let resolved: { path: string; content: string } | undefined;
     for (const p of tryPaths) {
       try {
@@ -85,7 +88,10 @@ export async function inlineRelativeImports(
       `^\\s*import\\s+[^;]*?from\\s+["']${imp.specifier.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}["'];?\\s*$`,
       "m",
     );
-    out = out.replace(importLineRe, `\n// ----- inlined from ${imp.specifier} -----\n${converted}\n// ----- end inlined -----\n`);
+    out = out.replace(
+      importLineRe,
+      `\n// ----- inlined from ${imp.specifier} -----\n${converted}\n// ----- end inlined -----\n`,
+    );
   }
   return out;
 }

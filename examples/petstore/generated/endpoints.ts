@@ -2,23 +2,57 @@
 import type { EndpointRef } from "@journey/core";
 import type { paths } from "./models.js";
 
-type JsonResponse<P extends keyof paths, M extends keyof paths[P]> =
-  paths[P][M] extends { responses: infer R }
-    ? R extends { 200: { content: { "application/json": infer T } } } ? T
-    : R extends { 201: { content: { "application/json": infer T } } } ? T
-    : R extends { 202: { content: { "application/json": infer T } } } ? T
-    : unknown
-    : unknown;
+type JsonResponse<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
+  responses: infer R;
+}
+  ? R extends { 200: { content: { "application/json": infer T } } }
+    ? T
+    : R extends { 201: { content: { "application/json": infer T } } }
+      ? T
+      : R extends { 202: { content: { "application/json": infer T } } }
+        ? T
+        : unknown
+  : unknown;
 
 export const endpoints = {
-  findPetsByStatus: { method: "GET", path: "/pet/findByStatus", operationId: "findPetsByStatus" } as unknown as EndpointRef<JsonResponse<"/pet/findByStatus", "get">>,
-  createPet: { method: "POST", path: "/pet", operationId: "createPet" } as unknown as EndpointRef<JsonResponse<"/pet", "post">>,
-  getPetById: { method: "GET", path: "/pet/{id}", operationId: "getPetById" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "get">>,
-  replacePet: { method: "PUT", path: "/pet/{id}", operationId: "replacePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "put">>,
-  updatePet: { method: "PATCH", path: "/pet/{id}", operationId: "updatePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "patch">>,
-  deletePet: { method: "DELETE", path: "/pet/{id}", operationId: "deletePet" } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "delete">>,
-  listPetNotes: { method: "GET", path: "/pet/{id}/notes", operationId: "listPetNotes" } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "get">>,
-  addPetNote: { method: "POST", path: "/pet/{id}/notes", operationId: "addPetNote" } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "post">>,
+  findPetsByStatus: {
+    method: "GET",
+    path: "/pet/findByStatus",
+    operationId: "findPetsByStatus",
+  } as unknown as EndpointRef<JsonResponse<"/pet/findByStatus", "get">>,
+  createPet: { method: "POST", path: "/pet", operationId: "createPet" } as unknown as EndpointRef<
+    JsonResponse<"/pet", "post">
+  >,
+  getPetById: {
+    method: "GET",
+    path: "/pet/{id}",
+    operationId: "getPetById",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "get">>,
+  replacePet: {
+    method: "PUT",
+    path: "/pet/{id}",
+    operationId: "replacePet",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "put">>,
+  updatePet: {
+    method: "PATCH",
+    path: "/pet/{id}",
+    operationId: "updatePet",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "patch">>,
+  deletePet: {
+    method: "DELETE",
+    path: "/pet/{id}",
+    operationId: "deletePet",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}", "delete">>,
+  listPetNotes: {
+    method: "GET",
+    path: "/pet/{id}/notes",
+    operationId: "listPetNotes",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "get">>,
+  addPetNote: {
+    method: "POST",
+    path: "/pet/{id}/notes",
+    operationId: "addPetNote",
+  } as unknown as EndpointRef<JsonResponse<"/pet/{id}/notes", "post">>,
 } as const;
 
 export type EndpointName = keyof typeof endpoints;

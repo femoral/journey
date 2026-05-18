@@ -13,7 +13,7 @@ Every step can define two callbacks. Both receive the same `HttpResponse` object
 ```ts
 interface StepOptions<E extends Endpoint> {
   assert?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
-  after?:  (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
+  after?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
 }
 ```
 
@@ -70,10 +70,10 @@ interface HttpResponse<T = unknown> {
 
 Header keys are lowercased by the `fetch` response and copied as-is. Body parsing:
 
-| Response `Content-Type` includes | Parsed as |
-|----------------------------------|-----------|
+| Response `Content-Type` includes | Parsed as                                                  |
+| -------------------------------- | ---------------------------------------------------------- |
 | `json`                           | `await res.json()` (falls back to `null` on parse failure) |
-| anything else                    | `await res.text()` |
+| anything else                    | `await res.text()`                                         |
 
 ## Halting behaviour
 

@@ -29,7 +29,10 @@ export function saveRecentProjects(list: RecentProject[]): void {
   }
 }
 
-export function upsertRecentProject(list: RecentProject[], project: RecentProject): RecentProject[] {
+export function upsertRecentProject(
+  list: RecentProject[],
+  project: RecentProject,
+): RecentProject[] {
   const without = list.filter((p) => p.path !== project.path);
   return [project, ...without].slice(0, MAX);
 }

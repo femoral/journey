@@ -6,18 +6,18 @@ properties; this document explains them. The reference implementation is the
 prototype at `design/iterations/01-prototype/`.
 
 Edit tokens in `tokens.css`; treat that file as authoritative. This doc tracks
-*meaning* — what each scale is for and when to use which step.
+_meaning_ — what each scale is for and when to use which step.
 
 ## Surface scale — `--bg-0` through `--bg-4`
 
 Dark-only for now. Each step is one elevation higher than the last.
 
-| Token    | Hex       | Use                                               |
-| -------- | --------- | ------------------------------------------------- |
-| `--bg-0` | `#0a0c0f` | App background (root, topbar, sidebar)            |
-| `--bg-1` | `#0f1216` | Panels, cards, dropdowns                          |
-| `--bg-2` | `#141820` | Elevated panel, row hover                         |
-| `--bg-3` | `#1a1f28` | Input, active nav item, selected row              |
+| Token    | Hex       | Use                                                      |
+| -------- | --------- | -------------------------------------------------------- |
+| `--bg-0` | `#0a0c0f` | App background (root, topbar, sidebar)                   |
+| `--bg-1` | `#0f1216` | Panels, cards, dropdowns                                 |
+| `--bg-2` | `#141820` | Elevated panel, row hover                                |
+| `--bg-3` | `#1a1f28` | Input, active nav item, selected row                     |
 | `--bg-4` | `#222832` | Strongly selected (rare; avoid unless contrast needs it) |
 
 ## Border scale — `--bd-1` through `--bd-3`
@@ -30,13 +30,13 @@ Dark-only for now. Each step is one elevation higher than the last.
 
 ## Foreground scale — `--fg-0` through `--fg-4`
 
-| Token    | Hex       | Use                                     |
-| -------- | --------- | --------------------------------------- |
-| `--fg-0` | `#f2f4f7` | Primary body text, headings             |
-| `--fg-1` | `#c8cdd5` | Secondary text (labels, nav items)      |
+| Token    | Hex       | Use                                      |
+| -------- | --------- | ---------------------------------------- |
+| `--fg-0` | `#f2f4f7` | Primary body text, headings              |
+| `--fg-1` | `#c8cdd5` | Secondary text (labels, nav items)       |
 | `--fg-2` | `#8892a0` | Tertiary / meta (path hints, timestamps) |
-| `--fg-3` | `#5a6372` | Quaternary / placeholder, disabled-like |
-| `--fg-4` | `#3b424d` | Truly disabled                          |
+| `--fg-3` | `#5a6372` | Quaternary / placeholder, disabled-like  |
+| `--fg-4` | `#3b424d` | Truly disabled                           |
 
 ## Accent
 
@@ -44,12 +44,12 @@ OKLCH-based so the chroma and lightness stay consistent when swapping hues.
 
 Four presets (used by the dev-only tweaker):
 
-| Preset  | `--ac`                    |
-| ------- | ------------------------- |
-| amber   | `oklch(0.78 0.16 75)`     |
-| lime    | `oklch(0.82 0.17 130)`    |
-| cyan    | `oklch(0.78 0.12 200)`    |
-| violet  | `oklch(0.72 0.18 300)`    |
+| Preset | `--ac`                 |
+| ------ | ---------------------- |
+| amber  | `oklch(0.78 0.16 75)`  |
+| lime   | `oklch(0.82 0.17 130)` |
+| cyan   | `oklch(0.78 0.12 200)` |
+| violet | `oklch(0.72 0.18 300)` |
 
 Each preset exposes four variables: `--ac` (solid), `--ac-dim` (secondary
 accent), `--ac-bg` (12% alpha fill for hover/active), `--ac-bd` (35% alpha
@@ -59,12 +59,12 @@ border). Swap by overwriting these four properties on `:root`.
 
 Status meaning is fixed regardless of accent.
 
-| Token    | Meaning                         | Reference hue   |
-| -------- | ------------------------------- | --------------- |
-| `--ok`   | 2xx, passing, healthy           | green `oklch(.74 .15 155)` |
-| `--warn` | 3xx–4xx, caution                | amber `oklch(.78 .15 75)`  |
-| `--err`  | 5xx, failed, destructive        | red `oklch(.68 .2 25)`     |
-| `--info` | informational                   | blue `oklch(.72 .13 230)`  |
+| Token    | Meaning                  | Reference hue              |
+| -------- | ------------------------ | -------------------------- |
+| `--ok`   | 2xx, passing, healthy    | green `oklch(.74 .15 155)` |
+| `--warn` | 3xx–4xx, caution         | amber `oklch(.78 .15 75)`  |
+| `--err`  | 5xx, failed, destructive | red `oklch(.68 .2 25)`     |
+| `--info` | informational            | blue `oklch(.72 .13 230)`  |
 
 Each has a `-bg` companion (12% alpha fill) for pills and subtle backgrounds.
 
@@ -74,13 +74,13 @@ Applied to `MethodBadge`. Distinct hue per method; intentionally overlaps with
 semantic colors where it reads naturally (GET = green like "ok", DELETE = red
 like "err").
 
-| Token       | Method  |
-| ----------- | ------- |
-| `--m-get`   | GET     |
-| `--m-post`  | POST    |
-| `--m-put`   | PUT     |
-| `--m-patch` | PATCH   |
-| `--m-del`   | DELETE  |
+| Token       | Method |
+| ----------- | ------ |
+| `--m-get`   | GET    |
+| `--m-post`  | POST   |
+| `--m-put`   | PUT    |
+| `--m-patch` | PATCH  |
+| `--m-del`   | DELETE |
 
 ## Typography
 
@@ -94,14 +94,14 @@ Two families, local-first (loaded via `@fontsource` — no CDN).
 
 Six discrete sizes. Resist introducing in-between values.
 
-| px  | Use                                                  |
-| --- | ---------------------------------------------------- |
-| 10  | Uppercase section labels, badges, kbd                |
-| 11  | Meta (timestamps, paths), small table values         |
-| 12  | Body small, control text (buttons, inputs, nav hints)|
-| 13  | Default body, sidebar nav, standard buttons          |
-| 16  | Section headings within a page                       |
-| 22  | Page titles (Overview, Project home)                 |
+| px  | Use                                                   |
+| --- | ----------------------------------------------------- |
+| 10  | Uppercase section labels, badges, kbd                 |
+| 11  | Meta (timestamps, paths), small table values          |
+| 12  | Body small, control text (buttons, inputs, nav hints) |
+| 13  | Default body, sidebar nav, standard buttons           |
+| 16  | Section headings within a page                        |
+| 22  | Page titles (Overview, Project home)                  |
 
 ### Weights
 
@@ -116,22 +116,22 @@ Six discrete sizes. Resist introducing in-between values.
 
 ## Radius scale — `--r-1` through `--r-4`
 
-| Token   | Use                                                        |
-| ------- | ---------------------------------------------------------- |
-| `--r-1` | `3px` — inline chips, status pills, small inline controls  |
-| `--r-2` | `5px` — buttons, inputs, default controls                  |
-| `--r-3` | `8px` — cards, popovers, panels                            |
-| `--r-4` | `12px` — modals, large surfaces (rare)                     |
+| Token   | Use                                                       |
+| ------- | --------------------------------------------------------- |
+| `--r-1` | `3px` — inline chips, status pills, small inline controls |
+| `--r-2` | `5px` — buttons, inputs, default controls                 |
+| `--r-3` | `8px` — cards, popovers, panels                           |
+| `--r-4` | `12px` — modals, large surfaces (rare)                    |
 
 ## Row heights
 
 Three density presets for tabular data.
 
-| Token           | Height |
-| --------------- | ------ |
-| `--row-dense`   | 28px   |
-| `--row-mid`     | 32px   |
-| `--row-comfy`   | 40px   |
+| Token         | Height |
+| ------------- | ------ |
+| `--row-dense` | 28px   |
+| `--row-mid`   | 32px   |
+| `--row-comfy` | 40px   |
 
 User-selectable density via the tweaker; default is `mid`.
 

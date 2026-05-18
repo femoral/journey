@@ -93,10 +93,7 @@ describe("smoke tests", () => {
     setActiveEnvironment("staging", values);
 
     clearRegistry();
-    await tsImport(
-      pathToFileURL("./journeys/checkout.journey.ts").href,
-      import.meta.url,
-    );
+    await tsImport(pathToFileURL("./journeys/checkout.journey.ts").href, import.meta.url);
 
     const results = await runAllRegistered({ baseUrl: "https://staging.api.example.com" });
 

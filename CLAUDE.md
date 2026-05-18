@@ -57,7 +57,8 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 ## Conventions
 
 - **Commits**: `<type>(<scope>): <subject>` — `feat|fix|chore|docs|refactor`, scopes `core|cli|codegen|gui|k6|dev|docs`. Prefix milestone tag (`M5b`, `M6g`, …) when relevant; tags appear in commit subjects, not as gh milestones.
-- **Workflow**: one gh issue per task → implement on `main` → typecheck/test/build the touched packages → one commit with `Closes #N` in the body → push `main` → close issue. Default branch on the remote is `master` but active development lives on `main`. Full details in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Workflow**: one gh issue per task → implement on `main` → typecheck/test/build the touched packages → `pnpm format` (prettier) → one commit with `Closes #N` in the body → push `main` → close issue. Default branch on the remote is `master` but active development lives on `main`. Full details in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Run `pnpm format` before committing.** CI doesn't enforce formatting on its own, but uncommitted prettier drift accumulates across files and bloats unrelated diffs. Either format-then-stage your own changes, or stage explicitly so drift in untouched files doesn't ride along.
 - **Co-author footer** on Claude-authored commits: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 - **Issue labels in use**: `area:core|cli|codegen|gui|k6`, `type:feat|chore`, `bug`.
 

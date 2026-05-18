@@ -1,16 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  SseRunEventSource,
-  TauriRunEventSource,
-  type RunEvent,
-} from "../src/api/runEvents";
+import { SseRunEventSource, TauriRunEventSource, type RunEvent } from "../src/api/runEvents";
 
 function sseFrames(events: RunEvent[]): string {
-  return (
-    events
-      .map((e) => `event: ${e.kind}\ndata: ${JSON.stringify(e)}`)
-      .join("\n\n") + "\n\n"
-  );
+  return events.map((e) => `event: ${e.kind}\ndata: ${JSON.stringify(e)}`).join("\n\n") + "\n\n";
 }
 
 function makeStreamResponse(text: string): Response {
@@ -67,12 +59,7 @@ describe("SseRunEventSource", () => {
     // Let the reader loop drain.
     await new Promise((r) => setTimeout(r, 20));
     sub.close();
-    expect(seen.map((e) => e.kind)).toEqual([
-      "run:start",
-      "step:start",
-      "step:end",
-      "run:end",
-    ]);
+    expect(seen.map((e) => e.kind)).toEqual(["run:start", "step:start", "step:end", "run:end"]);
     expect(seen.every((e) => e.runId === "r1")).toBe(true);
   });
 

@@ -99,10 +99,7 @@ export function RunDot(props: RunDotProps): JSX.Element {
         height: `${size()}px`,
         "border-radius": "50%",
         background: color(),
-        "box-shadow":
-          props.state === "running"
-            ? `0 0 0 3px ${color()}22`
-            : "none",
+        "box-shadow": props.state === "running" ? `0 0 0 3px ${color()}22` : "none",
         "flex-shrink": 0,
         display: "inline-block",
         animation: props.state === "running" ? "jrn-pulse 1s ease-in-out infinite" : undefined,

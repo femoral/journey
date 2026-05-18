@@ -93,7 +93,9 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
 
   const isDir = info.isDirectory();
   if (isDir && opts.out) {
-    throw new Error("--out is only valid with a single journey file. Use --out-dir for directories.");
+    throw new Error(
+      "--out is only valid with a single journey file. Use --out-dir for directories.",
+    );
   }
 
   const files = isDir ? await discoverJourneyFiles(target) : [target];

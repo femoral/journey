@@ -8,14 +8,7 @@ import {
   type JSX,
 } from "solid-js";
 import { api, type ProjectTree, type TreeNode } from "../api/client";
-import {
-  IconChevron,
-  IconFiles,
-  IconFolder,
-  IconX,
-  JsonPretty,
-  TsHighlight,
-} from "../ui";
+import { IconChevron, IconFiles, IconFolder, IconX, JsonPretty, TsHighlight } from "../ui";
 
 type SelectedFile = {
   section: string;
@@ -27,10 +20,7 @@ export const FilesPage: Component = () => {
   const [selected, setSelected] = createSignal<SelectedFile | undefined>(undefined);
 
   return (
-    <div
-      style={{ display: "flex", height: "100%", "min-height": 0 }}
-      data-testid="files-page"
-    >
+    <div style={{ display: "flex", height: "100%", "min-height": 0 }} data-testid="files-page">
       <aside
         style={{
           width: "360px",
@@ -60,10 +50,7 @@ export const FilesPage: Component = () => {
             Project tree
           </span>
           <div style={{ flex: 1 }} />
-          <span
-            class="mono"
-            style={{ "font-size": "10px", color: "var(--fg-3)" }}
-          >
+          <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
             {tree()?.projectDir ?? ""}
           </span>
         </div>
@@ -86,9 +73,7 @@ export const FilesPage: Component = () => {
                   <SectionNode
                     section={section}
                     selected={selected()}
-                    onSelect={(rel) =>
-                      setSelected({ section: section.label, relPath: rel })
-                    }
+                    onSelect={(rel) => setSelected({ section: section.label, relPath: rel })}
                   />
                 )}
               </For>
@@ -151,12 +136,8 @@ function SectionNode(props: {
           "text-align": "left",
           "font-size": "12px",
         }}
-        onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLElement).style.background = "var(--bg-1)")
-        }
-        onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLElement).style.background = "transparent")
-        }
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-1)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
       >
         <IconChevron
           size={9}
@@ -166,10 +147,7 @@ function SectionNode(props: {
             transition: "transform 0.1s",
           }}
         />
-        <IconFolder
-          size={13}
-          style={{ color: locked() ? "var(--fg-3)" : "var(--ac)" }}
-        />
+        <IconFolder size={13} style={{ color: locked() ? "var(--fg-3)" : "var(--ac)" }} />
         <span class="mono" style={{ color: "var(--fg-0)", "font-weight": 500 }}>
           {props.section.label}/
         </span>
@@ -230,12 +208,10 @@ function TreeEntry(props: {
   onSelect: (relPath: string) => void;
 }): JSX.Element {
   const [open, setOpen] = createSignal(props.depth < 2);
-  const rel = () =>
-    props.parentRel ? `${props.parentRel}/${props.node.name}` : props.node.name;
+  const rel = () => (props.parentRel ? `${props.parentRel}/${props.node.name}` : props.node.name);
 
   const active = () =>
-    props.selected?.section === props.sectionLabel &&
-    props.selected?.relPath === rel();
+    props.selected?.section === props.sectionLabel && props.selected?.relPath === rel();
 
   if (props.node.type === "dir") {
     return (
@@ -252,12 +228,8 @@ function TreeEntry(props: {
             "text-align": "left",
             "font-size": "12px",
           }}
-          onMouseEnter={(e) =>
-            ((e.currentTarget as HTMLElement).style.background = "var(--bg-1)")
-          }
-          onMouseLeave={(e) =>
-            ((e.currentTarget as HTMLElement).style.background = "transparent")
-          }
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-1)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
         >
           <IconChevron
             size={9}
@@ -267,10 +239,7 @@ function TreeEntry(props: {
               transition: "transform 0.1s",
             }}
           />
-          <IconFolder
-            size={13}
-            style={{ color: props.locked ? "var(--fg-3)" : "var(--ac)" }}
-          />
+          <IconFolder size={13} style={{ color: props.locked ? "var(--fg-3)" : "var(--ac)" }} />
           <span class="mono" style={{ color: "var(--fg-0)" }}>
             {props.node.name}/
           </span>
@@ -307,18 +276,14 @@ function TreeEntry(props: {
         "text-align": "left",
         "font-size": "12px",
         background: active() ? "var(--bg-3)" : "transparent",
-        "border-left": active()
-          ? "2px solid var(--ac)"
-          : "2px solid transparent",
+        "border-left": active() ? "2px solid var(--ac)" : "2px solid transparent",
         opacity: props.locked ? 0.7 : 1,
       }}
       onMouseEnter={(e) => {
-        if (!active())
-          (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
+        if (!active()) (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
       }}
       onMouseLeave={(e) => {
-        if (!active())
-          (e.currentTarget as HTMLElement).style.background = "transparent";
+        if (!active()) (e.currentTarget as HTMLElement).style.background = "transparent";
       }}
     >
       <IconFiles size={12} style={{ color: "var(--fg-3)" }} />
@@ -335,10 +300,7 @@ function TreeEntry(props: {
         {props.node.name}
       </span>
       <Show when={props.locked}>
-        <span
-          class="mono"
-          style={{ "font-size": "9px", color: "var(--fg-3)" }}
-        >
+        <span class="mono" style={{ "font-size": "9px", color: "var(--fg-3)" }}>
           generated
         </span>
       </Show>

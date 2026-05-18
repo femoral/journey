@@ -37,10 +37,10 @@ interface HttpResponse<T = unknown> {
 
 Header keys are lowercased by `fetch` and copied as-is. Body parsing:
 
-| `Content-Type` includes | Parsed as |
-|-------------------------|-----------|
+| `Content-Type` includes | Parsed as                                                  |
+| ----------------------- | ---------------------------------------------------------- |
 | `json`                  | `await res.json()` (falls back to `null` on parse failure) |
-| anything else           | `await res.text()` |
+| anything else           | `await res.text()`                                         |
 
 ## `RequestSpec` / `BuildRequestOptions`
 
@@ -81,11 +81,11 @@ Sends a built request. Respects `timeoutMs` via `AbortController`. Emits `onRequ
 
 Bodies go through `fetch` as:
 
-| Input `req.body`     | Sent as                                 |
-|----------------------|-----------------------------------------|
-| `string`             | The string, unchanged.                  |
-| anything else        | `JSON.stringify(value)`.                |
-| `undefined`          | No body.                                |
+| Input `req.body` | Sent as                  |
+| ---------------- | ------------------------ |
+| `string`         | The string, unchanged.   |
+| anything else    | `JSON.stringify(value)`. |
+| `undefined`      | No body.                 |
 
 ## `resolveUrl(endpoint, ctx, params, query)`
 

@@ -47,9 +47,7 @@ describe("insertStep", () => {
     expect(res.source).toContain(`step("first"`);
     expect(res.source).toContain(`step("second"`);
     // The new step comes after the first one.
-    expect(res.source.indexOf("second")).toBeGreaterThan(
-      res.source.indexOf("first"),
-    );
+    expect(res.source.indexOf("second")).toBeGreaterThan(res.source.indexOf("first"));
     // The final `});` is still present.
     expect(res.source.trimEnd().endsWith("});")).toBe(true);
   });

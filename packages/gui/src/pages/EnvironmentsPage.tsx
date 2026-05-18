@@ -13,16 +13,13 @@ import { IconPlus, IconX } from "../ui";
 
 type Row = { key: string; value: string };
 
-
 export const EnvironmentsPage: Component = () => {
   const [data, { refetch }] = createResource(api.getEnvironments);
   const [selectedName, setSelectedName] = createSignal<string | undefined>(undefined);
   const [draft, setDraft] = createSignal<Row[]>([]);
   const [status, setStatus] = createSignal<string | undefined>(undefined);
 
-  const selectedEnv = createMemo(() =>
-    data()?.environments.find((e) => e.name === selectedName()),
-  );
+  const selectedEnv = createMemo(() => data()?.environments.find((e) => e.name === selectedName()));
 
   const isDirty = createMemo(() => {
     const env = selectedEnv();
@@ -115,87 +112,73 @@ export const EnvironmentsPage: Component = () => {
         >
           Environments
         </div>
-        <div
-          style={{ flex: 1, padding: "6px 6px", overflow: "auto" }}
-        >
+        <div style={{ flex: 1, padding: "6px 6px", overflow: "auto" }}>
           <Show when={data()}>
             {(d) => (
               <div data-testid="env-list">
-              <For
-                each={d().environments}
-                fallback={
-                  <div
-                    style={{
-                      padding: "14px 10px",
-                      "font-size": "12px",
-                      color: "var(--fg-3)",
-                    }}
-                  >
-                    No environments yet.
-                  </div>
-                }
-              >
-                {(env) => {
-                  const active = () => selectedName() === env.name;
-                  const isDefault = () => env.name === d().defaultEnvironment;
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedName(env.name);
-                        loadDraftFor(env);
-                      }}
+                <For
+                  each={d().environments}
+                  fallback={
+                    <div
                       style={{
-                        width: "100%",
-                        display: "flex",
-                        "align-items": "center",
-                        gap: "8px",
-                        padding: "7px 10px",
-                        "border-radius": "4px",
+                        padding: "14px 10px",
                         "font-size": "12px",
-                        background: active() ? "var(--bg-3)" : "transparent",
-                        "border-left": active()
-                          ? "2px solid var(--ac)"
-                          : "2px solid transparent",
-                        "text-align": "left",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!active())
-                          (e.currentTarget as HTMLElement).style.background =
-                            "var(--bg-1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!active())
-                          (e.currentTarget as HTMLElement).style.background =
-                            "transparent";
+                        color: "var(--fg-3)",
                       }}
                     >
-                      <span
-                        style={{
-                          width: "6px",
-                          height: "6px",
-                          "border-radius": "50%",
-                          background: isDefault()
-                            ? "var(--ac)"
-                            : "var(--fg-3)",
+                      No environments yet.
+                    </div>
+                  }
+                >
+                  {(env) => {
+                    const active = () => selectedName() === env.name;
+                    const isDefault = () => env.name === d().defaultEnvironment;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedName(env.name);
+                          loadDraftFor(env);
                         }}
-                      />
-                      <span
-                        class="mono"
-                        style={{ flex: 1, color: "var(--fg-0)" }}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          "align-items": "center",
+                          gap: "8px",
+                          padding: "7px 10px",
+                          "border-radius": "4px",
+                          "font-size": "12px",
+                          background: active() ? "var(--bg-3)" : "transparent",
+                          "border-left": active() ? "2px solid var(--ac)" : "2px solid transparent",
+                          "text-align": "left",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!active())
+                            (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!active())
+                            (e.currentTarget as HTMLElement).style.background = "transparent";
+                        }}
                       >
-                        {env.name}
-                      </span>
-                      <span
-                        class="mono"
-                        style={{ "font-size": "10px", color: "var(--fg-3)" }}
-                      >
-                        {Object.keys(env.values).length}
-                      </span>
-                    </button>
-                  );
-                }}
-              </For>
+                        <span
+                          style={{
+                            width: "6px",
+                            height: "6px",
+                            "border-radius": "50%",
+                            background: isDefault() ? "var(--ac)" : "var(--fg-3)",
+                          }}
+                        />
+                        <span class="mono" style={{ flex: 1, color: "var(--fg-0)" }}>
+                          {env.name}
+                        </span>
+                        <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
+                          {Object.keys(env.values).length}
+                        </span>
+                      </button>
+                    );
+                  }}
+                </For>
               </div>
             )}
           </Show>
@@ -291,10 +274,7 @@ export const EnvironmentsPage: Component = () => {
                   </span>
                 </Show>
               </div>
-              <div
-                class="mono"
-                style={{ "font-size": "11px", color: "var(--fg-3)" }}
-              >
+              <div class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
                 environments/{selectedName()}.json · {draft().length}{" "}
                 {draft().length === 1 ? "variable" : "variables"}
               </div>
@@ -302,116 +282,109 @@ export const EnvironmentsPage: Component = () => {
           </div>
 
           <div style={{ flex: 1, overflow: "auto" }} data-testid="env-values">
-              <div
-                style={{
-                  display: "grid",
-                  "grid-template-columns": "200px 1fr 40px 24px",
-                  gap: "10px",
-                  padding: "8px 20px",
-                  "font-size": "10px",
-                  color: "var(--fg-3)",
-                  "text-transform": "uppercase",
-                  "letter-spacing": "0.08em",
-                  "border-bottom": "1px solid var(--bd-1)",
-                }}
-              >
-                <span>Key</span>
-                <span>Value</span>
-                <span />
-                <span />
-              </div>
-              <Index each={draft()}>
-                {(row, i) => {
-                  return (
+            <div
+              style={{
+                display: "grid",
+                "grid-template-columns": "200px 1fr 40px 24px",
+                gap: "10px",
+                padding: "8px 20px",
+                "font-size": "10px",
+                color: "var(--fg-3)",
+                "text-transform": "uppercase",
+                "letter-spacing": "0.08em",
+                "border-bottom": "1px solid var(--bd-1)",
+              }}
+            >
+              <span>Key</span>
+              <span>Value</span>
+              <span />
+              <span />
+            </div>
+            <Index each={draft()}>
+              {(row, i) => {
+                return (
+                  <div
+                    style={{
+                      display: "grid",
+                      "grid-template-columns": "200px 1fr 40px 24px",
+                      gap: "10px",
+                      padding: "7px 20px",
+                      "align-items": "center",
+                      "border-bottom": "1px solid var(--bd-1)",
+                      "font-size": "12px",
+                    }}
+                    class="mono"
+                  >
                     <div
                       style={{
-                        display: "grid",
-                        "grid-template-columns": "200px 1fr 40px 24px",
-                        gap: "10px",
-                        padding: "7px 20px",
+                        display: "flex",
                         "align-items": "center",
-                        "border-bottom": "1px solid var(--bd-1)",
-                        "font-size": "12px",
+                        gap: "5px",
+                        "min-width": 0,
                       }}
-                      class="mono"
                     >
-                      <div
+                      <input
+                        value={row().key}
+                        placeholder="KEY"
+                        onInput={(e) => updateRow(i, { key: e.currentTarget.value })}
                         style={{
-                          display: "flex",
-                          "align-items": "center",
-                          gap: "5px",
+                          flex: 1,
+                          "font-size": "12px",
+                          color: "var(--info)",
+                          width: "100%",
                           "min-width": 0,
                         }}
-                      >
-                        <input
-                          value={row().key}
-                          placeholder="KEY"
-                          onInput={(e) =>
-                            updateRow(i, { key: e.currentTarget.value })
-                          }
-                          style={{
-                            flex: 1,
-                            "font-size": "12px",
-                            color: "var(--info)",
-                            width: "100%",
-                            "min-width": 0,
-                          }}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          "align-items": "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <input
-                          value={row().value}
-                          placeholder="value"
-                          type="text"
-                          onInput={(e) =>
-                            updateRow(i, { value: e.currentTarget.value })
-                          }
-                          style={{
-                            flex: 1,
-                            "font-size": "12px",
-                            color:
-                              row().value.startsWith("$")
-                                ? "var(--m-patch)"
-                                : "var(--fg-0)",
-                            width: "100%",
-                          }}
-                        />
-                      </div>
-                      <span />
-                      <button
-                        type="button"
-                        onClick={() => removeRow(i)}
-                        style={{ color: "var(--fg-3)" }}
-                        aria-label={`Remove ${row().key || "row"}`}
-                      >
-                        <IconX size={10} />
-                      </button>
+                      />
                     </div>
-                  );
-                }}
-              </Index>
-              <button
-                type="button"
-                data-testid="add-row"
-                onClick={() => setDraft([...draft(), { key: "", value: "" }])}
-                style={{
-                  padding: "10px 20px",
-                  "font-size": "12px",
-                  color: "var(--fg-3)",
-                  display: "flex",
-                  "align-items": "center",
-                  gap: "6px",
-                }}
-              >
-                <IconPlus size={11} /> Add variable
-              </button>
-            </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        "align-items": "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <input
+                        value={row().value}
+                        placeholder="value"
+                        type="text"
+                        onInput={(e) => updateRow(i, { value: e.currentTarget.value })}
+                        style={{
+                          flex: 1,
+                          "font-size": "12px",
+                          color: row().value.startsWith("$") ? "var(--m-patch)" : "var(--fg-0)",
+                          width: "100%",
+                        }}
+                      />
+                    </div>
+                    <span />
+                    <button
+                      type="button"
+                      onClick={() => removeRow(i)}
+                      style={{ color: "var(--fg-3)" }}
+                      aria-label={`Remove ${row().key || "row"}`}
+                    >
+                      <IconX size={10} />
+                    </button>
+                  </div>
+                );
+              }}
+            </Index>
+            <button
+              type="button"
+              data-testid="add-row"
+              onClick={() => setDraft([...draft(), { key: "", value: "" }])}
+              style={{
+                padding: "10px 20px",
+                "font-size": "12px",
+                color: "var(--fg-3)",
+                display: "flex",
+                "align-items": "center",
+                gap: "6px",
+              }}
+            >
+              <IconPlus size={11} /> Add variable
+            </button>
+          </div>
 
           <FooterBar
             onSave={() => void save()}
@@ -488,4 +461,3 @@ function FooterBar(props: {
     </div>
   );
 }
-

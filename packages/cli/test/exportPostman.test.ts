@@ -109,7 +109,14 @@ describe("export postman — collection structure", () => {
       expect(folder.name).toBe("items api");
       expect(folder.item).toHaveLength(2);
 
-      type Item = { name: string; request: { url: { raw: string; path: string[] }; method: string; body?: { mode: string; raw: string } } };
+      type Item = {
+        name: string;
+        request: {
+          url: { raw: string; path: string[] };
+          method: string;
+          body?: { mode: string; raw: string };
+        };
+      };
       const [get, post] = folder.item as [Item, Item];
       expect(get.name).toBe("list items");
       expect(get.request.method).toBe("GET");
@@ -157,7 +164,9 @@ describe("export postman — collection structure", () => {
         tags: ["smoke"],
       });
 
-      const col = JSON.parse(await readFile(join(outDir, "tagged.postman_collection.json"), "utf8"));
+      const col = JSON.parse(
+        await readFile(join(outDir, "tagged.postman_collection.json"), "utf8"),
+      );
       expect(col.item).toHaveLength(1);
       expect(col.item[0].name).toBe("tagged");
     } finally {
@@ -289,33 +298,29 @@ describe("Newman e2e", () => {
 
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-  it(
-    "exported collection + environment run against a mock server with no failures",
-    async () => {
-      const root = await makeFullProject({ BASE_URL: baseUrl });
-      try {
-        await writeFile(join(root, "journeys", "smoke.journey.ts"), ITEMS_JOURNEY);
-        const outDir = join(root, "out");
-        await runExportPostman({
-          path: join(root, "journeys", "smoke.journey.ts"),
-          outDir,
-          tags: [],
-          env: "test",
-          projectDir: root,
-        });
+  it("exported collection + environment run against a mock server with no failures", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    try {
+      await writeFile(join(root, "journeys", "smoke.journey.ts"), ITEMS_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "smoke.journey.ts"),
+        outDir,
+        tags: [],
+        env: "test",
+        projectDir: root,
+      });
 
-        const collectionPath = join(outDir, "smoke.postman_collection.json");
-        const envPath = join(outDir, "test.postman_environment.json");
-        const summary = await runNewman(collectionPath, envPath);
+      const collectionPath = join(outDir, "smoke.postman_collection.json");
+      const envPath = join(outDir, "test.postman_environment.json");
+      const summary = await runNewman(collectionPath, envPath);
 
-        expect(summary.run.failures).toHaveLength(0);
-        expect(summary.run.stats.requests.total).toBe(2);
-        expect(hits.some((h) => h.method === "GET" && h.url === "/items")).toBe(true);
-        expect(hits.some((h) => h.method === "POST" && h.url === "/items")).toBe(true);
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
-    },
-    30_000,
-  );
+      expect(summary.run.failures).toHaveLength(0);
+      expect(summary.run.stats.requests.total).toBe(2);
+      expect(hits.some((h) => h.method === "GET" && h.url === "/items")).toBe(true);
+      expect(hits.some((h) => h.method === "POST" && h.url === "/items")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

@@ -36,22 +36,18 @@ export const HistoryPage: Component = () => {
   // `mutate` is pulled so we can explicitly clear the resource when the source
   // flips back to undefined — Solid keeps the previously-resolved value
   // otherwise, and the Close-diff / unpick-run buttons want a clean slate.
-  const [selectedDetail, { mutate: mutateSelectedDetail }] = createResource(
-    selectedId,
-    (id) => api.getRun(id),
+  const [selectedDetail, { mutate: mutateSelectedDetail }] = createResource(selectedId, (id) =>
+    api.getRun(id),
   );
-  const [compareDetail, { mutate: mutateCompareDetail }] = createResource(
-    compareId,
-    (id) => api.getRun(id),
+  const [compareDetail, { mutate: mutateCompareDetail }] = createResource(compareId, (id) =>
+    api.getRun(id),
   );
 
   const filtered = createMemo(() => {
     const q = filter().toLowerCase();
     const list = runs() ?? [];
     if (!q) return list;
-    return list.filter((r) =>
-      r.journeyNames.some((n) => n.toLowerCase().includes(q)),
-    );
+    return list.filter((r) => r.journeyNames.some((n) => n.toLowerCase().includes(q)));
   });
 
   const stats = createMemo(() => {
@@ -86,10 +82,7 @@ export const HistoryPage: Component = () => {
   };
 
   return (
-    <div
-      style={{ display: "flex", height: "100%", "min-height": 0 }}
-      data-testid="history-page"
-    >
+    <div style={{ display: "flex", height: "100%", "min-height": 0 }} data-testid="history-page">
       <aside
         style={{
           width: "360px",
@@ -110,9 +103,7 @@ export const HistoryPage: Component = () => {
           }}
         >
           <div style={{ display: "flex", "align-items": "baseline", gap: "8px" }}>
-            <h1 style={{ "font-size": "18px", "font-weight": 600, margin: 0 }}>
-              Run history
-            </h1>
+            <h1 style={{ "font-size": "18px", "font-weight": 600, margin: 0 }}>Run history</h1>
             <span
               class="mono"
               style={{ "font-size": "11px", color: "var(--fg-3)" }}
@@ -206,13 +197,11 @@ export const HistoryPage: Component = () => {
                     }}
                     onMouseEnter={(e) => {
                       if (!isSelected() && !isCompare())
-                        (e.currentTarget as HTMLElement).style.background =
-                          "var(--bg-1)";
+                        (e.currentTarget as HTMLElement).style.background = "var(--bg-1)";
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected() && !isCompare())
-                        (e.currentTarget as HTMLElement).style.background =
-                          "transparent";
+                        (e.currentTarget as HTMLElement).style.background = "transparent";
                     }}
                   >
                     <RunDot state={r.ok ? "pass" : "fail"} />
@@ -237,23 +226,16 @@ export const HistoryPage: Component = () => {
                           "margin-top": "2px",
                         }}
                       >
-                        {formatRelative(r.timestamp)} · {r.stepCount} steps ·{" "}
-                        {r.durationMs}ms
+                        {formatRelative(r.timestamp)} · {r.stepCount} steps · {r.durationMs}ms
                       </div>
                     </div>
                     <Show when={isCompare()}>
-                      <span
-                        class="mono"
-                        style={{ "font-size": "10px", color: "var(--info)" }}
-                      >
+                      <span class="mono" style={{ "font-size": "10px", color: "var(--info)" }}>
                         B
                       </span>
                     </Show>
                     <Show when={isSelected()}>
-                      <span
-                        class="mono"
-                        style={{ "font-size": "10px", color: "var(--ac)" }}
-                      >
+                      <span class="mono" style={{ "font-size": "10px", color: "var(--ac)" }}>
                         A
                       </span>
                     </Show>
@@ -292,7 +274,14 @@ export const HistoryPage: Component = () => {
           }
         >
           {(a) => (
-            <div style={{ padding: "16px 20px", display: "flex", "flex-direction": "column", gap: "16px" }}>
+            <div
+              style={{
+                padding: "16px 20px",
+                display: "flex",
+                "flex-direction": "column",
+                gap: "16px",
+              }}
+            >
               <DetailHeader
                 detail={a()}
                 label="A"
@@ -305,10 +294,7 @@ export const HistoryPage: Component = () => {
                   setPickingCompare(false);
                 }}
               />
-              <Show
-                when={compareDetail()}
-                fallback={<RunResults results={a().results} />}
-              >
+              <Show when={compareDetail()} fallback={<RunResults results={a().results} />}>
                 {(b) => <DiffPane a={a()} b={b()} />}
               </Show>
             </div>
@@ -319,11 +305,7 @@ export const HistoryPage: Component = () => {
   );
 };
 
-function Stat(props: {
-  label: string;
-  value: string;
-  valueColor?: string;
-}): JSX.Element {
+function Stat(props: { label: string; value: string; valueColor?: string }): JSX.Element {
   return (
     <div>
       <div
@@ -382,10 +364,7 @@ function DetailHeader(props: {
       </h2>
       <span class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
         {formatRelative(props.detail.timestamp)} ·{" "}
-        {props.detail.results.reduce(
-          (a, r) => a + (r.durationMs ?? 0),
-          0,
-        )}
+        {props.detail.results.reduce((a, r) => a + (r.durationMs ?? 0), 0)}
         ms
       </span>
       <div style={{ flex: 1 }} />
@@ -401,9 +380,7 @@ function DetailHeader(props: {
               "align-items": "center",
               gap: "6px",
               padding: "5px 10px",
-              border: props.pickingCompare
-                ? "1px solid var(--ac-bd)"
-                : "1px solid var(--bd-2)",
+              border: props.pickingCompare ? "1px solid var(--ac-bd)" : "1px solid var(--bd-2)",
               "border-radius": "4px",
               "font-size": "11px",
               color: props.pickingCompare ? "var(--ac)" : "var(--fg-1)",
@@ -454,9 +431,7 @@ function RunResults(props: { results: JourneyResult[] }): JSX.Element {
                 {r.name}
               </span>
             </div>
-            <For each={r.steps}>
-              {(s) => <StepRow step={s} />}
-            </For>
+            <For each={r.steps}>{(s) => <StepRow step={s} />}</For>
           </div>
         )}
       </For>
@@ -505,13 +480,8 @@ function StepRow(props: { step: StepResult }): JSX.Element {
           )}
         </Show>
       </div>
-      <Show when={props.step.response}>
-        {(res) => <StatusPill status={res().status} />}
-      </Show>
-      <span
-        class="mono"
-        style={{ "font-size": "11px", color: "var(--fg-2)" }}
-      >
+      <Show when={props.step.response}>{(res) => <StatusPill status={res().status} />}</Show>
+      <span class="mono" style={{ "font-size": "11px", color: "var(--fg-2)" }}>
         {props.step.durationMs}ms
       </span>
       <Show when={props.step.error}>
@@ -559,13 +529,9 @@ function DiffPane(props: { a: RunDetail; b: RunDetail }): JSX.Element {
                   padding: "3px 10px",
                   "font-size": "11px",
                   "border-radius": "3px",
-                  background:
-                    stepIdx() === i() ? "var(--ac-bg)" : "var(--bg-2)",
+                  background: stepIdx() === i() ? "var(--ac-bg)" : "var(--bg-2)",
                   color: stepIdx() === i() ? "var(--ac)" : "var(--fg-2)",
-                  border:
-                    stepIdx() === i()
-                      ? "1px solid var(--ac-bd)"
-                      : "1px solid transparent",
+                  border: stepIdx() === i() ? "1px solid var(--ac-bd)" : "1px solid transparent",
                 }}
               >
                 {s.name}

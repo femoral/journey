@@ -25,10 +25,7 @@ function makeId(): { id: string; timestamp: string } {
   return { id, timestamp: ts };
 }
 
-export async function writeRun(
-  cacheDir: string,
-  results: JourneyResult[],
-): Promise<RunRecord> {
+export async function writeRun(cacheDir: string, results: JourneyResult[]): Promise<RunRecord> {
   const runsDir = join(cacheDir, "runs");
   await mkdir(runsDir, { recursive: true });
   const { id, timestamp } = makeId();

@@ -17,9 +17,7 @@ export type ParsedCurl = {
   warnings: string[];
 };
 
-export type ParseResult =
-  | { ok: true; value: ParsedCurl }
-  | { ok: false; error: string };
+export type ParseResult = { ok: true; value: ParsedCurl } | { ok: false; error: string };
 
 export function parseCurl(input: string): ParseResult {
   const joined = input.replace(/\\\n/g, " ").trim();

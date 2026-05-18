@@ -11,8 +11,7 @@ function waitForLog(
   needle: string | RegExp,
   timeoutMs: number,
 ): Promise<void> {
-  const match = (s: string) =>
-    typeof needle === "string" ? s.includes(needle) : needle.test(s);
+  const match = (s: string) => (typeof needle === "string" ? s.includes(needle) : needle.test(s));
   return new Promise((resolve, reject) => {
     let buffered = "";
     const timer = setTimeout(
@@ -49,7 +48,11 @@ async function makeProject(): Promise<string> {
   await mkdir(join(projectDir, "environments"), { recursive: true });
   await writeFile(
     join(projectDir, "journey.config.json"),
-    JSON.stringify({ name: "demo", spec: "openapi.yaml", baseUrl: "https://api.example.com" }, null, 2),
+    JSON.stringify(
+      { name: "demo", spec: "openapi.yaml", baseUrl: "https://api.example.com" },
+      null,
+      2,
+    ),
   );
   await writeFile(
     join(projectDir, "generated", "endpoints.ts"),

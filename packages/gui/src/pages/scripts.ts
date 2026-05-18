@@ -93,9 +93,7 @@ export async function runPostScript(
     },
     toEqual(expected: T) {
       if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(
-          `expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`,
-        );
+        throw new Error(`expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`);
       }
     },
     toBeDefined() {

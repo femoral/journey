@@ -16,6 +16,7 @@ project directory generated from an OpenAPI spec and version-controlled
 alongside the API's code.
 
 **Stance:**
+
 - No cloud. No login. No subscriptions.
 - Projects live on disk and in your VCS.
 - Plain TypeScript, plain JSON, no proprietary format.
@@ -45,6 +46,7 @@ my-api/
 ```
 
 Surfaces:
+
 - **CLI** — `journey init | generate | run | export k6 | env list | serve`
 - **Web GUI** (Solid + Vite + Tailwind + Kobalte)
 - **Desktop app** (Tauri 2 wrap of the same SPA)
@@ -62,14 +64,14 @@ path. No logic forks.
 The web/desktop app is a SPA with a left sidebar and one main content
 area per route:
 
-| Route | Purpose |
-|-------|---------|
-| `/` Overview | Project name, base URL, counts (endpoints, journeys, environments) |
-| `/files` | Tree of `journeys/`, `environments/`, `generated/` |
-| `/endpoints` | List of generated endpoints; pick one and send a one-off request |
-| `/journeys` | List `.journey.ts` files, run one, see step-by-step results, diff against prior runs |
-| `/environments` | CRUD on environment JSON files (key/value pairs, secret masking) |
-| `/editor` | Source-edit a journey file; drag-drop step ordering; new from skeleton |
+| Route           | Purpose                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `/` Overview    | Project name, base URL, counts (endpoints, journeys, environments)                   |
+| `/files`        | Tree of `journeys/`, `environments/`, `generated/`                                   |
+| `/endpoints`    | List of generated endpoints; pick one and send a one-off request                     |
+| `/journeys`     | List `.journey.ts` files, run one, see step-by-step results, diff against prior runs |
+| `/environments` | CRUD on environment JSON files (key/value pairs, secret masking)                     |
+| `/editor`       | Source-edit a journey file; drag-drop step ordering; new from skeleton               |
 
 Backend is `journey serve`, a Node HTTP server exposing `/api/*`.
 The frontend hits it via a Vite proxy in dev and same-origin in
@@ -127,6 +129,7 @@ A dock-able panel — collapsible, resizable — that streams everything
 the runtime is doing in real time. Inspired by browser devtools.
 
 Required content:
+
 - **Request:** method, URL, query string broken out, headers (with
   secrets redacted by default but reveal-on-click), body (formatted
   JSON / raw / hex).
@@ -187,6 +190,7 @@ fiddling.
 ### 5. Visual identity
 
 Minimal isn't enough — the app needs:
+
 - A logo / wordmark.
 - A primary brand colour with a dark-mode palette and a light-mode
   palette (currently dark-only).
@@ -223,7 +227,7 @@ nav and shells.
   (image, GraphQL, gRPC, server-sent events).
 - **CI report mode** — `journey run --reporter junit | sarif | github-actions`
   and matching annotations.
-- **k6 dashboard preview** — show the script that *would* be exported
+- **k6 dashboard preview** — show the script that _would_ be exported
   next to the journey for one-click sanity check.
 
 ---

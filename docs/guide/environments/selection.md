@@ -59,8 +59,8 @@ If `environments/` is empty or missing: `No environments found in /abs/path/envi
 
 ## Priority recap
 
-| `--env` passed? | `defaultEnvironment` set? | Active env  |
-|-----------------|---------------------------|-------------|
-| Yes             | —                         | `<--env>`   |
-| No              | Yes                       | Default     |
+| `--env` passed? | `defaultEnvironment` set? | Active env                              |
+| --------------- | ------------------------- | --------------------------------------- |
+| Yes             | —                         | `<--env>`                               |
+| No              | Yes                       | Default                                 |
 | No              | No                        | None — `env()` throws at step execution |

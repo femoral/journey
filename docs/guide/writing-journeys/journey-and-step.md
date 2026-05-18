@@ -13,9 +13,9 @@ sources:
 function journey(name: string, body: () => void | Promise<void>): void;
 ```
 
-| Argument | Type                          | Required | Notes |
-|----------|-------------------------------|----------|-------|
-| `name`   | `string`                      | Yes      | Shown in logs and run records. |
+| Argument | Type                          | Required | Notes                                                             |
+| -------- | ----------------------------- | -------- | ----------------------------------------------------------------- |
+| `name`   | `string`                      | Yes      | Shown in logs and run records.                                    |
 | `body`   | `() => void \| Promise<void>` | Yes      | Called once, at **registration time**, to collect `step()` calls. |
 
 Calling `journey()` does **not** execute any HTTP requests. It registers the journey in a module-level registry. The runner (`journey run`, the GUI, or `runAllRegistered()`) walks the registry later and executes each journey's `body`, then each collected step.
@@ -31,19 +31,19 @@ Two consequences:
 function step<E extends Endpoint>(name: string, options: StepOptions<E>): void;
 ```
 
-| Argument  | Type             | Required | Notes |
-|-----------|------------------|----------|-------|
+| Argument  | Type             | Required | Notes                                        |
+| --------- | ---------------- | -------- | -------------------------------------------- |
 | `name`    | `string`         | Yes      | Appears in logs and in the Run history view. |
-| `options` | `StepOptions<E>` | Yes      | Per-step configuration. |
+| `options` | `StepOptions<E>` | Yes      | Per-step configuration.                      |
 
 `StepOptions<E>` has one required field (`endpoint`) and seven optional ones. Each is covered in its own page:
 
-| Field        | Page |
-|--------------|------|
-| `endpoint`   | [Endpoints](./endpoints) |
-| `params`, `query`, `headers`, `body` | [Request inputs](./request-inputs) |
-| `timeoutMs`  | [Timeouts](./timeouts) |
-| `assert`, `after` | [Assertions and hooks](./assertions-and-hooks) |
+| Field                                | Page                                           |
+| ------------------------------------ | ---------------------------------------------- |
+| `endpoint`                           | [Endpoints](./endpoints)                       |
+| `params`, `query`, `headers`, `body` | [Request inputs](./request-inputs)             |
+| `timeoutMs`                          | [Timeouts](./timeouts)                         |
+| `assert`, `after`                    | [Assertions and hooks](./assertions-and-hooks) |
 
 Full lookup table: [Reference — Step options](../../reference/step-options).
 

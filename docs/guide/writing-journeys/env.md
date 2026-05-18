@@ -27,10 +27,10 @@ step("login", {
 
 `env()` throws at **step-execution time** (not at registration), so a missing key fails the step cleanly rather than crashing the whole runner.
 
-| Trigger                          | Message |
-|----------------------------------|---------|
-| No active environment set        | `env("USERNAME") called with no active environment. Pass --env <name> or set one via setActiveEnvironment().` |
-| Key missing from environment     | `env: key "USERNAME" not found in environment "dev"` |
+| Trigger                      | Message                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| No active environment set    | `env("USERNAME") called with no active environment. Pass --env <name> or set one via setActiveEnvironment().` |
+| Key missing from environment | `env: key "USERNAME" not found in environment "dev"`                                                          |
 
 ## Using it inside lazy callbacks
 

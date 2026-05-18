@@ -26,8 +26,8 @@ Values are URL-encoded (via `encodeURIComponent`).
 
 ```ts
 step("get pet", {
-  endpoint: endpoints.getPetById,       // path: "/pet/{id}"
-  params: { id: petId },                 // → /pet/42
+  endpoint: endpoints.getPetById, // path: "/pet/{id}"
+  params: { id: petId }, // → /pet/42
 });
 ```
 
@@ -97,11 +97,11 @@ body?: Lazy<unknown>;
 
 Behavior depends on the runtime type:
 
-| Value type         | What fetch sees                                       |
-|--------------------|-------------------------------------------------------|
-| `string`           | Sent as-is (`init.body = value`)                      |
-| Anything else      | `JSON.stringify(value)` + auto `Content-Type: application/json` |
-| `undefined` / omitted | No body sent                                       |
+| Value type            | What fetch sees                                                 |
+| --------------------- | --------------------------------------------------------------- |
+| `string`              | Sent as-is (`init.body = value`)                                |
+| Anything else         | `JSON.stringify(value)` + auto `Content-Type: application/json` |
+| `undefined` / omitted | No body sent                                                    |
 
 ```ts
 step("create", {

@@ -15,16 +15,16 @@ import { journey, step, env, expect /*, … */ } from "@journey/core";
 
 ## Module map
 
-| Page | Exports | Purpose |
-|------|---------|---------|
-| [Runtime](./runtime)         | `journey`, `step`, `runAllRegistered`, `runJourney`, `clearRegistry`, `getRegisteredJourneys`, `StepOptions`, `StepResult`, `JourneyResult`, `RunMeta` | Registration and execution of journeys. |
-| [HTTP](./http)               | `HttpContext`, `HttpResponse`, `RequestSpec`, `BuildRequestOptions`, `buildRequest`, `execute`, `resolveUrl` | Low-level request building and execution. |
-| [Endpoints](./endpoints)     | `Endpoint`, `EndpointRef`, `EndpointDescriptor`, `HttpMethod`, `ResponseOf`, `isEndpointRef` | Endpoint types and the runtime guard. |
-| [Environment](./environment) | `env`, `setActiveEnvironment`, `clearActiveEnvironment`, `loadEnvironment`, `listEnvironments`, `EnvValues` | Environment loading and lookup. |
-| [Assertions](./assertions)   | `expect`, `Expectation`, `AssertionError` | Built-in matcher helper. |
-| [Config](./config-api)       | `loadConfig`, `resolveConfigPaths`, `JourneyConfig`, `JourneyConfigSchema`, `LoadedConfig` | Read and validate `journey.config.json`. |
-| [Logging](./logging)         | `JourneyLogger`, `createConsoleLogger`, `loggerFromEnv`, `maskHeaders`, `SECRET_HEADERS`, event type exports | Lifecycle hooks and built-in loggers. |
-| [History](./history)         | `writeRun`, `readRun`, `listRuns`, `pruneRuns`, `RunRecord`, `RunSummary` | Run-record persistence. |
+| Page                         | Exports                                                                                                                                                | Purpose                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| [Runtime](./runtime)         | `journey`, `step`, `runAllRegistered`, `runJourney`, `clearRegistry`, `getRegisteredJourneys`, `StepOptions`, `StepResult`, `JourneyResult`, `RunMeta` | Registration and execution of journeys.   |
+| [HTTP](./http)               | `HttpContext`, `HttpResponse`, `RequestSpec`, `BuildRequestOptions`, `buildRequest`, `execute`, `resolveUrl`                                           | Low-level request building and execution. |
+| [Endpoints](./endpoints)     | `Endpoint`, `EndpointRef`, `EndpointDescriptor`, `HttpMethod`, `ResponseOf`, `isEndpointRef`                                                           | Endpoint types and the runtime guard.     |
+| [Environment](./environment) | `env`, `setActiveEnvironment`, `clearActiveEnvironment`, `loadEnvironment`, `listEnvironments`, `EnvValues`                                            | Environment loading and lookup.           |
+| [Assertions](./assertions)   | `expect`, `Expectation`, `AssertionError`                                                                                                              | Built-in matcher helper.                  |
+| [Config](./config-api)       | `loadConfig`, `resolveConfigPaths`, `JourneyConfig`, `JourneyConfigSchema`, `LoadedConfig`                                                             | Read and validate `journey.config.json`.  |
+| [Logging](./logging)         | `JourneyLogger`, `createConsoleLogger`, `loggerFromEnv`, `maskHeaders`, `SECRET_HEADERS`, event type exports                                           | Lifecycle hooks and built-in loggers.     |
+| [History](./history)         | `writeRun`, `readRun`, `listRuns`, `pruneRuns`, `RunRecord`, `RunSummary`                                                                              | Run-record persistence.                   |
 
 ## Entry points
 

@@ -12,7 +12,9 @@ describe("parseCurl", () => {
   });
 
   it("parses a POST with JSON body via -d and line continuations", () => {
-    const r = parseCurl(`curl -X POST 'https://api.example.com/pets' \\\n  -H 'content-type: application/json' \\\n  -d '{"name":"rex"}'`);
+    const r = parseCurl(
+      `curl -X POST 'https://api.example.com/pets' \\\n  -H 'content-type: application/json' \\\n  -d '{"name":"rex"}'`,
+    );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.method).toBe("POST");

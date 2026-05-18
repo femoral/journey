@@ -4,9 +4,7 @@ import { DiffPage } from "../src/pages/DiffPage";
 
 const drifting = {
   added: [{ method: "GET", path: "/pets", operationId: "listPets" }],
-  removed: [
-    { method: "DELETE", path: "/pets/{id}", operationId: "deletePet" },
-  ],
+  removed: [{ method: "DELETE", path: "/pets/{id}", operationId: "deletePet" }],
   hasGenerated: true,
   hasSpec: true,
   count: 2,
@@ -53,15 +51,11 @@ describe("DiffPage", () => {
 
   it("lists drifted endpoints and clears them after Regenerate", async () => {
     render(() => <DiffPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId("drift-row-GET-/pets")).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByTestId("drift-row-GET-/pets")).toBeTruthy());
     expect(screen.getByTestId("drift-row-DELETE-/pets/{id}")).toBeTruthy();
     expect(screen.getByText(/2 endpoints drifted/)).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("regenerate"));
-    await waitFor(() =>
-      expect(screen.getByText("In sync. No drift detected.")).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("In sync. No drift detected.")).toBeTruthy());
   });
 });

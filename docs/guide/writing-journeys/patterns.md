@@ -168,11 +168,19 @@ You can call `journey()` multiple times in a single `.journey.ts` file — they'
 
 ```ts
 journey("happy path", () => {
-  step("create", { endpoint: endpoints.createPet, body: { name: "A" }, assert: r => expect(r.status).toBe(201) });
+  step("create", {
+    endpoint: endpoints.createPet,
+    body: { name: "A" },
+    assert: (r) => expect(r.status).toBe(201),
+  });
 });
 
 journey("error path", () => {
-  step("create invalid", { endpoint: endpoints.createPet, body: {}, assert: r => expect(r.status).toBe(400) });
+  step("create invalid", {
+    endpoint: endpoints.createPet,
+    body: {},
+    assert: (r) => expect(r.status).toBe(400),
+  });
 });
 ```
 

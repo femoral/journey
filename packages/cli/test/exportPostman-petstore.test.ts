@@ -139,7 +139,12 @@ describe("petstore — export structure", () => {
     expect(folder.name).toBe("list available pets");
     expect(folder.item).toHaveLength(1);
 
-    const step = (folder.item as Array<{ name: string; request: { method: string; url: { raw: string; query: Array<{ key: string }> } } }>)[0]!;
+    const step = (
+      folder.item as Array<{
+        name: string;
+        request: { method: string; url: { raw: string; query: Array<{ key: string }> } };
+      }>
+    )[0]!;
     expect(step.name).toBe("findByStatus");
     expect(step.request.method).toBe("GET");
     expect(step.request.url.raw).toContain("/pet/findByStatus");
@@ -260,17 +265,13 @@ describe("petstore — Newman e2e (list-available-pets)", () => {
     await rm(outDir, { recursive: true, force: true });
   });
 
-  it(
-    "collection runs against the petstore mock with no Newman failures",
-    async () => {
-      const collectionPath = join(outDir, "list-available-pets.postman_collection.json");
-      const envPath = join(outDir, "local.postman_environment.json");
-      const summary = await runNewman(collectionPath, envPath);
+  it("collection runs against the petstore mock with no Newman failures", async () => {
+    const collectionPath = join(outDir, "list-available-pets.postman_collection.json");
+    const envPath = join(outDir, "local.postman_environment.json");
+    const summary = await runNewman(collectionPath, envPath);
 
-      expect(summary.run.failures).toHaveLength(0);
-      expect(summary.run.stats.requests.total).toBe(1);
-      expect(summary.run.stats.requests.failed).toBe(0);
-    },
-    30_000,
-  );
+    expect(summary.run.failures).toHaveLength(0);
+    expect(summary.run.stats.requests.total).toBe(1);
+    expect(summary.run.stats.requests.failed).toBe(0);
+  }, 30_000);
 });

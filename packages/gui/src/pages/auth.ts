@@ -54,13 +54,9 @@ export function defaultPreset(kind: AuthPresetKind): AuthPreset {
  * use env() directly; the Endpoints page's ad-hoc Send doesn't run user code
  * so we substitute textually here before dispatching the request.
  */
-export function interpolateEnv(
-  input: string,
-  env: Record<string, string>,
-): string {
-  return input.replace(
-    /\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g,
-    (_, k: string) => (k in env ? (env[k] ?? "") : `{{env.${k}}}`),
+export function interpolateEnv(input: string, env: Record<string, string>): string {
+  return input.replace(/\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (_, k: string) =>
+    k in env ? (env[k] ?? "") : `{{env.${k}}}`,
   );
 }
 
@@ -74,10 +70,7 @@ export type AuthContribution = {
  * into the outgoing request. Returns empty contributions for "none" and for
  * presets missing required fields — callers just spread whatever is returned.
  */
-export function contribute(
-  preset: AuthPreset,
-  env: Record<string, string>,
-): AuthContribution {
+export function contribute(preset: AuthPreset, env: Record<string, string>): AuthContribution {
   const out: AuthContribution = { headers: {}, query: {} };
   const sub = (s: string) => interpolateEnv(s, env);
   switch (preset.kind) {

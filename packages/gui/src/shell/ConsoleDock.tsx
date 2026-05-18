@@ -1,11 +1,4 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createSignal,
-  onCleanup,
-  type JSX,
-} from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 import {
   IconConsole,
   IconCopy,
@@ -80,7 +73,7 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
     const inField =
       tgt instanceof HTMLInputElement ||
       tgt instanceof HTMLTextAreaElement ||
-      (tgt?.getAttribute("role") === "textbox");
+      tgt?.getAttribute("role") === "textbox";
     // Esc closes the dock whether or not focus is in an input.
     if (e.key === "Escape") {
       props.onClose();
@@ -267,11 +260,7 @@ export function ConsoleDock(props: ConsoleDockProps): JSX.Element {
 
         {/* content */}
         <Show when={tab() === "Network"}>
-          <NetworkTab
-            entries={visible()}
-            selected={selected()}
-            onSelect={setSelectedId}
-          />
+          <NetworkTab entries={visible()} selected={selected()} onSelect={setSelectedId} />
         </Show>
         <Show when={tab() === "Logs"}>
           <LogsTab logs={store.logs()} />
@@ -307,10 +296,7 @@ function TabBtn(props: {
       {props.icon}
       {props.label}
       <Show when={props.count !== undefined}>
-        <span
-          class="mono"
-          style={{ "font-size": "10px", color: "var(--fg-3)" }}
-        >
+        <span class="mono" style={{ "font-size": "10px", color: "var(--fg-3)" }}>
           {props.count}
         </span>
       </Show>
@@ -462,34 +448,25 @@ function NetworkTab(props: {
                   style={{
                     width: "100%",
                     display: "grid",
-                    "grid-template-columns":
-                      "18px 42px 140px minmax(0, 1fr) 46px 56px",
+                    "grid-template-columns": "18px 42px 140px minmax(0, 1fr) 46px 56px",
                     "align-items": "center",
                     gap: "8px",
                     padding: "5px 12px",
                     "text-align": "left",
-                    background:
-                      props.selected?.id === e.id
-                        ? "var(--bg-3)"
-                        : "transparent",
+                    background: props.selected?.id === e.id ? "var(--bg-3)" : "transparent",
                     "border-bottom": "1px solid var(--bd-1)",
                   }}
                   onMouseEnter={(ev) => {
                     if (props.selected?.id !== e.id)
-                      (ev.currentTarget as HTMLElement).style.background =
-                        "var(--bg-1)";
+                      (ev.currentTarget as HTMLElement).style.background = "var(--bg-1)";
                   }}
                   onMouseLeave={(ev) => {
                     if (props.selected?.id !== e.id)
-                      (ev.currentTarget as HTMLElement).style.background =
-                        "transparent";
+                      (ev.currentTarget as HTMLElement).style.background = "transparent";
                   }}
                 >
                   <RunDot state={e.state as RunState} size={6} />
-                  <Show
-                    when={e.method}
-                    fallback={<span style={{ color: "var(--fg-3)" }}>—</span>}
-                  >
+                  <Show when={e.method} fallback={<span style={{ color: "var(--fg-3)" }}>—</span>}>
                     <MethodBadge method={e.method as HttpMethod} />
                   </Show>
                   <span
@@ -519,10 +496,7 @@ function NetworkTab(props: {
                     <Show
                       when={e.status !== undefined}
                       fallback={
-                        <span
-                          class="mono"
-                          style={{ color: "var(--fg-3)", "font-size": "11px" }}
-                        >
+                        <span class="mono" style={{ color: "var(--fg-3)", "font-size": "11px" }}>
                           …
                         </span>
                       }
@@ -639,18 +613,12 @@ function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
           <StatusPill status={props.entry.status!} />
         </Show>
         <Show when={props.entry.durationMs !== undefined}>
-          <span
-            class="mono"
-            style={{ "font-size": "11px", color: "var(--fg-2)" }}
-          >
+          <span class="mono" style={{ "font-size": "11px", color: "var(--fg-2)" }}>
             {props.entry.durationMs}ms
           </span>
         </Show>
         <Show when={props.entry.size !== undefined}>
-          <span
-            class="mono"
-            style={{ "font-size": "11px", color: "var(--fg-3)" }}
-          >
+          <span class="mono" style={{ "font-size": "11px", color: "var(--fg-3)" }}>
             {formatBytes(props.entry.size!)}
           </span>
         </Show>
@@ -683,16 +651,8 @@ function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
           onClick={() => setTab("Response")}
           label="Response"
         />
-        <MiniTab
-          active={tab() === "Request"}
-          onClick={() => setTab("Request")}
-          label="Request"
-        />
-        <MiniTab
-          active={tab() === "Headers"}
-          onClick={() => setTab("Headers")}
-          label="Headers"
-        />
+        <MiniTab active={tab() === "Request"} onClick={() => setTab("Request")} label="Request" />
+        <MiniTab active={tab() === "Headers"} onClick={() => setTab("Headers")} label="Headers" />
       </div>
       <div style={{ flex: 1, overflow: "auto" }}>
         <Show when={tab() === "Response"}>
@@ -807,16 +767,16 @@ function HeaderRows(props: { entries: [string, string][] }): JSX.Element {
           }}
         >
           <span style={{ color: "var(--info)" }}>{k}</span>
-          <span style={{ color: "var(--fg-1)", "word-break": "break-all" }}>
-            {v}
-          </span>
+          <span style={{ color: "var(--fg-1)", "word-break": "break-all" }}>{v}</span>
         </div>
       )}
     </For>
   );
 }
 
-function LogsTab(props: { logs: Array<{ id: string; level: string; text: string; stepName: string; timestamp: number }> }): JSX.Element {
+function LogsTab(props: {
+  logs: Array<{ id: string; level: string; text: string; stepName: string; timestamp: number }>;
+}): JSX.Element {
   return (
     <div style={{ flex: 1, overflow: "auto" }}>
       <Show
@@ -862,11 +822,7 @@ function LogsTab(props: { logs: Array<{ id: string; level: string; text: string;
                 {log.level}
               </span>
               <span style={{ color: "var(--fg-3)" }}>{log.stepName}</span>
-              <span
-                style={{ color: "var(--fg-1)", "white-space": "pre-wrap" }}
-              >
-                {log.text}
-              </span>
+              <span style={{ color: "var(--fg-1)", "white-space": "pre-wrap" }}>{log.text}</span>
             </div>
           )}
         </For>

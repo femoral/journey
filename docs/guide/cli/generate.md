@@ -33,9 +33,9 @@ Regenerated N operations → /abs/path/generated/models.ts, /abs/path/generated/
 
 ## Exit codes
 
-| Code | When |
-|------|------|
-| `0`  | Success. |
+| Code | When                                                                          |
+| ---- | ----------------------------------------------------------------------------- |
+| `0`  | Success.                                                                      |
 | `1`  | `journey.config.json` missing or invalid, spec not found, generation failure. |
 
 ## Non-destructive guarantee

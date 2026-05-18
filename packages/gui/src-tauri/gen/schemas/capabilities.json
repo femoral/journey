@@ -1,1 +1,9 @@
-{"default":{"identifier":"default","description":"Default capabilities for the Journey window","local":true,"windows":["main"],"permissions":["shell:allow-open","dialog:allow-open"]}}
+{
+  "default": {
+    "identifier": "default",
+    "description": "Default capabilities for the Journey window",
+    "local": true,
+    "windows": ["main"],
+    "permissions": ["shell:allow-open", "dialog:allow-open"]
+  }
+}

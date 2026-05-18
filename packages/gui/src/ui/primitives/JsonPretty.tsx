@@ -28,9 +28,7 @@ function tokenize(text: string): JSX.Element[] {
       const str = text.slice(i, j + 1);
       const rest = text.slice(j + 1);
       const isKey = /^\s*:/.test(rest);
-      out.push(
-        <span style={{ color: isKey ? "var(--info)" : "var(--ok)" }}>{str}</span>,
-      );
+      out.push(<span style={{ color: isKey ? "var(--info)" : "var(--ok)" }}>{str}</span>);
       i = j + 1;
     } else if (/[0-9-]/.test(c) && (i === 0 || !/[a-zA-Z_]/.test(at(i - 1)))) {
       let j = i;

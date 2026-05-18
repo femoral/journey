@@ -74,12 +74,7 @@ describe("TabButton", () => {
   it("fires click and reflects active state", () => {
     const [active, setActive] = createSignal(false);
     render(() => (
-      <TabButton
-        active={active()}
-        onClick={() => setActive(true)}
-        label="Params"
-        count={3}
-      />
+      <TabButton active={active()} onClick={() => setActive(true)} label="Params" count={3} />
     ));
     const btn = screen.getByRole("tab");
     expect(btn.getAttribute("aria-selected")).toBe("false");
@@ -108,9 +103,7 @@ describe("SegBtn", () => {
 describe("Checkbox (Kobalte)", () => {
   it("toggles state via keyboard a11y surface", () => {
     const [checked, setChecked] = createSignal(false);
-    render(() => (
-      <Checkbox checked={checked()} onChange={setChecked} aria-label="Enable" />
-    ));
+    render(() => <Checkbox checked={checked()} onChange={setChecked} aria-label="Enable" />);
     const cb = screen.getByRole("checkbox");
     fireEvent.click(cb);
     expect(checked()).toBe(true);
@@ -141,9 +134,7 @@ describe("KVTable", () => {
 
 describe("JsonPretty", () => {
   it("renders all characters of the input JSON text", () => {
-    const { container } = render(() => (
-      <JsonPretty text='{"id":"x","n":42,"ok":true}' />
-    ));
+    const { container } = render(() => <JsonPretty text='{"id":"x","n":42,"ok":true}' />);
     expect(container.textContent).toBe('{"id":"x","n":42,"ok":true}');
   });
 });
@@ -201,9 +192,7 @@ describe("TypeHint", () => {
 describe("QAButton", () => {
   it("renders label and subtitle and fires onClick", () => {
     const click = vi.fn();
-    render(() => (
-      <QAButton icon={IconPlus} label="New journey" sub="skeleton" onClick={click} />
-    ));
+    render(() => <QAButton icon={IconPlus} label="New journey" sub="skeleton" onClick={click} />);
     fireEvent.click(screen.getByText("New journey"));
     expect(click).toHaveBeenCalled();
     expect(screen.getByText("skeleton")).toBeDefined();

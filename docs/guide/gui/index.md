@@ -32,16 +32,16 @@ This guide is **orientation**, not a component reference. For the exact options 
 
 ## Navigation map
 
-| Section | Route          | What it is |
-|---------|----------------|------------|
-| Project | `/`            | Overview dashboard — config, counts, recent runs, spec-drift card. |
-| Project | `/endpoints`   | Single-request view over each endpoint in the spec. Postman-style. |
-| Project | `/journeys`    | Run journeys; live step timeline. |
-| Project | `/editor`      | Edit `.journey.ts` files — visual step list + source view. |
-| Project | `/files`       | Read-only file tree for the project. |
-| Project | `/environments`| Manage per-environment JSON files. |
-| Tools   | `/diff`        | Spec drift: added/removed endpoints. |
-| Tools   | `/history`     | Run records; compare two runs side-by-side. |
+| Section | Route           | What it is                                                         |
+| ------- | --------------- | ------------------------------------------------------------------ |
+| Project | `/`             | Overview dashboard — config, counts, recent runs, spec-drift card. |
+| Project | `/endpoints`    | Single-request view over each endpoint in the spec. Postman-style. |
+| Project | `/journeys`     | Run journeys; live step timeline.                                  |
+| Project | `/editor`       | Edit `.journey.ts` files — visual step list + source view.         |
+| Project | `/files`        | Read-only file tree for the project.                               |
+| Project | `/environments` | Manage per-environment JSON files.                                 |
+| Tools   | `/diff`         | Spec drift: added/removed endpoints.                               |
+| Tools   | `/history`      | Run records; compare two runs side-by-side.                        |
 
 ## Shared principles
 

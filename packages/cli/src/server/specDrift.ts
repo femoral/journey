@@ -38,14 +38,8 @@ export function parseGeneratedEndpoints(source: string): DriftEndpoint[] {
   return out;
 }
 
-export async function computeSpecDrift(
-  specPath: string,
-  generatedDir: string,
-): Promise<SpecDrift> {
-  const [spec, generated] = await Promise.all([
-    readSpecOps(specPath),
-    readGenerated(generatedDir),
-  ]);
+export async function computeSpecDrift(specPath: string, generatedDir: string): Promise<SpecDrift> {
+  const [spec, generated] = await Promise.all([readSpecOps(specPath), readGenerated(generatedDir)]);
 
   if (!spec || !generated) {
     return {
@@ -102,9 +96,7 @@ async function readSpecOps(specPath: string): Promise<Operation[] | undefined> {
   }
 }
 
-async function readGenerated(
-  generatedDir: string,
-): Promise<DriftEndpoint[] | undefined> {
+async function readGenerated(generatedDir: string): Promise<DriftEndpoint[] | undefined> {
   try {
     const source = await readFile(join(generatedDir, "endpoints.ts"), "utf8");
     return parseGeneratedEndpoints(source);

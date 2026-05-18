@@ -3,9 +3,7 @@ import { contribute, fetchOAuth2Token, interpolateEnv } from "../src/pages/auth"
 
 describe("interpolateEnv", () => {
   it("substitutes {{env.VAR}} against the provided env", () => {
-    expect(interpolateEnv("Bearer {{env.TOKEN}}", { TOKEN: "abc" })).toBe(
-      "Bearer abc",
-    );
+    expect(interpolateEnv("Bearer {{env.TOKEN}}", { TOKEN: "abc" })).toBe("Bearer abc");
   });
 
   it("leaves unknown vars in place", () => {
@@ -22,33 +20,21 @@ describe("contribute", () => {
   });
 
   it("emits a Basic header from username/password", () => {
-    const c = contribute(
-      { kind: "basic", username: "ada", password: "lovelace" },
-      {},
-    );
+    const c = contribute({ kind: "basic", username: "ada", password: "lovelace" }, {});
     expect(c.headers.Authorization).toBe(`Basic ${btoa("ada:lovelace")}`);
   });
 
   it("emits a Bearer header, substituting env vars", () => {
-    const c = contribute(
-      { kind: "bearer", token: "{{env.T}}" },
-      { T: "xyz" },
-    );
+    const c = contribute({ kind: "bearer", token: "{{env.T}}" }, { T: "xyz" });
     expect(c.headers.Authorization).toBe("Bearer xyz");
   });
 
   it("routes API key to header or query based on where", () => {
-    const h = contribute(
-      { kind: "apikey", where: "header", name: "X-Api-Key", value: "abc" },
-      {},
-    );
+    const h = contribute({ kind: "apikey", where: "header", name: "X-Api-Key", value: "abc" }, {});
     expect(h.headers["X-Api-Key"]).toBe("abc");
     expect(h.query).toEqual({});
 
-    const q = contribute(
-      { kind: "apikey", where: "query", name: "api_key", value: "abc" },
-      {},
-    );
+    const q = contribute({ kind: "apikey", where: "query", name: "api_key", value: "abc" }, {});
     expect(q.query.api_key).toBe("abc");
     expect(q.headers).toEqual({});
   });

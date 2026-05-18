@@ -133,9 +133,7 @@ export function SaveAsStepDialog(props: SaveAsStepDialogProps): JSX.Element {
             "border-bottom": "1px solid var(--bd-1)",
           }}
         >
-          <div style={{ "font-size": "13px", "font-weight": 600 }}>
-            Save as journey step
-          </div>
+          <div style={{ "font-size": "13px", "font-weight": 600 }}>Save as journey step</div>
           <div style={{ flex: 1 }} />
           <button
             type="button"
@@ -184,9 +182,7 @@ export function SaveAsStepDialog(props: SaveAsStepDialogProps): JSX.Element {
                 when={(journeys()?.files ?? []).length > 0}
                 fallback={<option value="">(no journeys found)</option>}
               >
-                <For each={journeys()?.files ?? []}>
-                  {(f) => <option value={f}>{f}</option>}
-                </For>
+                <For each={journeys()?.files ?? []}>{(f) => <option value={f}>{f}</option>}</For>
               </Show>
             </select>
           </div>
@@ -257,8 +253,8 @@ export function SaveAsStepDialog(props: SaveAsStepDialogProps): JSX.Element {
               color: "var(--fg-3)",
             }}
           >
-            Appended before the last <span class="mono">{");"}</span> in the
-            file. For multi-journey files, double-check the result.
+            Appended before the last <span class="mono">{");"}</span> in the file. For multi-journey
+            files, double-check the result.
           </div>
         </div>
         <div
@@ -324,10 +320,7 @@ export function SaveAsStepDialog(props: SaveAsStepDialogProps): JSX.Element {
  * request fields. Uses the descriptor form for `endpoint` so the journey
  * file doesn't need a codegen-generated import to work.
  */
-export function renderStepBlock(
-  name: string,
-  p: SaveAsStepPayload,
-): string {
+export function renderStepBlock(name: string, p: SaveAsStepPayload): string {
   const lines: string[] = [];
   lines.push(`  step(${JSON.stringify(name)}, {`);
   lines.push(
@@ -352,8 +345,7 @@ export function insertStep(
   if (idx === -1) {
     return {
       ok: false,
-      reason:
-        "Couldn't find `});` to insert before. Is this a valid journey file?",
+      reason: "Couldn't find `});` to insert before. Is this a valid journey file?",
     };
   }
   // Find the start of the line containing the closing `});` so we preserve

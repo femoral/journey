@@ -50,13 +50,13 @@ When `endpoint.baseUrl` is omitted, the step falls back to `HttpContext.baseUrl`
 
 ## Side-by-side
 
-|                 | `EndpointRef`                                  | `EndpointDescriptor`                            |
-|-----------------|------------------------------------------------|-------------------------------------------------|
-| Source          | Generated into `generated/endpoints.ts`        | Hand-written `{ method, path, baseUrl? }`        |
-| Response typing | `HttpResponse<T>` from the spec                | `HttpResponse<unknown>` — cast needed            |
-| Base URL        | Inherits from `HttpContext.baseUrl`            | `endpoint.baseUrl` falls back to context        |
-| Use for         | Operations in your spec                        | Services outside the spec, seed endpoints       |
-| Regeneration    | Rewritten by `journey generate`                | Never touched                                   |
+|                 | `EndpointRef`                           | `EndpointDescriptor`                      |
+| --------------- | --------------------------------------- | ----------------------------------------- |
+| Source          | Generated into `generated/endpoints.ts` | Hand-written `{ method, path, baseUrl? }` |
+| Response typing | `HttpResponse<T>` from the spec         | `HttpResponse<unknown>` — cast needed     |
+| Base URL        | Inherits from `HttpContext.baseUrl`     | `endpoint.baseUrl` falls back to context  |
+| Use for         | Operations in your spec                 | Services outside the spec, seed endpoints |
+| Regeneration    | Rewritten by `journey generate`         | Never touched                             |
 
 ## Type flow
 

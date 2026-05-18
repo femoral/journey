@@ -9,13 +9,7 @@ export type TimingBreakdownProps = {
   width?: number;
 };
 
-const COLORS = [
-  "var(--info)",
-  "var(--m-patch)",
-  "var(--ac)",
-  "var(--ok)",
-  "var(--fg-2)",
-];
+const COLORS = ["var(--info)", "var(--m-patch)", "var(--ac)", "var(--ok)", "var(--fg-2)"];
 
 export function TimingBreakdown(props: TimingBreakdownProps): JSX.Element {
   const sum = () => props.segments.reduce((a, [, n]) => a + n, 0) || 1;

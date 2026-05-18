@@ -197,20 +197,20 @@ Serializes loaded `JourneyDef`/`StepDef` structures into Postman Collection v2.1
 
 ## Tech Stack
 
-| Layer          | Technology                                     |
-| -------------- | ---------------------------------------------- |
-| CLI            | Node.js + TypeScript, `commander`              |
-| Journey files  | TypeScript (`.journey.ts`), executed via `tsx` |
-| Runtime core   | TypeScript, native `fetch`, `zod`              |
-| Codegen        | `openapi-typescript`                           |
-| GUI shell      | Tauri 2 (Rust + system webview)                |
-| GUI frontend   | Solid.js + Tailwind                            |
-| GUI components | Kobalte (accessible primitives)                |
-| k6 adapter     | Constrained subset → transpiled `.js` output   |
-| Postman adapter | Postman Collection v2.1.0 JSON + env files    |
-| Assertions     | Built-in `expect()` in `@journey/core`         |
-| Monorepo       | pnpm workspaces                                |
-| Packaging      | npm (CLI), Tauri platform installers (GUI)     |
+| Layer           | Technology                                     |
+| --------------- | ---------------------------------------------- |
+| CLI             | Node.js + TypeScript, `commander`              |
+| Journey files   | TypeScript (`.journey.ts`), executed via `tsx` |
+| Runtime core    | TypeScript, native `fetch`, `zod`              |
+| Codegen         | `openapi-typescript`                           |
+| GUI shell       | Tauri 2 (Rust + system webview)                |
+| GUI frontend    | Solid.js + Tailwind                            |
+| GUI components  | Kobalte (accessible primitives)                |
+| k6 adapter      | Constrained subset → transpiled `.js` output   |
+| Postman adapter | Postman Collection v2.1.0 JSON + env files     |
+| Assertions      | Built-in `expect()` in `@journey/core`         |
+| Monorepo        | pnpm workspaces                                |
+| Packaging       | npm (CLI), Tauri platform installers (GUI)     |
 
 ---
 

@@ -6,10 +6,7 @@ import type { OpenApiDocument } from "./types.js";
 export async function loadSpec(specPath: string): Promise<OpenApiDocument> {
   const raw = await readFile(specPath, "utf8");
   const ext = extname(specPath).toLowerCase();
-  const doc =
-    ext === ".json"
-      ? (JSON.parse(raw) as unknown)
-      : (yaml.load(raw) as unknown);
+  const doc = ext === ".json" ? (JSON.parse(raw) as unknown) : (yaml.load(raw) as unknown);
   if (!doc || typeof doc !== "object") {
     throw new Error(`Spec at ${specPath} did not parse to an object`);
   }

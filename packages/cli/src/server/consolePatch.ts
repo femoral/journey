@@ -30,11 +30,7 @@ export function patchConsole(logger: JourneyLogger): () => void {
     error: console.error,
   };
 
-  const forward = (
-    level: LogEvent["level"],
-    original: ConsoleFn,
-    args: unknown[],
-  ) => {
+  const forward = (level: LogEvent["level"], original: ConsoleFn, args: unknown[]) => {
     try {
       logger.onLog?.({ level, text: formatArgs(args) });
     } catch {

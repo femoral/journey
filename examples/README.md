@@ -27,17 +27,17 @@ This starts three processes via concurrently, killed together on Ctrl+C:
 
 ### What's in the spec
 
-| Method | Path                 | Notes                            |
-|--------|----------------------|----------------------------------|
-| POST   | `/auth/login`        | Returns a bearer token           |
-| GET    | `/pet/findByStatus`  | `?status=…&limit=…`              |
-| POST   | `/pet`               | Auth + body; `X-Request-Id` hdr  |
-| GET    | `/pet/{id}`          | Path param                       |
-| PUT    | `/pet/{id}`          | Auth + full replace              |
-| PATCH  | `/pet/{id}`          | Auth + partial update            |
-| DELETE | `/pet/{id}`          | Auth                             |
-| GET    | `/pet/{id}/notes`    | List notes                       |
-| POST   | `/pet/{id}/notes`    | Auth + body                      |
+| Method | Path                | Notes                           |
+| ------ | ------------------- | ------------------------------- |
+| POST   | `/auth/login`       | Returns a bearer token          |
+| GET    | `/pet/findByStatus` | `?status=…&limit=…`             |
+| POST   | `/pet`              | Auth + body; `X-Request-Id` hdr |
+| GET    | `/pet/{id}`         | Path param                      |
+| PUT    | `/pet/{id}`         | Auth + full replace             |
+| PATCH  | `/pet/{id}`         | Auth + partial update           |
+| DELETE | `/pet/{id}`         | Auth                            |
+| GET    | `/pet/{id}/notes`   | List notes                      |
+| POST   | `/pet/{id}/notes`   | Auth + body                     |
 
 Mock credentials live in `environments/dev.json` (`alice` / `wonderland`).
 Override at runtime with `MOCK_USER=… MOCK_PASSWORD=…` when launching the

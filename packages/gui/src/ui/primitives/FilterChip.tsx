@@ -15,7 +15,7 @@ export type FilterChipProps<T extends string> = {
 };
 
 export function FilterChip<T extends string>(props: FilterChipProps<T>): JSX.Element {
-  const empty = () => (props.emptyValue ?? ("all" as T));
+  const empty = () => props.emptyValue ?? ("all" as T);
   const active = () => props.value !== empty();
   const display = () => {
     const v = props.value;

@@ -9,13 +9,7 @@ import {
   type JSX,
 } from "solid-js";
 import { api } from "../api/client";
-import {
-  IconSearch,
-  IconX,
-  JsonPretty,
-  MethodBadge,
-  type HttpMethod,
-} from "../ui";
+import { IconSearch, IconX, JsonPretty, MethodBadge, type HttpMethod } from "../ui";
 import { insertStep, renderStepBlock } from "./SaveAsStepDialog";
 
 export type AddStepDialogProps = {
@@ -59,10 +53,7 @@ export function AddStepDialog(props: AddStepDialogProps): JSX.Element {
     const q = query().toLowerCase();
     const list = endpoints()?.endpoints ?? [];
     return q
-      ? list.filter(
-          (e) =>
-            e.path.toLowerCase().includes(q) || e.name.toLowerCase().includes(q),
-        )
+      ? list.filter((e) => e.path.toLowerCase().includes(q) || e.name.toLowerCase().includes(q))
       : list;
   });
 
@@ -139,9 +130,7 @@ export function AddStepDialog(props: AddStepDialogProps): JSX.Element {
             "border-bottom": "1px solid var(--bd-1)",
           }}
         >
-          <div style={{ "font-size": "13px", "font-weight": 600 }}>
-            Add step from endpoint
-          </div>
+          <div style={{ "font-size": "13px", "font-weight": 600 }}>Add step from endpoint</div>
           <div style={{ flex: 1 }} />
           <button
             type="button"
@@ -202,12 +191,9 @@ export function AddStepDialog(props: AddStepDialogProps): JSX.Element {
                       padding: "6px 14px",
                       "text-align": "left",
                       "font-size": "12px",
-                      background:
-                        selectedName() === e.name ? "var(--bg-3)" : "transparent",
+                      background: selectedName() === e.name ? "var(--bg-3)" : "transparent",
                       "border-left":
-                        selectedName() === e.name
-                          ? "2px solid var(--ac)"
-                          : "2px solid transparent",
+                        selectedName() === e.name ? "2px solid var(--ac)" : "2px solid transparent",
                     }}
                   >
                     <MethodBadge method={e.method as HttpMethod} />
@@ -315,10 +301,7 @@ export function AddStepDialog(props: AddStepDialogProps): JSX.Element {
           }}
         >
           <Show when={status()}>
-            <span
-              class="mono"
-              style={{ "font-size": "11px", color: "var(--err)" }}
-            >
+            <span class="mono" style={{ "font-size": "11px", color: "var(--err)" }}>
               {status()}
             </span>
           </Show>
@@ -376,9 +359,6 @@ export function renameStep(
   if (!match || match[1] !== oldName) return undefined;
   const before = source.slice(0, stepStart);
   const after = source.slice(stepEnd);
-  const replaced = block.replace(
-    /^step\(\s*"[^"]+"/,
-    `step(${JSON.stringify(newName)}`,
-  );
+  const replaced = block.replace(/^step\(\s*"[^"]+"/, `step(${JSON.stringify(newName)}`);
   return `${before}${replaced}${after}`;
 }

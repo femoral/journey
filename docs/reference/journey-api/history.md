@@ -30,9 +30,9 @@ interface RunSummary {
   id: string;
   timestamp: string;
   journeyNames: string[];
-  ok: boolean;          // every journey ok?
-  durationMs: number;   // sum across journeys
-  stepCount: number;    // total steps across journeys
+  ok: boolean; // every journey ok?
+  durationMs: number; // sum across journeys
+  stepCount: number; // total steps across journeys
 }
 ```
 

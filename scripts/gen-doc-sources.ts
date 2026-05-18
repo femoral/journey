@@ -59,7 +59,9 @@ async function collect(): Promise<DocEntry[]> {
     const sources: string[] = [];
     for (const s of rawSources) {
       if (typeof s !== "string") {
-        throw new Error(`${docPath}: frontmatter sources entry is not a string (${JSON.stringify(s)})`);
+        throw new Error(
+          `${docPath}: frontmatter sources entry is not a string (${JSON.stringify(s)})`,
+        );
       }
       const normalized = toPosix(s.trim());
       if (!normalized) continue;
@@ -129,9 +131,7 @@ function renderMarkdown(entries: DocEntry[]): string {
 
   lines.push("## By source file");
   lines.push("");
-  lines.push(
-    "When a PR touches any of these paths, check the linked doc page(s) for updates.",
-  );
+  lines.push("When a PR touches any of these paths, check the linked doc page(s) for updates.");
   lines.push("");
 
   if (reverseKeys.length === 0) {
@@ -165,9 +165,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     if (existing !== next) {
-      console.error(
-        `docs/SOURCES.md is out of date. Run: pnpm --filter @journey/docs sources:gen`,
-      );
+      console.error(`docs/SOURCES.md is out of date. Run: pnpm --filter @journey/docs sources:gen`);
       process.exit(1);
     }
     console.log("docs/SOURCES.md is up to date.");

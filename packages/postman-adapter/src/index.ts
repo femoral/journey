@@ -176,10 +176,7 @@ export function buildCollection(name: string, folders: PostmanFolder[]): Postman
   };
 }
 
-export function buildEnvironment(
-  name: string,
-  values: Record<string, string>,
-): PostmanEnvironment {
+export function buildEnvironment(name: string, values: Record<string, string>): PostmanEnvironment {
   return {
     name,
     values: Object.entries(values).map(([key, value]) => ({ key, value, enabled: true })),

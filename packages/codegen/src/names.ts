@@ -20,9 +20,7 @@ export function operationName(
   operationId: string | undefined,
 ): string {
   if (operationId && IDENT_RE.test(operationId)) return operationId;
-  const cleanedPath = path
-    .replace(/\{([^}]+)\}/g, "By_$1")
-    .replace(/\//g, "_");
+  const cleanedPath = path.replace(/\{([^}]+)\}/g, "By_$1").replace(/\//g, "_");
   const pascal = pascalCaseParts(`${method}_${cleanedPath}`);
   return pascal.charAt(0).toLowerCase() + pascal.slice(1);
 }

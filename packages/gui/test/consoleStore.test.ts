@@ -206,7 +206,7 @@ describe("toCurl", () => {
     });
     expect(curl).toContain("curl -X POST");
     expect(curl).toContain("-H 'content-type: application/json'");
-    expect(curl).toContain("--data '{\"u\":\"x\"}'");
+    expect(curl).toContain('--data \'{"u":"x"}\'');
     expect(curl).toContain("'https://api/login'");
   });
 

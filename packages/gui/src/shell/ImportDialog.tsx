@@ -1,11 +1,4 @@
-import {
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  type JSX,
-} from "solid-js";
+import { Show, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { IconX, JsonPretty, MiniTab } from "../ui";
 import { parseCurl, type ParsedCurl } from "../pages/importCurl";
@@ -47,9 +40,7 @@ export function ImportDialog(props: ImportDialogProps): JSX.Element {
     const p = parsed();
     if (!p || !p.ok) return;
     const v = p.value;
-    navigate(
-      `/endpoints?method=${encodeURIComponent(v.method)}&url=${encodeURIComponent(v.url)}`,
-    );
+    navigate(`/endpoints?method=${encodeURIComponent(v.method)}&url=${encodeURIComponent(v.url)}`);
     props.onClose();
   };
 
@@ -111,21 +102,9 @@ export function ImportDialog(props: ImportDialogProps): JSX.Element {
             "border-bottom": "1px solid var(--bd-1)",
           }}
         >
-          <MiniTab
-            active={tab() === "cURL"}
-            onClick={() => setTab("cURL")}
-            label="cURL"
-          />
-          <MiniTab
-            active={tab() === "OpenAPI"}
-            onClick={() => setTab("OpenAPI")}
-            label="OpenAPI"
-          />
-          <MiniTab
-            active={tab() === "Postman"}
-            onClick={() => setTab("Postman")}
-            label="Postman"
-          />
+          <MiniTab active={tab() === "cURL"} onClick={() => setTab("cURL")} label="cURL" />
+          <MiniTab active={tab() === "OpenAPI"} onClick={() => setTab("OpenAPI")} label="OpenAPI" />
+          <MiniTab active={tab() === "Postman"} onClick={() => setTab("Postman")} label="Postman" />
         </div>
         <div
           style={{
@@ -207,12 +186,8 @@ export function ImportDialog(props: ImportDialogProps): JSX.Element {
                                 method: ok.value.method,
                                 url: ok.value.url,
                                 headers: ok.value.headers,
-                                ...(ok.value.body !== undefined
-                                  ? { body: ok.value.body }
-                                  : {}),
-                                ...(ok.value.basicAuth
-                                  ? { basicAuth: ok.value.basicAuth }
-                                  : {}),
+                                ...(ok.value.body !== undefined ? { body: ok.value.body } : {}),
+                                ...(ok.value.basicAuth ? { basicAuth: ok.value.basicAuth } : {}),
                               },
                               null,
                               2,
@@ -244,17 +219,15 @@ export function ImportDialog(props: ImportDialogProps): JSX.Element {
           </Show>
           <Show when={tab() === "OpenAPI"}>
             <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
-              Importing a full OpenAPI spec replaces{" "}
-              <span class="mono">openapi.yaml</span> and re-runs{" "}
-              <span class="mono">journey generate</span>. Not wired yet —
-              drop a spec into the project folder and hit Regenerate on the
-              Spec diff page for now.
+              Importing a full OpenAPI spec replaces <span class="mono">openapi.yaml</span> and
+              re-runs <span class="mono">journey generate</span>. Not wired yet — drop a spec into
+              the project folder and hit Regenerate on the Spec diff page for now.
             </div>
           </Show>
           <Show when={tab() === "Postman"}>
             <div style={{ "font-size": "12px", color: "var(--fg-3)" }}>
-              Postman collection v2.1 import isn't wired yet. For single
-              requests, export to cURL inside Postman and use the cURL tab.
+              Postman collection v2.1 import isn't wired yet. For single requests, export to cURL
+              inside Postman and use the cURL tab.
             </div>
           </Show>
         </div>
