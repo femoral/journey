@@ -56,7 +56,57 @@ export interface RunPlannedEvent {
   journeyIdx: number;
   journeyName: string;
   stepIdxOffset: number;
-  steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
+  /**
+   * Resolved pipeline entries. `kind` is `"step"` for an HTTP step (carries
+   * method/path from the endpoint) and `"sub"` for an `invokeJourney(...)` node
+   * (carries the child journey's display name; method/path are unset). Child
+   * steps inside a sub-journey are not listed at this level — they appear via
+   * `onGroupStart` / step events once the sub-journey is entered.
+   */
+  steps: ReadonlyArray<{
+    kind?: "step" | "sub";
+    name: string;
+    method?: string;
+    path?: string;
+  }>;
+}
+
+/**
+ * Fired at the moment a sub-journey node (an `invokeJourney(handle, ...)`
+ * call) begins executing — before any of the child's steps run. The `stepIdx`
+ * is the slot consumed by the sub-journey itself in the parent run's
+ * monotonic counter; child step events that follow carry `firstChildStepIdx`
+ * and beyond.
+ */
+export interface GroupStartEvent {
+  runId: string;
+  journeyIdx: number;
+  /** Display name for the timeline (override on the call site, else handle.name). */
+  name: string;
+  /** Child journey's authored name (i.e. handle.name). Distinct from `name` only when overridden. */
+  childJourneyName: string;
+  /** Slot consumed by the sub-journey node itself. */
+  stepIdx: number;
+  /** First child stepIdx that will fire inside this group (== `stepIdx + 1`). */
+  firstChildStepIdx: number;
+  /** "miss" / "hit". Until #90 lands the cache store, this is always "miss". */
+  cacheStatus: "miss" | "hit";
+  /** Resolved cache key if the caller supplied a `cacheKey` opt. Omitted otherwise. */
+  resolvedKey?: string;
+}
+
+/** Fired once the sub-journey node finishes (success, failure, or cache hit short-circuit). */
+export interface GroupEndEvent {
+  runId: string;
+  journeyIdx: number;
+  name: string;
+  childJourneyName: string;
+  stepIdx: number;
+  /** Last child stepIdx that fired inside this group. Equal to `stepIdx` when the child had no steps (or hit cache). */
+  lastChildStepIdx: number;
+  ok: boolean;
+  durationMs: number;
+  error?: string;
 }
 
 /**
@@ -102,6 +152,10 @@ export interface JourneyLogger {
   onRequest?(req: RequestLog): void;
   onResponse?(req: RequestLog, res: ResponseLog): void;
   onError?(req: RequestLog, error: unknown, durationMs: number): void;
+  /** Fired when a sub-journey node begins executing, before any child step events. */
+  onGroupStart?(event: GroupStartEvent): void;
+  /** Fired when a sub-journey node finishes; carries the child step range and the group outcome. */
+  onGroupEnd?(event: GroupEndEvent): void;
   /**
    * Fired for user-code `console.*` calls captured during a run. The runner
    * installs a shim that forwards each call here and to the original console

@@ -1,6 +1,7 @@
+import type { ZodType } from "zod";
 import type { Endpoint, ResponseOf } from "./endpoint.js";
 import { buildRequest, execute, type HttpContext, type HttpResponse } from "./http.js";
-import { describeError } from "./logger.js";
+import { describeError, type GroupEndEvent, type GroupStartEvent } from "./logger.js";
 
 /** Caller-supplied run metadata. runId is forwarded to every lifecycle event. */
 export interface RunMeta {
@@ -32,6 +33,48 @@ export interface StepDef {
 }
 
 /**
+ * Recorded call to a reusable journey, captured in the parent's pipeline at
+ * registration time. The `handle` carries the child def and its input/output
+ * schemas; everything else is per-call configuration. See `invokeJourney`.
+ */
+export interface SubJourneyCallDef {
+  handle: JourneyHandle<unknown, unknown>;
+  /** Display label for the timeline; defaults to `handle.name`. */
+  name?: string;
+  /** Lazy or eager input. Validated against `handle.inputs` (if set) before child body runs. */
+  inputs?: Lazy<unknown>;
+  /** Cache opts — plumbed through `onGroupStart`. Store lookup lands in #90. */
+  cacheKey?: string | ((input: unknown) => string);
+  cacheTtlMs?: number;
+  cache?: "off" | "inherit";
+  assert?: (out: unknown) => void | Promise<void>;
+  after?: (out: unknown) => void | Promise<void>;
+}
+
+/**
+ * One ordered entry in the resolved pipeline of a journey. Both kinds consume
+ * exactly one `stepIdx` slot in the run's monotonic counter; child steps
+ * inside a `sub` node consume their own slots in the same counter.
+ */
+export type PipelineNode = { kind: "step"; def: StepDef } | { kind: "sub"; def: SubJourneyCallDef };
+
+/**
+ * Typed reference to a reusable journey. Returned by `journey(name, { reusable: true, ... }, body)`.
+ * Pass it to `invokeJourney(handle, ...)`; the phantom `I`/`O` parameters drive
+ * type inference at the call site.
+ */
+export interface JourneyHandle<I = unknown, O = unknown> {
+  readonly name: string;
+  readonly inputs?: ZodType<I>;
+  readonly outputs?: ZodType<O>;
+  /** Internal: the def the runtime invokes. Treat as opaque. */
+  readonly __def: JourneyDef;
+  /** Phantom — never assigned at runtime, only present in the type. */
+  readonly __input?: I;
+  readonly __output?: O;
+}
+
+/**
  * k6 `export const options` shape for an exported journey. Strict named fields
  * cover the common load profiles (vus + duration, iterations, stages); the
  * index signature passes everything else through so adding a k6 knob (e.g.
@@ -45,15 +88,35 @@ export interface K6JourneyOptions {
   [extra: string]: unknown;
 }
 
-/** Per-call configuration accepted by the 3-arg `journey()` overload. */
+/**
+ * Per-call configuration accepted by the 3-arg `journey()` overloads. The
+ * field set is split by mode:
+ *
+ * - Entry journeys (default — registered for `runAllRegistered`): `tags`, `k6`.
+ * - Reusable journeys (`reusable: true`, no auto-run, returns a handle):
+ *   `inputs`, `outputs`.
+ *
+ * The two sets are disjoint in the public overloads. Mixing is an `as any`
+ * escape from the type-level split; the footgun guard in `runAllRegistered`
+ * catches it at run start.
+ */
 export interface JourneyOptions {
+  /** Entry-only — drives `journey export k6 --tag` filtering. */
   tags?: string[];
+  /** Entry-only — baked into the emitted k6 script's `export const options`. */
   k6?: K6JourneyOptions;
+  /** Switches to reusable mode when true. */
+  reusable?: boolean;
+  /** Reusable-only — child input schema. Validated before the child body runs. */
+  inputs?: ZodType;
+  /** Reusable-only — child output schema. Validated when the child completes. */
+  outputs?: ZodType;
 }
 
 export interface JourneyDef {
   name: string;
-  body: () => void | Promise<void>;
+  /** Bodies for entries take no argument; reusable bodies take the validated input. */
+  body: (input?: unknown) => void | Promise<void>;
   options?: JourneyOptions;
 }
 
@@ -64,6 +127,10 @@ export interface StepResult {
   response?: HttpResponse;
   error?: string;
   durationMs: number;
+  /** Set on sub-journey nodes; the flat list of child step results in execution order. */
+  children?: StepResult[];
+  /** Set on sub-journey nodes — distinguishes a group entry from a regular step. */
+  kind?: "step" | "sub";
 }
 
 export interface JourneyResult {
@@ -73,12 +140,17 @@ export interface JourneyResult {
   durationMs: number;
 }
 
+interface ChildOutputSlot {
+  value: unknown;
+  written: boolean;
+}
+
 // Shared across module instances — tsx can load `@journey/core` more than once
 // (once from the runner, once through the journey file's imports), and we need
 // both copies to point at the same registry/collector.
 interface SharedState {
   registry: JourneyDef[];
-  collecting: StepDef[] | undefined;
+  collecting: PipelineNode[] | undefined;
   /**
    * The HttpContext driving the currently-executing journey. `runJourney`
    * sets this before iterating steps and clears it afterwards so user-facing
@@ -87,12 +159,26 @@ interface SharedState {
    * argument.
    */
   currentCtx: HttpContext | undefined;
+  /**
+   * Stack of in-flight reusable journey output slots. `output(value)` writes
+   * to the top slot; it's a stack so a sub-journey that itself invokes another
+   * sub-journey doesn't trample the outer slot.
+   */
+  childOutputs: ChildOutputSlot[];
 }
 const STATE_KEY = Symbol.for("@journey/core::runtime-state");
 const globals = globalThis as unknown as { [STATE_KEY]?: SharedState };
 const state: SharedState =
   globals[STATE_KEY] ??
-  (globals[STATE_KEY] = { registry: [], collecting: undefined, currentCtx: undefined });
+  (globals[STATE_KEY] = {
+    registry: [],
+    collecting: undefined,
+    currentCtx: undefined,
+    childOutputs: [],
+  });
+
+/** Hard limit on nested `invokeJourney` calls; trips on suspected runaway recursion. */
+const MAX_SUB_JOURNEY_DEPTH = 8;
 
 /**
  * Returns the HttpContext bound to the currently-executing journey, or
@@ -104,27 +190,155 @@ export function getCurrentCtx(): HttpContext | undefined {
   return state.currentCtx;
 }
 
-export function journey(name: string, body: () => void | Promise<void>): void;
+/** Type for the journey body when no `inputs` schema is set. */
+type EntryBody = () => void | Promise<void>;
+/** Type for a reusable journey body — receives the validated input. */
+type ReusableBody<I> = (input: I) => void | Promise<void>;
+
+/** Strict reusable options — discriminated by literal `reusable: true`. */
+export interface ReusableJourneyOptions<I, O> {
+  reusable: true;
+  inputs?: ZodType<I>;
+  outputs?: ZodType<O>;
+}
+
+/** Strict entry options — `reusable` must be absent or false. */
+export interface EntryJourneyOptions {
+  reusable?: false;
+  tags?: string[];
+  k6?: K6JourneyOptions;
+}
+
+// Reusable: returns a typed handle, does NOT register for auto-run.
+export function journey<I, O>(
+  name: string,
+  options: ReusableJourneyOptions<I, O>,
+  body: ReusableBody<I>,
+): JourneyHandle<I, O>;
+// Entry with options: registered, auto-run.
+export function journey(name: string, options: EntryJourneyOptions, body: EntryBody): void;
+// Entry, no options: registered, auto-run.
+export function journey(name: string, body: EntryBody): void;
 export function journey(
   name: string,
-  options: JourneyOptions,
-  body: () => void | Promise<void>,
-): void;
-export function journey(
-  name: string,
-  optionsOrBody: JourneyOptions | (() => void | Promise<void>),
-  maybeBody?: () => void | Promise<void>,
-): void {
-  const body = typeof optionsOrBody === "function" ? optionsOrBody : maybeBody!;
+  optionsOrBody: ReusableJourneyOptions<unknown, unknown> | EntryJourneyOptions | EntryBody,
+  maybeBody?: ReusableBody<unknown> | EntryBody,
+): JourneyHandle<unknown, unknown> | void {
+  const bodyFn =
+    typeof optionsOrBody === "function"
+      ? (optionsOrBody as EntryBody)
+      : (maybeBody as ReusableBody<unknown> | EntryBody);
   const options = typeof optionsOrBody === "function" ? undefined : optionsOrBody;
-  state.registry.push(options ? { name, body, options } : { name, body });
+  if (options && (options as ReusableJourneyOptions<unknown, unknown>).reusable === true) {
+    const reusable = options as ReusableJourneyOptions<unknown, unknown>;
+    const def: JourneyDef = {
+      name,
+      body: bodyFn as (input?: unknown) => void | Promise<void>,
+      options: {
+        reusable: true,
+        ...(reusable.inputs ? { inputs: reusable.inputs } : {}),
+        ...(reusable.outputs ? { outputs: reusable.outputs } : {}),
+      },
+    };
+    const handle: JourneyHandle<unknown, unknown> = {
+      name,
+      ...(reusable.inputs ? { inputs: reusable.inputs } : {}),
+      ...(reusable.outputs ? { outputs: reusable.outputs } : {}),
+      __def: def,
+    };
+    return handle;
+  }
+  // Entry mode — push to the auto-run registry.
+  const entryOpts = options as EntryJourneyOptions | undefined;
+  const def: JourneyDef = {
+    name,
+    body: bodyFn as EntryBody,
+    ...(entryOpts ? { options: entryOpts } : {}),
+  };
+  state.registry.push(def);
 }
 
 export function step<E extends Endpoint>(name: string, options: StepOptions<E>): void {
   if (!state.collecting) {
     throw new Error(`step(${JSON.stringify(name)}) called outside a journey(...) body`);
   }
-  state.collecting.push({ name, options: options as StepOptions<Endpoint> });
+  state.collecting.push({
+    kind: "step",
+    def: { name, options: options as StepOptions<Endpoint> },
+  });
+}
+
+/** Options accepted at an `invokeJourney(handle, opts)` call site. */
+export interface InvokeJourneyOptions<I, O> {
+  inputs?: I | (() => I | Promise<I>);
+  /** Override the timeline display label; defaults to `handle.name`. */
+  name?: string;
+  cacheKey?: string | ((input: I) => string);
+  cacheTtlMs?: number;
+  cache?: "off" | "inherit";
+  assert?: (out: O) => void | Promise<void>;
+  after?: (out: O) => void | Promise<void>;
+}
+
+/**
+ * Pipeline-level primitive: registers a sub-journey call as a node in the
+ * surrounding journey's pipeline. Like `step()`, this is called during the
+ * registration phase (the journey body), not at execution time — the child
+ * runs inline when the runtime reaches the node.
+ */
+export function invokeJourney<I, O>(
+  handle: JourneyHandle<I, O>,
+  opts: InvokeJourneyOptions<I, O> = {},
+): void {
+  if (!state.collecting) {
+    throw new Error(
+      `invokeJourney(${JSON.stringify(handle.name)}) called outside a journey(...) body`,
+    );
+  }
+  const callDef: SubJourneyCallDef = {
+    handle: handle as JourneyHandle<unknown, unknown>,
+  };
+  if (opts.name !== undefined) callDef.name = opts.name;
+  if (opts.inputs !== undefined) callDef.inputs = opts.inputs as Lazy<unknown>;
+  if (opts.cacheKey !== undefined) {
+    const ck = opts.cacheKey;
+    callDef.cacheKey =
+      typeof ck === "function" ? (ck as (input: unknown) => string) : (ck as string);
+  }
+  if (opts.cacheTtlMs !== undefined) callDef.cacheTtlMs = opts.cacheTtlMs;
+  if (opts.cache !== undefined) callDef.cache = opts.cache;
+  if (opts.assert !== undefined) {
+    callDef.assert = opts.assert as (out: unknown) => void | Promise<void>;
+  }
+  if (opts.after !== undefined) {
+    callDef.after = opts.after as (out: unknown) => void | Promise<void>;
+  }
+  state.collecting.push({ kind: "sub", def: callDef });
+}
+
+/**
+ * Terminal helper for reusable journeys: records the value returned to the
+ * parent's `invokeJourney({ after })`. Called from inside any step's `after`
+ * hook within the child body. Multiple calls: last wins (with a warn log).
+ * Called outside a reusable journey context: warn and no-op.
+ */
+export function output(value: unknown): void {
+  if (state.childOutputs.length === 0) {
+    state.currentCtx?.logger?.onLog?.({
+      level: "warn",
+      text: "output() called outside a reusable journey; ignored",
+    });
+    return;
+  }
+  const slot = state.childOutputs[state.childOutputs.length - 1]!;
+  if (slot.written) {
+    state.currentCtx?.logger?.onLog?.({
+      level: "warn",
+      text: "output() called more than once in a single sub-journey; last value wins",
+    });
+  }
+  slot.value = value;
+  slot.written = true;
 }
 
 export function getRegisteredJourneys(): ReadonlyArray<JourneyDef> {
@@ -135,16 +349,29 @@ export function clearRegistry(): void {
   state.registry.length = 0;
 }
 
+/**
+ * Walks a journey body and returns the **step** nodes only. Kept as a
+ * filter-down view for back-compat with exporters that don't yet support
+ * sub-journey nesting (#91, #92); new consumers should use `collectPipeline`.
+ */
 export async function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepDef>> {
-  const steps: StepDef[] = [];
+  const nodes = await collectPipeline(def);
+  return nodes
+    .filter((n): n is { kind: "step"; def: StepDef } => n.kind === "step")
+    .map((n) => n.def);
+}
+
+/** Walks a journey body and returns every pipeline node (step + sub) in order. */
+export async function collectPipeline(def: JourneyDef): Promise<ReadonlyArray<PipelineNode>> {
+  const nodes: PipelineNode[] = [];
   const prev = state.collecting;
-  state.collecting = steps;
+  state.collecting = nodes;
   try {
     await def.body();
   } finally {
     state.collecting = prev;
   }
-  return steps;
+  return nodes;
 }
 
 async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
@@ -152,10 +379,296 @@ async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
   return typeof v === "function" ? await (v as () => T | Promise<T>)() : v;
 }
 
+interface ExecMeta {
+  runId: string;
+  journeyIdx: number;
+  journeyName: string;
+}
+
+interface ExecState {
+  counter: number;
+  ok: boolean;
+  /** Set when the loop should stop launching new nodes (abort, upToStepIdx hit). */
+  halt: boolean;
+}
+
+async function executeStepNode(
+  s: StepDef,
+  ctx: HttpContext,
+  meta: ExecMeta,
+  stepIdx: number,
+): Promise<StepResult> {
+  const start = Date.now();
+  ctx.logger?.onStepStart?.({
+    runId: meta.runId,
+    journeyIdx: meta.journeyIdx,
+    journeyName: meta.journeyName,
+    stepIdx,
+    name: s.name,
+  });
+  try {
+    const headers = await resolveLazy(s.options.headers);
+    const query = await resolveLazy(s.options.query);
+    const body = await resolveLazy(s.options.body);
+    const params = await resolveLazy(s.options.params);
+    const req = buildRequest(
+      {
+        endpoint: s.options.endpoint,
+        ...(params !== undefined ? { params } : {}),
+        ...(query !== undefined ? { query } : {}),
+        ...(headers !== undefined ? { headers } : {}),
+        ...(body !== undefined ? { body } : {}),
+        ...(s.options.timeoutMs !== undefined ? { timeoutMs: s.options.timeoutMs } : {}),
+      },
+      ctx,
+    );
+    const response = await execute(req, ctx);
+    if (s.options.assert) await s.options.assert(response as HttpResponse<never>);
+    if (s.options.after) await s.options.after(response as HttpResponse<never>);
+    const durationMs = Date.now() - start;
+    ctx.logger?.onStepEnd?.({
+      runId: meta.runId,
+      journeyIdx: meta.journeyIdx,
+      stepIdx,
+      ok: true,
+      durationMs,
+    });
+    return {
+      name: s.name,
+      ok: true,
+      request: { method: req.method, url: req.url },
+      response,
+      durationMs,
+    };
+  } catch (err) {
+    const durationMs = Date.now() - start;
+    const error = describeError(err);
+    ctx.logger?.onStepEnd?.({
+      runId: meta.runId,
+      journeyIdx: meta.journeyIdx,
+      stepIdx,
+      ok: false,
+      durationMs,
+      error,
+    });
+    return { name: s.name, ok: false, error, durationMs };
+  }
+}
+
+function resolveCacheKey(
+  cacheKey: SubJourneyCallDef["cacheKey"],
+  input: unknown,
+): string | undefined {
+  if (cacheKey === undefined) return undefined;
+  if (typeof cacheKey === "function") return cacheKey(input);
+  return cacheKey;
+}
+
+async function executeSubNode(
+  call: SubJourneyCallDef,
+  ctx: HttpContext,
+  meta: ExecMeta,
+  stepIdx: number,
+  upToStepIdx: number | undefined,
+  depth: number,
+  execState: ExecState,
+): Promise<StepResult> {
+  const displayName = call.name ?? call.handle.name;
+  const start = Date.now();
+  const firstChildStepIdx = stepIdx + 1;
+
+  // Resolve inputs eagerly so a schema mismatch surfaces before group:start.
+  let input: unknown;
+  try {
+    input = call.inputs !== undefined ? await resolveLazy(call.inputs) : undefined;
+    if (call.handle.inputs) {
+      input = call.handle.inputs.parse(input);
+    }
+  } catch (err) {
+    const durationMs = Date.now() - start;
+    const error = `sub-journey "${call.handle.name}" input validation failed: ${describeError(err)}`;
+    // Still surface the group bookends so subscribers can attribute the failure.
+    ctx.logger?.onGroupStart?.({
+      runId: meta.runId,
+      journeyIdx: meta.journeyIdx,
+      name: displayName,
+      childJourneyName: call.handle.name,
+      stepIdx,
+      firstChildStepIdx,
+      cacheStatus: "miss",
+    });
+    ctx.logger?.onGroupEnd?.({
+      runId: meta.runId,
+      journeyIdx: meta.journeyIdx,
+      name: displayName,
+      childJourneyName: call.handle.name,
+      stepIdx,
+      lastChildStepIdx: stepIdx,
+      ok: false,
+      durationMs,
+      error,
+    });
+    return { name: displayName, ok: false, error, durationMs, kind: "sub", children: [] };
+  }
+
+  const resolvedKey = resolveCacheKey(call.cacheKey, input);
+  const groupStart: GroupStartEvent = {
+    runId: meta.runId,
+    journeyIdx: meta.journeyIdx,
+    name: displayName,
+    childJourneyName: call.handle.name,
+    stepIdx,
+    firstChildStepIdx,
+    // Cache store lookup lands in #90 — until then every call is a miss.
+    cacheStatus: "miss",
+    ...(resolvedKey !== undefined ? { resolvedKey } : {}),
+  };
+  ctx.logger?.onGroupStart?.(groupStart);
+
+  // Collect the child pipeline by evaluating the reusable body. Restore
+  // `state.collecting` afterwards so the parent's pipeline keeps growing into
+  // its own array.
+  let childNodes: PipelineNode[];
+  const prevCollecting = state.collecting;
+  state.collecting = [];
+  try {
+    await call.handle.__def.body(input);
+    childNodes = state.collecting;
+  } finally {
+    state.collecting = prevCollecting;
+  }
+
+  // Push an output slot so `output()` calls in any descendant step land here.
+  const slot: ChildOutputSlot = { value: undefined, written: false };
+  state.childOutputs.push(slot);
+
+  const children: StepResult[] = [];
+  let childOk = true;
+  let childError: string | undefined;
+  try {
+    // Run child nodes in the same shared counter — sub-journey steps consume
+    // monotonic stepIdx slots inside the parent's run.
+    const childExecState: ExecState = { counter: stepIdx + 1, ok: true, halt: false };
+    await executePipeline(childNodes, ctx, meta, upToStepIdx, depth + 1, childExecState, children);
+    childOk = childExecState.ok;
+    // Sync the outer counter to whatever the children consumed.
+    execState.counter = childExecState.counter;
+    if (!childOk) {
+      const failed = children.find((c) => !c.ok);
+      childError = failed
+        ? `sub-journey "${call.handle.name}" failed at step "${failed.name}": ${failed.error ?? "unknown error"}`
+        : `sub-journey "${call.handle.name}" failed`;
+    }
+    if (childExecState.halt) execState.halt = true;
+  } finally {
+    state.childOutputs.pop();
+  }
+
+  // Validate output against the schema (if any). A non-writing child whose
+  // schema is set fails the node loudly.
+  let validatedOutput: unknown = slot.written ? slot.value : undefined;
+  if (childOk) {
+    if (call.handle.outputs) {
+      if (!slot.written) {
+        childOk = false;
+        childError = `sub-journey "${call.handle.name}" did not call output() before completing`;
+      } else {
+        try {
+          validatedOutput = call.handle.outputs.parse(slot.value);
+        } catch (err) {
+          childOk = false;
+          childError = `sub-journey "${call.handle.name}" output validation failed: ${describeError(err)}`;
+        }
+      }
+    }
+  }
+
+  // Run parent-side assert/after only when the child succeeded.
+  if (childOk) {
+    try {
+      if (call.assert) await call.assert(validatedOutput);
+      if (call.after) await call.after(validatedOutput);
+    } catch (err) {
+      childOk = false;
+      childError = describeError(err);
+    }
+  }
+
+  const durationMs = Date.now() - start;
+  const lastChildStepIdx = children.length > 0 ? execState.counter - 1 : stepIdx;
+  const groupEnd: GroupEndEvent = {
+    runId: meta.runId,
+    journeyIdx: meta.journeyIdx,
+    name: displayName,
+    childJourneyName: call.handle.name,
+    stepIdx,
+    lastChildStepIdx,
+    ok: childOk,
+    durationMs,
+    ...(childError !== undefined ? { error: childError } : {}),
+  };
+  ctx.logger?.onGroupEnd?.(groupEnd);
+
+  return {
+    name: displayName,
+    ok: childOk,
+    durationMs,
+    kind: "sub",
+    children,
+    ...(childError !== undefined ? { error: childError } : {}),
+  };
+}
+
+async function executePipeline(
+  nodes: ReadonlyArray<PipelineNode>,
+  ctx: HttpContext,
+  meta: ExecMeta,
+  upToStepIdx: number | undefined,
+  depth: number,
+  execState: ExecState,
+  out: StepResult[],
+): Promise<void> {
+  if (depth > MAX_SUB_JOURNEY_DEPTH) {
+    throw new Error(
+      `sub-journey recursion depth exceeded (max ${MAX_SUB_JOURNEY_DEPTH}); check for cycles`,
+    );
+  }
+  for (const node of nodes) {
+    if (ctx.signal?.aborted) {
+      execState.ok = false;
+      execState.halt = true;
+      break;
+    }
+    if (upToStepIdx !== undefined && execState.counter > upToStepIdx) {
+      execState.halt = true;
+      break;
+    }
+    const stepIdx = execState.counter++;
+    if (node.kind === "step") {
+      const r = await executeStepNode(node.def, ctx, meta, stepIdx);
+      out.push(r);
+      if (!r.ok) {
+        execState.ok = false;
+        execState.halt = true;
+        break;
+      }
+    } else {
+      const r = await executeSubNode(node.def, ctx, meta, stepIdx, upToStepIdx, depth, execState);
+      out.push(r);
+      if (!r.ok) {
+        execState.ok = false;
+        execState.halt = true;
+        break;
+      }
+    }
+  }
+}
+
 /**
- * Runs a single journey. Emits `onStepStart` / `onStepEnd` events for each step
- * through `ctx.logger`; run-level lifecycle events (`onRunStart` / `onRunEnd`)
- * are the caller's responsibility — use `runAllRegistered` to get the full set.
+ * Runs a single entry journey. Emits `onStepStart` / `onStepEnd` (and
+ * `onGroupStart` / `onGroupEnd` for any sub-journey nodes) through
+ * `ctx.logger`; run-level lifecycle events (`onRunStart` / `onRunEnd`) are
+ * the caller's responsibility — use `runAllRegistered` to get the full set.
  *
  * Pass `opts.journeyIdx` (and `opts.runId`) so step events carry the same
  * correlation identifiers as surrounding `runAllRegistered` invocations would
@@ -171,38 +684,37 @@ export async function runJourney(
     upToStepIdx?: number;
   } = {},
 ): Promise<JourneyResult> {
-  const steps: StepDef[] = [];
-  const prev = state.collecting;
-  state.collecting = steps;
-  try {
-    await def.body();
-  } finally {
-    state.collecting = prev;
-  }
+  const nodes = await collectPipeline(def);
 
   const runId = opts.runId ?? newRunId();
   const journeyIdx = opts.journeyIdx ?? 0;
   const stepIdxOffset = opts.stepIdxOffset ?? 0;
 
   // Announce the resolved plan up front so subscribers (notably the GUI) can
-  // pre-render the full step list — including any helper-injected steps that a
-  // static parse of the source would miss — without waiting for each
-  // `onStepStart` to arrive.
+  // pre-render the full pipeline — including any helper-injected steps and
+  // sub-journey nodes that a static parse of the source would miss — without
+  // waiting for each `onStepStart` to arrive.
   ctx.logger?.onPlanned?.({
     runId,
     journeyIdx,
     journeyName: def.name,
     stepIdxOffset,
-    steps: steps.map((s) => ({
-      name: s.name,
-      method: s.options.endpoint.method,
-      path: s.options.endpoint.path,
-    })),
+    steps: nodes.map((n) =>
+      n.kind === "step"
+        ? {
+            kind: "step",
+            name: n.def.name,
+            method: n.def.options.endpoint.method,
+            path: n.def.options.endpoint.path,
+          }
+        : { kind: "sub", name: n.def.name ?? n.def.handle.name },
+    ),
   });
 
-  const results: StepResult[] = [];
   const journeyStart = Date.now();
-  let ok = true;
+  const meta: ExecMeta = { runId, journeyIdx, journeyName: def.name };
+  const execState: ExecState = { counter: stepIdxOffset, ok: true, halt: false };
+  const results: StepResult[] = [];
 
   // Expose the active ctx so helpers can call into the run's logger (e.g.
   // `import { fetch } from "@journey/core"` inside an `after` hook). Restored
@@ -210,88 +722,43 @@ export async function runJourney(
   const prevCtx = state.currentCtx;
   state.currentCtx = ctx;
   try {
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i]!;
-      const stepIdx = stepIdxOffset + i;
-      if (opts.upToStepIdx !== undefined && stepIdx > opts.upToStepIdx) break;
-      // Don't start a new step once the run has been aborted (e.g. between
-      // steps or during an `after` hook). An in-flight fetch sees the same
-      // signal and rejects on its own; the per-step catch records that.
-      if (ctx.signal?.aborted) {
-        ok = false;
-        break;
-      }
-      const start = Date.now();
-      ctx.logger?.onStepStart?.({
-        runId,
-        journeyIdx,
-        journeyName: def.name,
-        stepIdx,
-        name: s.name,
-      });
-      try {
-        const headers = await resolveLazy(s.options.headers);
-        const query = await resolveLazy(s.options.query);
-        const body = await resolveLazy(s.options.body);
-        const params = await resolveLazy(s.options.params);
-        const req = buildRequest(
-          {
-            endpoint: s.options.endpoint,
-            ...(params !== undefined ? { params } : {}),
-            ...(query !== undefined ? { query } : {}),
-            ...(headers !== undefined ? { headers } : {}),
-            ...(body !== undefined ? { body } : {}),
-            ...(s.options.timeoutMs !== undefined ? { timeoutMs: s.options.timeoutMs } : {}),
-          },
-          ctx,
-        );
-        const response = await execute(req, ctx);
-        if (s.options.assert) await s.options.assert(response as HttpResponse<never>);
-        if (s.options.after) await s.options.after(response as HttpResponse<never>);
-        const durationMs = Date.now() - start;
-        results.push({
-          name: s.name,
-          ok: true,
-          request: { method: req.method, url: req.url },
-          response,
-          durationMs,
-        });
-        ctx.logger?.onStepEnd?.({ runId, journeyIdx, stepIdx, ok: true, durationMs });
-      } catch (err) {
-        ok = false;
-        const durationMs = Date.now() - start;
-        const error = describeError(err);
-        results.push({ name: s.name, ok: false, error, durationMs });
-        ctx.logger?.onStepEnd?.({
-          runId,
-          journeyIdx,
-          stepIdx,
-          ok: false,
-          durationMs,
-          error,
-        });
-        break;
-      }
-    }
+    await executePipeline(nodes, ctx, meta, opts.upToStepIdx, 0, execState, results);
   } finally {
     state.currentCtx = prevCtx;
   }
 
-  return { name: def.name, ok, steps: results, durationMs: Date.now() - journeyStart };
+  return {
+    name: def.name,
+    ok: execState.ok,
+    steps: results,
+    durationMs: Date.now() - journeyStart,
+  };
 }
 
 /**
- * Runs every currently-registered journey, clearing the registry first. Emits
- * `onRunStart` / `onRunEnd` bookends around the set, with each journey's steps
- * in between sharing the same runId. stepIdx is monotonic across the whole run
- * so a subscriber can key network/log streams by stepIdx without caring about
- * journey boundaries.
+ * Runs every currently-registered entry journey, clearing the registry first.
+ * Emits `onRunStart` / `onRunEnd` bookends around the set, with each journey's
+ * steps in between sharing the same runId. stepIdx is monotonic across the
+ * whole run so a subscriber can key network/log streams by stepIdx without
+ * caring about journey boundaries.
  */
 export async function runAllRegistered(
   ctx: HttpContext,
   opts: RunMeta = {},
 ): Promise<JourneyResult[]> {
   const defs = state.registry.slice();
+  // Footgun guard: reusable journeys must never land in the auto-run registry.
+  // The type-level split rejects `inputs`/`outputs` on entry journeys, but JS
+  // / `as any` can bypass that. Surface a clear diagnostic now instead of a
+  // mysterious "body called with undefined input" failure deep in a step.
+  for (const def of defs) {
+    if (def.options?.inputs !== undefined || def.options?.outputs !== undefined) {
+      throw new Error(
+        `journey "${def.name}" declares an inputs/outputs schema but is registered as an entry. ` +
+          `Mark it { reusable: true } and invoke it via invokeJourney(handle, ...), or remove the schema.`,
+      );
+    }
+  }
   clearRegistry();
   const runId = opts.runId ?? newRunId();
   ctx.logger?.onRunStart?.({ runId, journeyNames: defs.map((d) => d.name) });
@@ -309,7 +776,7 @@ export async function runAllRegistered(
     });
     results.push(result);
     if (!result.ok) ok = false;
-    stepIdxOffset += result.steps.length;
+    stepIdxOffset += countLeaves(result.steps);
     // Early-exit once the caller-requested cap is reached.
     if (opts.upToStepIdx !== undefined && stepIdxOffset > opts.upToStepIdx) break;
     // Stop launching follow-on journeys once the run has been aborted.
@@ -325,6 +792,16 @@ export async function runAllRegistered(
     results: results.map((r) => ({ name: r.name, ok: r.ok })),
   });
   return results;
+}
+
+/** Counts every stepIdx slot consumed in a result tree (group + nested children). */
+function countLeaves(steps: ReadonlyArray<StepResult>): number {
+  let n = 0;
+  for (const s of steps) {
+    n += 1; // the slot for this entry (step or sub group)
+    if (s.children) n += countLeaves(s.children);
+  }
+  return n;
 }
 
 function newRunId(): string {
