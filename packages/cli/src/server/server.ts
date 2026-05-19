@@ -14,8 +14,11 @@ import { collectOperations, generate, loadSpec, operationName } from "@journey/c
 import { runJourneyFile } from "./runner.js";
 import { computeSpecDrift } from "./specDrift.js";
 import {
+  abortRun,
+  clearAbortController,
   getBroadcaster,
   newRunId,
+  registerAbortController,
   registerBroadcaster,
   type RunBroadcaster,
 } from "./runBroadcaster.js";
@@ -491,6 +494,8 @@ async function route(
       const { journeysDir, environmentsDir } = resolveConfigPaths(loaded);
       const runId = newRunId();
       const broadcaster = registerBroadcaster(runId);
+      const abortController = new AbortController();
+      registerAbortController(runId, abortController);
       const runPromise = runJourneyFile({
         loaded,
         journeysDir,
@@ -498,6 +503,7 @@ async function route(
         file,
         runId,
         logger: broadcaster.toLogger(),
+        signal: abortController.signal,
         ...(body.env !== undefined ? { env: body.env } : {}),
         ...(typeof body.upToStepIdx === "number" ? { upToStepIdx: body.upToStepIdx } : {}),
         ...(debug ? { debug: true } : {}),
@@ -505,9 +511,11 @@ async function route(
       if (body.stream) {
         // Fire-and-forget: the broadcaster owns event delivery from here. We
         // still observe the promise so unhandled rejections are captured.
-        runPromise.catch((err) => {
-          broadcaster.fail(err instanceof Error ? err.message : String(err));
-        });
+        runPromise
+          .catch((err) => {
+            broadcaster.fail(err instanceof Error ? err.message : String(err));
+          })
+          .finally(() => clearAbortController(runId));
         send(res, 202, { runId });
         return;
       }
@@ -517,6 +525,18 @@ async function route(
       } catch (err) {
         broadcaster.fail(err instanceof Error ? err.message : String(err));
         send(res, 500, { runId, error: err instanceof Error ? err.message : String(err) });
+      } finally {
+        clearAbortController(runId);
+      }
+      return;
+    }
+    const runAbortMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/abort$/);
+    if (runAbortMatch && req.method === "POST") {
+      const id = decodeURIComponent(runAbortMatch[1]!);
+      if (abortRun(id)) {
+        send(res, 202, { runId: id, aborted: true });
+      } else {
+        send(res, 404, { error: "unknown or completed run" });
       }
       return;
     }

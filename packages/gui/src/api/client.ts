@@ -175,6 +175,10 @@ export const api = {
         ...(opts.upToStepIdx !== undefined ? { upToStepIdx: opts.upToStepIdx } : {}),
       }),
     }),
+  abortRun: (runId: string) =>
+    req<{ runId: string; aborted: true }>(`/api/runs/${encodeURIComponent(runId)}/abort`, {
+      method: "POST",
+    }),
   getEnvironments: () => req<EnvironmentsResponse>("/api/environments"),
   saveEnvironment: (name: string, values: Record<string, string>) =>
     req<Environment>(`/api/environments/${encodeURIComponent(name)}`, {

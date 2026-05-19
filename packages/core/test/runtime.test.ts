@@ -281,6 +281,46 @@ describe("runtime", () => {
     expect(result!.steps[0]!.error).toMatch(/expected 500 to be 200/);
   });
 
+  it("aborts in-flight fetch when ctx.signal fires and marks the run not-ok", async () => {
+    const controller = new AbortController();
+    // fetchImpl that honours init.signal — when aborted, reject like global
+    // fetch would so the runtime takes its error path.
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      return await new Promise<Response>((_resolve, reject) => {
+        const sig = init?.signal;
+        if (sig?.aborted) {
+          reject(new DOMException("aborted", "AbortError"));
+          return;
+        }
+        sig?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    });
+
+    journey("hang", () => {
+      step("slow", { endpoint: { method: "GET", path: "/x", operationId: "x" } });
+      step("never", { endpoint: { method: "GET", path: "/y", operationId: "y" } });
+    });
+
+    const runPromise = runAllRegistered({
+      baseUrl: "https://x",
+      fetchImpl,
+      signal: controller.signal,
+    });
+    // Yield once so the runtime dispatches the first fetch, then abort.
+    await new Promise((r) => setTimeout(r, 0));
+    controller.abort();
+
+    const [result] = await runPromise;
+    expect(result!.ok).toBe(false);
+    // The first (aborted) step records an error and halts the loop — the
+    // second step never runs.
+    expect(result!.steps).toHaveLength(1);
+    expect(result!.steps[0]!.error).toBeTruthy();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   describe("journey() options overload", () => {
     it("records options on the registered def with the 3-arg form", () => {
       journey("tagged", { tags: ["load", "checkout"], k6: { vus: 10, duration: "30s" } }, () => {});

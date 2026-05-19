@@ -290,6 +290,102 @@ journey("smoke", () => {
     }
   });
 
+  it("aborts an in-flight run via POST /api/runs/:id/abort", async () => {
+    // Slow target so we can fire abort while the first step is still pending.
+    const { createServer } = await import("node:http");
+    const target = createServer((_req, res) => {
+      // Never respond — close the socket only when the server is torn down.
+      setTimeout(() => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+      }, 30_000);
+    });
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
+    const targetAddr = target.address();
+    const targetPort = typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
+
+    await writeFile(
+      join(projectDir, "journeys", "abortable.journey.ts"),
+      `import { journey, step } from "@journey/core";
+journey("slow", () => {
+  step("hang", { endpoint: { method: "GET", path: "/slow", baseUrl: "http://127.0.0.1:${targetPort}" } });
+});
+`,
+    );
+
+    try {
+      const post = await fetch(`${srv.url}/api/journeys/abortable.journey.ts/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stream: true }),
+      });
+      expect(post.status).toBe(202);
+      const { runId } = (await post.json()) as { runId: string };
+
+      // Subscribe to SSE in the background; wait until the first `request`
+      // frame lands so we know the fetch has actually been dispatched, then
+      // fire the abort.
+      const evRes = await fetch(`${srv.url}/api/runs/${runId}/events`);
+      const reader = evRes.body!.getReader();
+      const decoder = new TextDecoder();
+      const events: { kind: string }[] = [];
+      let buf = "";
+      let sawRequest = false;
+      let runEndOk: boolean | undefined;
+
+      const drain = (async () => {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const frames = buf.split("\n\n");
+          buf = frames.pop() ?? "";
+          for (const frame of frames) {
+            const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+            if (!dataLine) continue;
+            const parsed = JSON.parse(dataLine.slice(5).trim()) as {
+              kind: string;
+              ok?: boolean;
+            };
+            events.push(parsed);
+            if (parsed.kind === "request") sawRequest = true;
+            if (parsed.kind === "run:end") {
+              runEndOk = parsed.ok;
+              return;
+            }
+          }
+        }
+      })();
+
+      // Wait until the request has been fired (max ~2s).
+      const deadline = Date.now() + 2000;
+      while (!sawRequest && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      expect(sawRequest).toBe(true);
+
+      const abort = await fetch(`${srv.url}/api/runs/${runId}/abort`, { method: "POST" });
+      expect(abort.status).toBe(202);
+      const abortBody = (await abort.json()) as { aborted: boolean };
+      expect(abortBody.aborted).toBe(true);
+
+      await drain;
+      expect(runEndOk).toBe(false);
+      // An `error` frame for the aborted fetch should be present.
+      expect(events.some((e) => e.kind === "error")).toBe(true);
+
+      // A second abort after completion returns 404 — controller is gone.
+      const lateAbort = await fetch(`${srv.url}/api/runs/${runId}/abort`, { method: "POST" });
+      expect(lateAbort.status).toBe(404);
+    } finally {
+      // Force-drop the hung connection so close() doesn't wait 30s for the
+      // setTimeout in the handler. closeAllConnections is the supported
+      // teardown for `http.Server` with long-lived requests.
+      target.closeAllConnections?.();
+      await new Promise<void>((r) => target.close(() => r()));
+    }
+  });
+
   it("reports spec drift and regenerates on POST /api/generate", async () => {
     type Drift = {
       added: Array<{ method: string; path: string; operationId: string }>;

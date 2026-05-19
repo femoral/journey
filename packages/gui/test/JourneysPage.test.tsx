@@ -123,7 +123,7 @@ const runEventsFrames = sseFrames([
   },
 ]);
 
-type Captured = { runBody?: unknown };
+type Captured = { runBody?: unknown; abortedRunIds?: string[] };
 
 interface StubOpts {
   captured?: Captured;
@@ -143,6 +143,15 @@ function stubFetch(opts: StubOpts = {}) {
       if (eventMatch) {
         if (typeof eventsBody === "string") return streamResponse(eventsBody);
         return eventsBody;
+      }
+      const abortMatch = url.match(/\/api\/runs\/([^/]+)\/abort$/);
+      if (abortMatch && (init?.method ?? "GET") === "POST") {
+        const runId = decodeURIComponent(abortMatch[1]!);
+        if (captured) (captured.abortedRunIds ??= []).push(runId);
+        return new Response(JSON.stringify({ runId, aborted: true }), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        });
       }
       let body: unknown;
       const runMatch = url.match(/\/api\/journeys\/([^/]+)\/run$/);
@@ -343,6 +352,66 @@ describe("JourneysPage", () => {
       expect(screen.getByText("200")).toBeTruthy();
       expect(screen.getByText("login")).toBeTruthy();
     });
+  });
+
+  it("Run button swaps to Stop mid-run and clicking it posts to /api/runs/:id/abort", async () => {
+    vi.unstubAllGlobals();
+    // Live stream that we don't close until after the Stop click, so the
+    // button stays in its running state for assertions.
+    const partialFrames = sseFrames([
+      { kind: "run:start", runId: "r1", journeyNames: ["auth"] },
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "auth",
+        stepIdx: 0,
+        name: "login",
+      },
+    ]);
+    const stream = controllableStreamResponse(partialFrames);
+    const captured: Captured = {};
+    stubFetch({ captured, runEvents: stream.response });
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("run-button")));
+    // Once the run kicks off the same button switches to Stop (no longer
+    // disabled, no more "Run journey" label).
+    await waitFor(() => {
+      const btn = screen.getByTestId("run-button") as HTMLButtonElement;
+      expect(btn.textContent?.includes("Stop")).toBe(true);
+      expect(btn.disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByTestId("run-button"));
+    // POST /api/runs/r1/abort fires, label flips to Stopping… and the button
+    // disables to block double-clicks until run:end lands.
+    await waitFor(() => {
+      const btn = screen.getByTestId("run-button") as HTMLButtonElement;
+      expect(captured.abortedRunIds).toEqual(["r1"]);
+      expect(btn.textContent?.includes("Stopping")).toBe(true);
+      expect(btn.disabled).toBe(true);
+    });
+    // Send the terminal run:end the server would emit once the runtime
+    // unwinds — UI returns to its idle "Run journey" state.
+    stream.push(
+      `data: ${JSON.stringify({
+        kind: "run:end",
+        runId: "r1",
+        ok: false,
+        durationMs: 5,
+        results: [{ name: "auth", ok: false }],
+      })}\n\n`,
+    );
+    stream.close();
+    await waitFor(() => {
+      const btn = screen.getByTestId("run-button") as HTMLButtonElement;
+      expect(btn.textContent?.includes("Run journey")).toBe(true);
+      expect(btn.disabled).toBe(false);
+    });
+    expect(screen.getByTestId("run-error").textContent).toMatch(/stopped by user/i);
   });
 
   it("flags cached results as stale when source checksum drifts", async () => {

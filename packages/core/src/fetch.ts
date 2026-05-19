@@ -27,17 +27,22 @@ export async function fetch(input: FetchInput, init?: FetchInit): Promise<FetchR
   // Snapshot the platform fetch per-call so a test that swaps `globalThis.fetch`
   // before invoking the wrapper still sees its replacement.
   const realFetch = globalThis.fetch;
+  // Merge the run-scoped abort signal with any caller-supplied init.signal so
+  // an in-flight helper fetch cancels when the run is aborted, without
+  // discarding a caller's own timeout/abort wiring.
+  const mergedInit = mergeAbortSignal(init, ctx?.signal);
+
   if (!logger) {
-    return realFetch(input, init);
+    return realFetch(input, mergedInit);
   }
 
-  const reqLog = buildRequestLog(input, init);
+  const reqLog = buildRequestLog(input, mergedInit);
   logger.onRequest?.(reqLog);
 
   const started = Date.now();
   let res: FetchResponse;
   try {
-    res = await realFetch(input, init);
+    res = await realFetch(input, mergedInit);
   } catch (err) {
     logger.onError?.(reqLog, err, Date.now() - started);
     throw err;
@@ -45,6 +50,16 @@ export async function fetch(input: FetchInput, init?: FetchInit): Promise<FetchR
 
   logger.onResponse?.(reqLog, await buildResponseLog(res, Date.now() - started));
   return res;
+}
+
+function mergeAbortSignal(
+  init: FetchInit | undefined,
+  runSignal: AbortSignal | undefined,
+): FetchInit | undefined {
+  if (!runSignal) return init;
+  const userSignal = init?.signal ?? undefined;
+  const merged = userSignal ? AbortSignal.any([userSignal, runSignal]) : runSignal;
+  return { ...(init ?? {}), signal: merged };
 }
 
 function buildRequestLog(input: FetchInput, init: FetchInit | undefined): RequestLog {

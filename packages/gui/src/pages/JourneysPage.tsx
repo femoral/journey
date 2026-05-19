@@ -61,6 +61,14 @@ interface JourneyRuntimeState {
   // bodies inject steps via helpers render the real plan from the first frame
   // of the run instead of growing in place as `step:start` events arrive.
   plannedSteps?: ParsedStep[];
+  // Live runId, set as soon as POST /run returns its 202. Used by the Stop
+  // button to call POST /api/runs/:id/abort. Cleared (set to undefined) on
+  // run:end so a stale id doesn't outlive its broadcaster.
+  runId?: string | undefined;
+  // True once the user has clicked Stop but the final `run:end` hasn't landed
+  // yet — keeps the button disabled (label: "Stopping…") so a second click
+  // can't double-fire the abort.
+  aborting?: boolean | undefined;
 }
 
 function emptyRuntimeState(): JourneyRuntimeState {
@@ -218,6 +226,26 @@ export const JourneysPage: Component = () => {
     });
   };
 
+  const stop = async () => {
+    const file = selected();
+    if (!file) return;
+    const state = journeyStates()[file];
+    const runId = state?.runId;
+    if (!runId || state.aborting) return;
+    updateJourneyState(file, { aborting: true });
+    try {
+      await api.abortRun(runId);
+    } catch (e) {
+      // 404 just means the run already finished — broadcaster will still emit
+      // run:end and we'll transition normally. Surface other failures so the
+      // user knows the stop request didn't take.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/404/.test(msg)) {
+        updateJourneyState(file, { error: msg, aborting: false });
+      }
+    }
+  };
+
   const run = async (opts: { upToStepIdx?: number } = {}) => {
     const file = selected();
     if (!file) return;
@@ -258,6 +286,7 @@ export const JourneysPage: Component = () => {
         ...opts,
         ...(env !== undefined ? { env } : {}),
       });
+      updateJourneyState(file, { runId });
       const sub = runEvents.subscribe(runId, (event) => {
         cons.ingest(event);
         switch (event.kind) {
@@ -346,11 +375,19 @@ export const JourneysPage: Component = () => {
           case "run:end": {
             batch(() => {
               publish(event.ok, event.durationMs);
-              updateJourneyState(file, {
-                runState: "done",
-                inFlight: new Set<number>(),
-                sourceChecksum,
-                stale: false,
+              updateJourneyState(file, (prev) => {
+                const patch: Partial<JourneyRuntimeState> = {
+                  runState: "done",
+                  inFlight: new Set<number>(),
+                  sourceChecksum,
+                  stale: false,
+                  aborting: false,
+                  runId: undefined,
+                };
+                if (prev.aborting && prev.error === undefined) {
+                  patch.error = "Run stopped by user";
+                }
+                return patch;
               });
             });
             subs.get(file)?.close();
@@ -509,8 +546,11 @@ export const JourneysPage: Component = () => {
                   file={file()}
                   steps={stepCount()}
                   runState={state().runState}
+                  aborting={state().aborting ?? false}
+                  canStop={state().runId !== undefined}
                   {...(state().stale ? { stale: true } : {})}
                   onRun={() => void run()}
+                  onStop={() => void stop()}
                   onViewHistory={() => navigate("/history")}
                 />
 
@@ -635,8 +675,11 @@ function JourneyHeader(props: {
   file: string;
   steps: number;
   runState: UiRunState;
+  aborting: boolean;
+  canStop: boolean;
   stale?: boolean;
   onRun: () => void;
+  onStop: () => void;
   onViewHistory: () => void;
 }): JSX.Element {
   const name = () => props.file.replace(/\.journey\.ts$/, "");
@@ -728,8 +771,8 @@ function JourneyHeader(props: {
         <button
           type="button"
           data-testid="run-button"
-          onClick={props.onRun}
-          disabled={props.runState === "running"}
+          onClick={() => (props.runState === "running" ? props.onStop() : props.onRun())}
+          disabled={props.runState === "running" && (props.aborting || !props.canStop)}
           style={{
             display: "flex",
             "align-items": "center",
@@ -741,6 +784,10 @@ function JourneyHeader(props: {
             "font-weight": 600,
             "font-size": "12px",
             border: props.runState === "running" ? "1px solid var(--bd-2)" : "none",
+            cursor:
+              props.runState === "running" && (props.aborting || !props.canStop)
+                ? "not-allowed"
+                : "pointer",
           }}
         >
           <Show
@@ -751,7 +798,7 @@ function JourneyHeader(props: {
               </>
             }
           >
-            <IconStop size={10} /> Running…
+            <IconStop size={10} /> {props.aborting ? "Stopping…" : "Stop"}
           </Show>
         </button>
       </div>

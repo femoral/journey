@@ -37,6 +37,11 @@ export interface RunJourneyFileOptions {
   runId?: string;
   /** Stop after the Nth absolute step (across journey boundaries). */
   upToStepIdx?: number;
+  /**
+   * When fired, in-flight fetches abort and the runtime stops launching new
+   * steps. Used by the dev server's `POST /api/runs/:id/abort` route.
+   */
+  signal?: AbortSignal;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -68,6 +73,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());
   if (logger) ctx.logger = logger;
   if (dispatcher !== undefined) ctx.dispatcher = dispatcher;
+  if (opts.signal !== undefined) ctx.signal = opts.signal;
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
   let results;
   try {

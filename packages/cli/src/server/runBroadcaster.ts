@@ -301,6 +301,9 @@ export class RunBroadcaster {
     if (this.completed) return;
     this.completed = true;
     this.completedAt = Date.now();
+    // Drop the abort controller as soon as the run is done so a late
+    // `POST /api/runs/:id/abort` returns 404 instead of silently no-oping.
+    abortControllers.delete(this.runId);
     for (const sub of this.subscribers) {
       try {
         clearInterval(sub.heartbeat);
@@ -331,6 +334,13 @@ function writeEvent(res: ServerResponse, event: RunEvent): void {
  */
 const EVICTION_GRACE_MS = 5 * 60 * 1000;
 const registry = new Map<string, RunBroadcaster>();
+/**
+ * Abort controllers for in-flight runs. The route handler registers one with
+ * the runId when a streaming run starts; `POST /api/runs/:id/abort` looks it
+ * up and triggers the abort. Entries are removed when the run completes (the
+ * broadcaster's `complete()` path calls `clearAbortController`).
+ */
+const abortControllers = new Map<string, AbortController>();
 
 export function newRunId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -353,8 +363,32 @@ export function getBroadcaster(runId: string): RunBroadcaster | undefined {
 
 export function evictStale(graceMs: number = EVICTION_GRACE_MS): void {
   for (const [id, b] of registry) {
-    if (b.canEvict(graceMs)) registry.delete(id);
+    if (b.canEvict(graceMs)) {
+      registry.delete(id);
+      abortControllers.delete(id);
+    }
   }
+}
+
+export function registerAbortController(runId: string, controller: AbortController): void {
+  abortControllers.set(runId, controller);
+}
+
+export function clearAbortController(runId: string): void {
+  abortControllers.delete(runId);
+}
+
+/**
+ * Triggers the AbortController associated with `runId`. Returns `true` if a
+ * live controller was found, `false` if the run is unknown or already
+ * complete. The broadcaster will see `run:end` fire naturally — the runtime
+ * propagates the signal into in-flight fetches and stops launching new steps.
+ */
+export function abortRun(runId: string): boolean {
+  const controller = abortControllers.get(runId);
+  if (!controller) return false;
+  controller.abort(new Error("run aborted by user"));
+  return true;
 }
 
 /** Result of the awaited run in a form the route handler can serialize. */

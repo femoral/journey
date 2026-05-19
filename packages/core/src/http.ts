@@ -23,6 +23,14 @@ export interface HttpContext {
    * client cert. The CLI's `--insecure` flag uses this.
    */
   dispatcher?: unknown;
+  /**
+   * Optional run-scoped AbortSignal. When set, every `fetch` issued through
+   * `execute` (and through the instrumented `@journey/core` `fetch` helper)
+   * receives it, and `runJourney` stops iterating steps as soon as it fires.
+   * Used by the dev server's `POST /api/runs/:id/abort` route to cancel an
+   * in-flight run.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RequestSpec {
@@ -126,13 +134,16 @@ export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpR
     // undici types. Cast through `Record<string, unknown>` to attach it.
     (init as unknown as Record<string, unknown>).dispatcher = ctx.dispatcher;
   }
-  let abort: AbortController | undefined;
   let timer: NodeJS.Timeout | undefined;
+  const signals: AbortSignal[] = [];
   if (req.timeoutMs !== undefined) {
-    abort = new AbortController();
-    init.signal = abort.signal;
-    timer = setTimeout(() => abort?.abort(), req.timeoutMs);
+    const abort = new AbortController();
+    timer = setTimeout(() => abort.abort(), req.timeoutMs);
+    signals.push(abort.signal);
   }
+  if (ctx.signal) signals.push(ctx.signal);
+  if (signals.length === 1) init.signal = signals[0]!;
+  else if (signals.length > 1) init.signal = AbortSignal.any(signals);
   const started = Date.now();
   try {
     const res = await f(req.url, init);

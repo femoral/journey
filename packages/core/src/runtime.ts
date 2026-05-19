@@ -214,6 +214,13 @@ export async function runJourney(
       const s = steps[i]!;
       const stepIdx = stepIdxOffset + i;
       if (opts.upToStepIdx !== undefined && stepIdx > opts.upToStepIdx) break;
+      // Don't start a new step once the run has been aborted (e.g. between
+      // steps or during an `after` hook). An in-flight fetch sees the same
+      // signal and rejects on its own; the per-step catch records that.
+      if (ctx.signal?.aborted) {
+        ok = false;
+        break;
+      }
       const start = Date.now();
       ctx.logger?.onStepStart?.({
         runId,
@@ -305,6 +312,11 @@ export async function runAllRegistered(
     stepIdxOffset += result.steps.length;
     // Early-exit once the caller-requested cap is reached.
     if (opts.upToStepIdx !== undefined && stepIdxOffset > opts.upToStepIdx) break;
+    // Stop launching follow-on journeys once the run has been aborted.
+    if (ctx.signal?.aborted) {
+      ok = false;
+      break;
+    }
   }
   ctx.logger?.onRunEnd?.({
     runId,
