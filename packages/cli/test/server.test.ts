@@ -365,6 +365,103 @@ journey("with-sub", () => {
     }
   });
 
+  it("streams group:start/group:end frames bracketing a sub-journey's child steps", async () => {
+    const { createServer } = await import("node:http");
+    const target = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/token") {
+        res.end(JSON.stringify({ access_token: "tok-xyz" }));
+      } else {
+        res.end(JSON.stringify({ ok: true }));
+      }
+    });
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
+    const targetAddr = target.address();
+    const targetPort = typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
+    const base = `http://127.0.0.1:${targetPort}`;
+
+    await writeFile(
+      join(projectDir, "journeys", "grouped.journey.ts"),
+      `import { journey, step, invokeJourney, output, z } from "@journey/core";
+
+const auth = journey(
+  "auth.sub",
+  { reusable: true, outputs: z.object({ token: z.string() }) },
+  () => {
+    step("exchange", {
+      endpoint: { method: "POST", path: "/token", baseUrl: "${base}" },
+      after: (res) => output({ token: res.body.access_token }),
+    });
+  },
+);
+
+journey("grouped", () => {
+  invokeJourney(auth, {});
+  step("after-auth", { endpoint: { method: "GET", path: "/data", baseUrl: "${base}" } });
+});
+`,
+    );
+
+    try {
+      const post = await fetch(`${srv.url}/api/journeys/grouped.journey.ts/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stream: true }),
+      });
+      expect(post.status).toBe(202);
+      const { runId } = (await post.json()) as { runId: string };
+
+      const evRes = await fetch(`${srv.url}/api/runs/${runId}/events`);
+      const reader = evRes.body!.getReader();
+      const decoder = new TextDecoder();
+      const events: Array<{ kind: string; stepIdx?: number; firstChildStepIdx?: number }> = [];
+      let buf = "";
+      let done = false;
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buf += decoder.decode(value, { stream: true });
+        const frames = buf.split("\n\n");
+        buf = frames.pop() ?? "";
+        for (const frame of frames) {
+          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (!dataLine) continue;
+          const parsed = JSON.parse(dataLine.slice(5).trim()) as {
+            kind: string;
+            stepIdx?: number;
+            firstChildStepIdx?: number;
+          };
+          events.push(parsed);
+          if (parsed.kind === "run:end") {
+            done = true;
+            break;
+          }
+        }
+      }
+
+      const kinds = events.map((e) => e.kind);
+      // group:start fires before the child step's step:start, group:end after it.
+      const groupStartIdx = kinds.indexOf("group:start");
+      const groupEndIdx = kinds.indexOf("group:end");
+      const firstStepStartIdx = kinds.indexOf("step:start");
+      expect(groupStartIdx).toBeGreaterThanOrEqual(0);
+      expect(groupEndIdx).toBeGreaterThan(groupStartIdx);
+      expect(groupStartIdx).toBeLessThan(firstStepStartIdx);
+      expect(firstStepStartIdx).toBeLessThan(groupEndIdx);
+
+      // The sub-journey node occupies stepIdx 0; its child step starts at 1.
+      const groupStart = events[groupStartIdx]!;
+      expect(groupStart.stepIdx).toBe(0);
+      expect(groupStart.firstChildStepIdx).toBe(1);
+
+      // The child step event carries the firstChildStepIdx slot.
+      const childStart = events.find((e) => e.kind === "step:start");
+      expect(childStart!.stepIdx).toBe(1);
+    } finally {
+      await new Promise<void>((r) => target.close(() => r()));
+    }
+  });
+
   it("aborts an in-flight run via POST /api/runs/:id/abort", async () => {
     // Slow target so we can fire abort while the first step is still pending.
     const { createServer } = await import("node:http");

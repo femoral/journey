@@ -1,5 +1,7 @@
 import type { ServerResponse } from "node:http";
 import type {
+  GroupEndEvent,
+  GroupStartEvent,
   JourneyLogger,
   JourneyResult,
   LogEvent,
@@ -76,6 +78,33 @@ export type RunEvent =
       runId: string;
       journeyIdx: number;
       stepIdx: number;
+      ok: boolean;
+      durationMs: number;
+      error?: string;
+    }
+  | {
+      // A sub-journey node (`invokeJourney(...)`) began executing. `stepIdx` is
+      // the slot the node itself occupies; the child's own steps fire ordinary
+      // `step:start` / `step:end` frames carrying stepIdx values from
+      // `firstChildStepIdx` upward, so the GUI can fold them under this group.
+      kind: "group:start";
+      runId: string;
+      journeyIdx: number;
+      name: string;
+      childJourneyName: string;
+      stepIdx: number;
+      firstChildStepIdx: number;
+      cacheStatus: "miss" | "hit";
+      resolvedKey?: string;
+    }
+  | {
+      kind: "group:end";
+      runId: string;
+      journeyIdx: number;
+      name: string;
+      childJourneyName: string;
+      stepIdx: number;
+      lastChildStepIdx: number;
       ok: boolean;
       durationMs: number;
       error?: string;
@@ -205,6 +234,33 @@ export class RunBroadcaster {
           runId: e.runId,
           journeyIdx: e.journeyIdx,
           stepIdx: e.stepIdx,
+          ok: e.ok,
+          durationMs: e.durationMs,
+          ...(e.error !== undefined ? { error: e.error } : {}),
+        });
+      },
+      onGroupStart: (e: GroupStartEvent) => {
+        this.emit({
+          kind: "group:start",
+          runId: e.runId,
+          journeyIdx: e.journeyIdx,
+          name: e.name,
+          childJourneyName: e.childJourneyName,
+          stepIdx: e.stepIdx,
+          firstChildStepIdx: e.firstChildStepIdx,
+          cacheStatus: e.cacheStatus,
+          ...(e.resolvedKey !== undefined ? { resolvedKey: e.resolvedKey } : {}),
+        });
+      },
+      onGroupEnd: (e: GroupEndEvent) => {
+        this.emit({
+          kind: "group:end",
+          runId: e.runId,
+          journeyIdx: e.journeyIdx,
+          name: e.name,
+          childJourneyName: e.childJourneyName,
+          stepIdx: e.stepIdx,
+          lastChildStepIdx: e.lastChildStepIdx,
           ok: e.ok,
           durationMs: e.durationMs,
           ...(e.error !== undefined ? { error: e.error } : {}),
