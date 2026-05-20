@@ -49,18 +49,34 @@ import {
 
 type UiRunState = "idle" | "running" | "done";
 
+/**
+ * One entry in a journey's resolved top-level pipeline, as broadcast by
+ * `step:planned`. `kind: "sub"` marks an `invokeJourney(...)` node; the child
+ * steps inside it are not listed here — they stream in via `group:start` and
+ * the step events that follow.
+ */
+interface PlannedNode {
+  name: string;
+  kind: "step" | "sub";
+  /** Endpoint token fed to `resolveIdleEndpoint`; absent for sub-journey nodes. */
+  endpoint?: string;
+}
+
 interface JourneyRuntimeState {
   results?: JourneyResult[];
   runState: UiRunState;
   error?: string;
+  // Absolute stepIdx values currently executing — covers both HTTP steps and
+  // sub-journey group nodes. Keyed by stepIdx (not array position) so it stays
+  // correct when a sub-journey shifts the numbering of later steps.
   inFlight: Set<number>;
   sourceChecksum?: string;
   stale?: boolean;
-  // Resolved step list broadcast by the runner on `step:planned`. When set, it
-  // wins over the regex-parsed source for the timeline, so journeys whose
-  // bodies inject steps via helpers render the real plan from the first frame
-  // of the run instead of growing in place as `step:start` events arrive.
-  plannedSteps?: ParsedStep[];
+  // Resolved top-level pipeline broadcast by the runner on `step:planned`. When
+  // set, it wins over the regex-parsed source for the timeline, so journeys
+  // whose bodies inject steps via helpers — or call sub-journeys — render the
+  // real plan from the first frame of the run.
+  plannedSteps?: PlannedNode[];
   // Live runId, set as soon as POST /run returns its 202. Used by the Stop
   // button to call POST /api/runs/:id/abort. Cleared (set to undefined) on
   // run:end so a stale id doesn't outlive its broadcaster.
@@ -265,18 +281,30 @@ export const JourneysPage: Component = () => {
     // the version it actually ran against — used later to detect drift.
     const sourceChecksum = idleSource()?.checksum ?? "";
 
-    const liveSteps: StepResult[] = [];
+    // Live pipeline tree, built from SSE events. `liveTree` holds the
+    // top-level nodes; a sub-journey node carries its child steps in
+    // `.children`. `groupStack` routes child step/group events into the
+    // innermost open sub-journey; `byIdx` maps absolute stepIdx → node so
+    // request/response/end frames land on the right row regardless of how
+    // sub-journeys shift the numbering.
+    const liveTree: StepResult[] = [];
+    const groupStack: StepResult[] = [];
+    const byIdx = new Map<number, StepResult>();
+    const inFlight = new Set<number>();
     let journeyName = file.replace(/\.journey\.ts$/, "");
+
+    const container = (): StepResult[] =>
+      groupStack.length > 0 ? groupStack[groupStack.length - 1]!.children! : liveTree;
+
+    const cloneStep = (s: StepResult): StepResult => ({
+      ...s,
+      ...(s.children ? { children: s.children.map(cloneStep) } : {}),
+    });
+
     const publish = (ok: boolean, durationMs: number) => {
       updateJourneyState(file, {
-        results: [
-          {
-            name: journeyName,
-            ok,
-            steps: liveSteps.map((s) => ({ ...s })),
-            durationMs,
-          },
-        ],
+        results: [{ name: journeyName, ok, steps: liveTree.map(cloneStep), durationMs }],
+        inFlight: new Set(inFlight),
       });
     };
 
@@ -295,57 +323,76 @@ export const JourneysPage: Component = () => {
             // journeys that might run in the same SSE stream.
             if (event.journeyIdx !== 0) break;
             const parsed = idleSource()?.parsed ?? [];
-            // Prefer the runtime-supplied method+path (covers helper-injected
-            // steps); fall back to the source parse for cases where the
-            // runtime descriptor is less informative (unlikely).
-            const merged: ParsedStep[] = event.steps.map((s) => {
-              const entry: ParsedStep = { name: s.name, start: 0, end: 0 };
-              if (s.method && s.path) {
-                // Synthesize an inline-descriptor token so resolveIdleEndpoint
-                // can produce the MethodBadge + URL subtext using its existing
-                // parser.
-                entry.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
-              } else {
-                const match = parsed.find((p) => p.name === s.name);
-                if (match?.endpoint !== undefined) entry.endpoint = match.endpoint;
+            const nodes: PlannedNode[] = event.steps.map((s) => {
+              const kind: "step" | "sub" = s.kind === "sub" ? "sub" : "step";
+              const node: PlannedNode = { name: s.name, kind };
+              if (kind === "step") {
+                if (s.method && s.path) {
+                  // Synthesize an inline-descriptor token so resolveIdleEndpoint
+                  // can produce the MethodBadge + URL subtext.
+                  node.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
+                } else {
+                  const match = parsed.find((p) => p.name === s.name);
+                  if (match?.endpoint !== undefined) node.endpoint = match.endpoint;
+                }
               }
-              return entry;
+              return node;
             });
-            updateJourneyState(file, { plannedSteps: merged });
+            updateJourneyState(file, { plannedSteps: nodes });
+            break;
+          }
+          case "group:start": {
+            const node: StepResult = {
+              name: event.name,
+              ok: false,
+              durationMs: 0,
+              kind: "sub",
+              children: [],
+              stepIdx: event.stepIdx,
+              cacheStatus: event.cacheStatus,
+            };
+            container().push(node);
+            byIdx.set(event.stepIdx, node);
+            groupStack.push(node);
+            inFlight.add(event.stepIdx);
+            publish(false, 0);
+            break;
+          }
+          case "group:end": {
+            const node = byIdx.get(event.stepIdx);
+            if (node) {
+              node.ok = event.ok;
+              node.durationMs = event.durationMs;
+              if (event.error !== undefined) node.error = event.error;
+            }
+            if (groupStack[groupStack.length - 1] === node) groupStack.pop();
+            inFlight.delete(event.stepIdx);
+            publish(false, 0);
             break;
           }
           case "step:start": {
             journeyName = event.journeyName;
-            // Pre-fill request with the resolved endpoint so the MethodBadge
-            // and URL row stay rendered between step:start and the actual
-            // `request` SSE frame (avoids first-step flicker). Prefer the
-            // planned list (covers helper-injected steps) over the source
-            // parse.
-            const initial: StepResult = { name: event.name, ok: false, durationMs: 0 };
-            const plannedList = untrack(() => journeyStates()[file]?.plannedSteps);
-            const lookup = plannedList ?? idleSource()?.parsed ?? [];
-            const parsed = lookup[event.stepIdx];
-            const resolved = parsed ? resolveIdleEndpoint(parsed.endpoint) : undefined;
-            if (resolved) initial.request = resolved;
-            liveSteps.push(initial);
-            batch(() => {
-              updateJourneyState(file, (prev) => {
-                const next = new Set(prev.inFlight);
-                next.add(event.stepIdx);
-                return { inFlight: next };
-              });
-              publish(false, 0);
-            });
+            const node: StepResult = {
+              name: event.name,
+              ok: false,
+              durationMs: 0,
+              kind: "step",
+              stepIdx: event.stepIdx,
+            };
+            container().push(node);
+            byIdx.set(event.stepIdx, node);
+            inFlight.add(event.stepIdx);
+            publish(false, 0);
             break;
           }
           case "request": {
-            const s = liveSteps[event.stepIdx];
+            const s = byIdx.get(event.stepIdx);
             if (s) s.request = { method: event.method, url: event.url };
             publish(false, 0);
             break;
           }
           case "response": {
-            const s = liveSteps[event.stepIdx];
+            const s = byIdx.get(event.stepIdx);
             if (s)
               s.response = {
                 status: event.status,
@@ -356,20 +403,14 @@ export const JourneysPage: Component = () => {
             break;
           }
           case "step:end": {
-            const s = liveSteps[event.stepIdx];
+            const s = byIdx.get(event.stepIdx);
             if (s) {
               s.ok = event.ok;
               s.durationMs = event.durationMs;
               if (event.error !== undefined) s.error = event.error;
             }
-            batch(() => {
-              updateJourneyState(file, (prev) => {
-                const next = new Set(prev.inFlight);
-                next.delete(event.stepIdx);
-                return { inFlight: next };
-              });
-              publish(false, 0);
-            });
+            inFlight.delete(event.stepIdx);
+            publish(false, 0);
             break;
           }
           case "run:end": {
@@ -537,9 +578,20 @@ export const JourneysPage: Component = () => {
         >
           {(file) => {
             const state = (): JourneyRuntimeState => current() ?? emptyRuntimeState();
-            const idle = () => state().plannedSteps ?? idleSource()?.parsed ?? [];
+            // Top-level pipeline for idle rendering: the runtime-broadcast plan
+            // when available, else the regex parse of the source (which can
+            // only see HTTP steps, never sub-journeys).
+            const idleNodes = (): PlannedNode[] => {
+              const planned = state().plannedSteps;
+              if (planned) return planned;
+              return (idleSource()?.parsed ?? []).map((p) => ({
+                name: p.name,
+                kind: "step" as const,
+                ...(p.endpoint !== undefined ? { endpoint: p.endpoint } : {}),
+              }));
+            };
             const stepCount = () =>
-              Math.max(state().results?.[0]?.steps.length ?? 0, idle().length);
+              Math.max(state().results?.[0]?.steps.length ?? 0, idleNodes().length);
             return (
               <>
                 <JourneyHeader
@@ -573,7 +625,7 @@ export const JourneysPage: Component = () => {
                   <StepTimeline
                     runState={state().runState}
                     results={state().results}
-                    idleSteps={idle()}
+                    idleNodes={idleNodes()}
                     inFlight={state().inFlight}
                     stale={state().stale ?? false}
                     resolveEndpoint={resolveIdleEndpoint}
@@ -806,78 +858,70 @@ function JourneyHeader(props: {
   );
 }
 
-interface MergedRow {
+interface TimelineRow {
   step: StepResult;
   state: RunState;
   index: number;
-  inFlight: boolean;
-  defaultExpanded: boolean;
+}
+
+/**
+ * Run state of a single node. `stepIdx` present + in `inFlight` → running;
+ * absent stepIdx → an idle planned row that hasn't executed; otherwise the
+ * recorded outcome (`ok`, or a non-zero duration / explicit error) decides.
+ * A bare `!ok` with no duration means the node started but hasn't ended yet.
+ */
+function nodeRunState(s: StepResult, inFlight: Set<number>): RunState {
+  if (s.stepIdx !== undefined && inFlight.has(s.stepIdx)) return "running";
+  if (s.stepIdx === undefined) return "idle";
+  if (s.ok) return "pass";
+  if (s.durationMs > 0 || s.error !== undefined) return "fail";
+  return "running";
 }
 
 function StepTimeline(props: {
   runState: UiRunState;
   results: JourneyResult[] | undefined;
-  idleSteps: ParsedStep[];
+  idleNodes: PlannedNode[];
   inFlight: Set<number>;
   stale: boolean;
   resolveEndpoint: (token: string | undefined) => { method: string; url: string } | undefined;
   onRunOnly: (stepIdx: number) => void;
   onSendViaEndpoints: (step: StepResult) => void;
 }): JSX.Element {
-  const liveSteps = createMemo<StepResult[]>(() => {
-    const rs = props.results ?? [];
-    return rs.flatMap((r) => r.steps);
-  });
-  const rows = createMemo<MergedRow[]>(() => {
-    const live = liveSteps();
-    const idle = props.idleSteps;
+  const liveTop = createMemo<StepResult[]>(() => props.results?.[0]?.steps ?? []);
+  // Top-level rows: live nodes win positionally over the idle plan (both are
+  // in pipeline order), so steps not yet started still render as idle rows.
+  const rows = createMemo<TimelineRow[]>(() => {
+    const live = liveTop();
+    const idle = props.idleNodes;
     const len = Math.max(live.length, idle.length);
-    const out: MergedRow[] = [];
+    const out: TimelineRow[] = [];
     for (let i = 0; i < len; i++) {
       const liveStep = live[i];
-      const inFlight = props.inFlight.has(i);
       if (liveStep) {
-        // Ended = no longer in flight AND has a recorded outcome (pass, or a
-        // non-zero duration / explicit error from step:end). Bare !ok with no
-        // duration means we're still mid-run for this step.
-        let s: RunState;
-        if (inFlight) s = "running";
-        else if (liveStep.ok) s = "pass";
-        else if (liveStep.durationMs > 0 || liveStep.error !== undefined) s = "fail";
-        else s = "running";
-        // Fall back to the pre-resolved idle endpoint when live row exists but
-        // hasn't received its `request` SSE frame yet (avoids verb/URL flicker
-        // between `step:start` and `request`).
         let step = liveStep;
-        if (!liveStep.request) {
-          const parsed = idle[i];
-          const resolved = parsed ? props.resolveEndpoint(parsed.endpoint) : undefined;
+        // A live HTTP step that hasn't received its `request` frame yet falls
+        // back to the planned endpoint so the verb/URL don't flicker.
+        if (liveStep.kind !== "sub" && !liveStep.request) {
+          const p = idle[i];
+          const resolved = p && p.kind === "step" ? props.resolveEndpoint(p.endpoint) : undefined;
           if (resolved) step = { ...liveStep, request: resolved };
         }
-        out.push({
-          step,
-          state: s,
-          index: i,
-          inFlight,
-          defaultExpanded: s === "fail",
-        });
+        out.push({ step, state: nodeRunState(liveStep, props.inFlight), index: i });
       } else {
-        const parsed = idle[i]!;
-        const resolved = props.resolveEndpoint(parsed.endpoint);
-        const idleStep: StepResult = { name: parsed.name, ok: false, durationMs: 0 };
-        if (resolved) idleStep.request = resolved;
-        out.push({
-          step: idleStep,
-          state: "idle",
-          index: i,
-          inFlight: false,
-          defaultExpanded: false,
-        });
+        const p = idle[i]!;
+        const idleStep: StepResult = { name: p.name, ok: false, durationMs: 0, kind: p.kind };
+        if (p.kind === "sub") {
+          idleStep.children = [];
+        } else {
+          const resolved = props.resolveEndpoint(p.endpoint);
+          if (resolved) idleStep.request = resolved;
+        }
+        out.push({ step: idleStep, state: "idle", index: i });
       }
     }
     return out;
   });
-  const allSteps = createMemo<StepResult[]>(() => rows().map((r) => r.step));
 
   return (
     <div
@@ -906,8 +950,8 @@ function StepTimeline(props: {
         >
           Current run
         </span>
-        <Show when={props.runState === "done" && allSteps().length > 0}>
-          <span class="mono">{allSteps().reduce((a, s) => a + s.durationMs, 0)}ms</span>
+        <Show when={props.runState === "done" && rows().length > 0}>
+          <span class="mono">{rows().reduce((a, r) => a + r.step.durationMs, 0)}ms</span>
         </Show>
         <Show when={props.runState === "running"}>
           <span class="mono" style={{ color: "var(--ac)" }}>
@@ -919,7 +963,7 @@ function StepTimeline(props: {
       </div>
 
       <Show
-        when={allSteps().length > 0}
+        when={rows().length > 0}
         fallback={
           <div
             style={{
@@ -951,10 +995,10 @@ function StepTimeline(props: {
                 step={row().step}
                 index={i}
                 state={row().state}
-                inFlight={row().inFlight}
-                defaultExpanded={row().defaultExpanded}
-                onRunOnly={() => props.onRunOnly(i)}
-                onSendViaEndpoints={() => props.onSendViaEndpoints(row().step)}
+                depth={0}
+                inFlight={props.inFlight}
+                onRunOnly={props.onRunOnly}
+                onSendViaEndpoints={props.onSendViaEndpoints}
               />
             )}
           </Index>
@@ -964,25 +1008,45 @@ function StepTimeline(props: {
   );
 }
 
+/** Short status badge shown on a sub-journey group row in place of a method badge. */
+function groupBadgeText(step: StepResult): string {
+  if (step.cacheStatus === "hit") return "cached";
+  const n = step.children?.length ?? 0;
+  if (n > 0) return `${n} step${n === 1 ? "" : "s"}`;
+  return "sub-journey";
+}
+
 function StepCard(props: {
   step: StepResult;
   index: number;
   state: RunState;
-  inFlight: boolean;
-  defaultExpanded: boolean;
-  onRunOnly: () => void;
-  onSendViaEndpoints: () => void;
+  /** 0 = top-level pipeline row; >0 = a step nested inside a sub-journey. */
+  depth: number;
+  inFlight: Set<number>;
+  onRunOnly: (stepIdx: number) => void;
+  onSendViaEndpoints: (step: StepResult) => void;
 }): JSX.Element {
-  const [expanded, setExpanded] = createSignal(props.defaultExpanded);
+  const isSub = () => props.step.kind === "sub";
+  const [expanded, setExpanded] = createSignal(props.state === "fail");
   // Auto-expand the first time this card enters the "fail" state so the user
-  // sees the error without an extra click. Subsequent toggles are honored.
-  let didAutoExpand = props.defaultExpanded;
+  // sees the error (or the failing child) without an extra click.
+  let didAutoExpand = props.state === "fail";
   createEffect(() => {
     if (props.state === "fail" && !didAutoExpand) {
       didAutoExpand = true;
       setExpanded(true);
     }
   });
+  const childRows = createMemo<TimelineRow[]>(() =>
+    (props.step.children ?? []).map((c, i) => ({
+      step: c,
+      state: nodeRunState(c, props.inFlight),
+      index: i,
+    })),
+  );
+  const inFlightSelf = () =>
+    props.step.stepIdx !== undefined && props.inFlight.has(props.step.stepIdx);
+  const testid = props.depth === 0 ? `step-card-${props.index}` : `substep-card-${props.index}`;
   return (
     <div
       style={{
@@ -991,7 +1055,7 @@ function StepCard(props: {
         "margin-bottom": "8px",
         position: "relative",
       }}
-      data-testid={`step-card-${props.index}`}
+      data-testid={testid}
     >
       <div style={{ "padding-top": "4px", "z-index": 1 }}>
         <StepIcon state={props.state} index={props.index} />
@@ -1018,8 +1082,30 @@ function StepCard(props: {
             "text-align": "left",
           }}
         >
-          <Show when={props.step.request}>
-            {(req) => <MethodBadge method={req().method as HttpMethod} />}
+          <Show
+            when={!isSub()}
+            fallback={
+              <span
+                class="mono"
+                data-testid="sub-journey-badge"
+                style={{
+                  "font-size": "9px",
+                  "font-weight": 600,
+                  "letter-spacing": "0.05em",
+                  padding: "2px 5px",
+                  "border-radius": "3px",
+                  background: "var(--ac-bg)",
+                  color: "var(--ac)",
+                  "flex-shrink": 0,
+                }}
+              >
+                SUB
+              </span>
+            }
+          >
+            <Show when={props.step.request}>
+              {(req) => <MethodBadge method={req().method as HttpMethod} />}
+            </Show>
           </Show>
           <div
             style={{
@@ -1056,7 +1142,7 @@ function StepCard(props: {
                 "line-height": "14px",
               }}
             >
-              {props.step.request?.url ?? " "}
+              {isSub() ? groupBadgeText(props.step) : (props.step.request?.url ?? " ")}
             </span>
           </div>
           <Show when={props.step.response}>{(res) => <StatusPill status={res().status} />}</Show>
@@ -1081,12 +1167,55 @@ function StepCard(props: {
           />
         </button>
         <Show when={expanded()}>
-          <StepDetail
-            step={props.step}
-            inFlight={props.inFlight}
-            onRunOnly={props.onRunOnly}
-            onSendViaEndpoints={props.onSendViaEndpoints}
-          />
+          <Show
+            when={isSub()}
+            fallback={
+              <StepDetail
+                step={props.step}
+                inFlight={inFlightSelf()}
+                onRunOnly={() => props.onRunOnly(props.step.stepIdx ?? props.index)}
+                onSendViaEndpoints={() => props.onSendViaEndpoints(props.step)}
+              />
+            }
+          >
+            <div
+              style={{
+                "border-top": "1px solid var(--bd-1)",
+                background: "var(--bg-0)",
+                padding: "10px 12px 2px",
+              }}
+            >
+              <Show
+                when={childRows().length > 0}
+                fallback={
+                  <div
+                    style={{
+                      "font-size": "12px",
+                      color: props.step.error ? "var(--err)" : "var(--fg-3)",
+                      "white-space": "pre-wrap",
+                      "padding-bottom": "8px",
+                    }}
+                  >
+                    {props.step.error ?? "Sub-journey has not run yet."}
+                  </div>
+                }
+              >
+                <Index each={childRows()}>
+                  {(row) => (
+                    <StepCard
+                      step={row().step}
+                      index={row().index}
+                      state={row().state}
+                      depth={props.depth + 1}
+                      inFlight={props.inFlight}
+                      onRunOnly={props.onRunOnly}
+                      onSendViaEndpoints={props.onSendViaEndpoints}
+                    />
+                  )}
+                </Index>
+              </Show>
+            </div>
+          </Show>
         </Show>
       </div>
     </div>

@@ -84,6 +84,14 @@ export interface StepResult {
   response?: { status: number; headers: Record<string, string>; body: unknown };
   error?: string;
   durationMs: number;
+  /** `"sub"` marks an `invokeJourney(...)` node; `"step"` (or absent) is an HTTP step. */
+  kind?: "step" | "sub";
+  /** Child step results, present on sub-journey nodes. */
+  children?: StepResult[];
+  /** Absolute run stepIdx — set on live rows so the timeline can key in-flight state. */
+  stepIdx?: number;
+  /** Sub-journey cache status carried from the `group:start` SSE frame. */
+  cacheStatus?: "miss" | "hit";
 }
 
 export interface JourneyResult {

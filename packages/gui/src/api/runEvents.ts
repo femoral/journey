@@ -19,7 +19,12 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
+      steps: ReadonlyArray<{
+        kind?: "step" | "sub";
+        name: string;
+        method?: string;
+        path?: string;
+      }>;
     }
   | {
       kind: "step:start";
@@ -69,6 +74,29 @@ export type RunEvent =
       runId: string;
       journeyIdx: number;
       stepIdx: number;
+      ok: boolean;
+      durationMs: number;
+      error?: string;
+    }
+  | {
+      kind: "group:start";
+      runId: string;
+      journeyIdx: number;
+      name: string;
+      childJourneyName: string;
+      stepIdx: number;
+      firstChildStepIdx: number;
+      cacheStatus: "miss" | "hit";
+      resolvedKey?: string;
+    }
+  | {
+      kind: "group:end";
+      runId: string;
+      journeyIdx: number;
+      name: string;
+      childJourneyName: string;
+      stepIdx: number;
+      lastChildStepIdx: number;
       ok: boolean;
       durationMs: number;
       error?: string;

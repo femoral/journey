@@ -28,7 +28,12 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{ name: string; method?: string; path?: string }>;
+      steps: ReadonlyArray<{
+        kind?: "step" | "sub";
+        name: string;
+        method?: string;
+        path?: string;
+      }>;
     }
   | {
       kind: "step:start";

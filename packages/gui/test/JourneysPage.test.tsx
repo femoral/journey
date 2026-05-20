@@ -261,6 +261,147 @@ describe("JourneysPage", () => {
     });
   });
 
+  it("renders a sub-journey as a collapsible group row with correct child + sibling status", async () => {
+    vi.unstubAllGlobals();
+    // A run with one sub-journey node (stepIdx 0) wrapping one child step
+    // (stepIdx 1), then a sibling HTTP step (stepIdx 2). This is the shape
+    // that broke the flat positional model — the sibling's events must still
+    // land on the right row.
+    const frames = sseFrames([
+      { kind: "run:start", runId: "r1", journeyNames: ["demo"] },
+      {
+        kind: "step:planned",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "demo",
+        stepIdxOffset: 0,
+        steps: [
+          { kind: "sub", name: "authenticate" },
+          { kind: "step", name: "fetch data", method: "GET", path: "/data" },
+        ],
+      },
+      {
+        kind: "group:start",
+        runId: "r1",
+        journeyIdx: 0,
+        name: "authenticate",
+        childJourneyName: "auth.sub",
+        stepIdx: 0,
+        firstChildStepIdx: 1,
+        cacheStatus: "miss",
+      },
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "demo",
+        stepIdx: 1,
+        name: "login via IDP",
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 1,
+        requestIdx: 0,
+        method: "POST",
+        url: "https://idp/token",
+        headers: {},
+      },
+      {
+        kind: "response",
+        runId: "r1",
+        stepIdx: 1,
+        requestIdx: 0,
+        status: 200,
+        headers: {},
+        body: { token: "t" },
+        durationMs: 5,
+      },
+      { kind: "step:end", runId: "r1", journeyIdx: 0, stepIdx: 1, ok: true, durationMs: 5 },
+      {
+        kind: "group:end",
+        runId: "r1",
+        journeyIdx: 0,
+        name: "authenticate",
+        childJourneyName: "auth.sub",
+        stepIdx: 0,
+        lastChildStepIdx: 1,
+        ok: true,
+        durationMs: 8,
+      },
+      {
+        kind: "step:start",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "demo",
+        stepIdx: 2,
+        name: "fetch data",
+      },
+      {
+        kind: "request",
+        runId: "r1",
+        stepIdx: 2,
+        requestIdx: 1,
+        method: "GET",
+        url: "https://x/data",
+        headers: {},
+      },
+      {
+        kind: "response",
+        runId: "r1",
+        stepIdx: 2,
+        requestIdx: 1,
+        status: 200,
+        headers: {},
+        body: {},
+        durationMs: 6,
+      },
+      { kind: "step:end", runId: "r1", journeyIdx: 0, stepIdx: 2, ok: true, durationMs: 6 },
+      {
+        kind: "run:end",
+        runId: "r1",
+        ok: true,
+        durationMs: 20,
+        results: [{ name: "demo", ok: true }],
+      },
+    ]);
+    stubFetch({ runEvents: frames });
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("run-button")));
+
+    // Top-level timeline: 2 rows — the sub-journey group, then the sibling step.
+    await waitFor(() => {
+      expect(screen.getByTestId("step-card-0")).toBeTruthy();
+      expect(screen.getByTestId("step-card-1")).toBeTruthy();
+    });
+    const groupRow = screen.getByTestId("step-card-0");
+    expect(groupRow.querySelector('[data-testid="sub-journey-badge"]')).toBeTruthy();
+    expect(groupRow.textContent).toContain("authenticate");
+    // Badge reflects the child step count.
+    expect(groupRow.textContent).toContain("1 step");
+    // Group passed → check icon (svg), not stuck running.
+    expect(groupRow.querySelector("svg")).toBeTruthy();
+
+    // The sibling HTTP step row carries its own request + 200 — not offset.
+    const siblingRow = screen.getByTestId("step-card-1");
+    expect(siblingRow.textContent).toContain("fetch data");
+    expect(siblingRow.textContent).toContain("https://x/data");
+    expect(siblingRow.textContent).toContain("200");
+
+    // Child step is nested — revealed by expanding the group row.
+    expect(screen.queryByTestId("substep-card-0")).toBeNull();
+    const groupToggle = groupRow.querySelector("button[aria-expanded]") as HTMLButtonElement;
+    fireEvent.click(groupToggle);
+    await waitFor(() => {
+      const child = screen.getByTestId("substep-card-0");
+      expect(child.textContent).toContain("login via IDP");
+    });
+  });
+
   it("renders parsed steps in an idle state before any run", async () => {
     renderWithConsole();
     await waitFor(() => {
