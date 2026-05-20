@@ -1,0 +1,78 @@
+import { env, expect, invokeJourney, journey, step } from "@journey/core";
+import { endpoints } from "../generated/endpoints.js";
+import { acquireToken } from "./helpers/auth.js";
+
+/**
+ * Adoption flow: authenticate, list a pet, mark it sold, confirm, clean up.
+ *
+ * Auth is a sub-journey node — `invokeJourney(acquireToken, ...)` — not an
+ * inline `step`. It sits in the pipeline as a peer of the HTTP steps; the
+ * token it mints flows forward through a closure variable, exactly like
+ * step-to-step state.
+ */
+journey("adopt a pet", () => {
+  let token = "";
+  let petId = 0;
+
+  invokeJourney(acquireToken, {
+    // Display label for the timeline (defaults to the handle's name otherwise).
+    name: "authenticate",
+    inputs: {
+      username: env("USERNAME"),
+      password: env("PASSWORD"),
+    },
+    // Cache key — the runtime resolves and reports it on the group event.
+    // The cache store itself lands in a later milestone issue (#90); until
+    // then this is a documented no-op that already shows the call shape.
+    cacheKey: () => env("USERNAME"),
+    after: (out) => {
+      token = out.token;
+    },
+  });
+
+  step("put a pet up for adoption", {
+    endpoint: endpoints.createPet,
+    headers: () => ({ Authorization: `Bearer ${token}` }),
+    body: { name: "Biscuit", status: "available", tags: ["dog", "good-boy"] },
+    assert(res) {
+      expect(res.status).toBe(201);
+      const pet = res.body as { id: number; status: string };
+      expect(pet.status).toBe("available");
+    },
+    after(res) {
+      petId = (res.body as { id: number }).id;
+    },
+  });
+
+  step("adopt the pet (mark sold)", {
+    endpoint: endpoints.updatePet,
+    params: () => ({ id: petId }),
+    headers: () => ({ Authorization: `Bearer ${token}` }),
+    body: { status: "sold" },
+    assert(res) {
+      expect(res.status).toBe(200);
+      expect((res.body as { status: string }).status).toBe("sold");
+    },
+  });
+
+  step("confirm adoption", {
+    endpoint: endpoints.getPetById,
+    params: () => ({ id: petId }),
+    assert(res) {
+      expect(res.status).toBe(200);
+      const pet = res.body as { id: number; name: string; status: string };
+      expect(pet.id).toBe(petId);
+      expect(pet.name).toBe("Biscuit");
+      expect(pet.status).toBe("sold");
+    },
+  });
+
+  step("clean up", {
+    endpoint: endpoints.deletePet,
+    params: () => ({ id: petId }),
+    headers: () => ({ Authorization: `Bearer ${token}` }),
+    assert(res) {
+      expect(res.status).toBe(204);
+    },
+  });
+});
