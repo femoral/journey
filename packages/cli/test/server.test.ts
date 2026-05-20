@@ -290,6 +290,81 @@ journey("smoke", () => {
     }
   });
 
+  it("runs a journey using invokeJourney + zod re-export through the runner", async () => {
+    // Proves a journey project (zero deps of its own) can reach `z`,
+    // `invokeJourney`, and `output` via the `@journey/core` symlink — the
+    // sub-journey surface from #87 resolves end-to-end through the CLI runner.
+    const { createServer } = await import("node:http");
+    const target = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/token") {
+        res.end(JSON.stringify({ access_token: "tok-123" }));
+      } else {
+        res.end(JSON.stringify({ seen: req.headers.authorization ?? null }));
+      }
+    });
+    await new Promise<void>((r) => target.listen(0, "127.0.0.1", r));
+    const targetAddr = target.address();
+    const targetPort = typeof targetAddr === "object" && targetAddr ? targetAddr.port : 0;
+    const base = `http://127.0.0.1:${targetPort}`;
+
+    await writeFile(
+      join(projectDir, "journeys", "subjourney.journey.ts"),
+      `import { journey, step, invokeJourney, output, z } from "@journey/core";
+
+const acquireToken = journey(
+  "auth.acquire-token",
+  { reusable: true, outputs: z.object({ token: z.string() }) },
+  () => {
+    step("exchange", {
+      endpoint: { method: "POST", path: "/token", baseUrl: "${base}" },
+      after: (res) => output({ token: res.body.access_token }),
+    });
+  },
+);
+
+journey("with-sub", () => {
+  let token = "";
+  invokeJourney(acquireToken, { after: (out) => { token = out.token; } });
+  step("call", {
+    endpoint: { method: "GET", path: "/data", baseUrl: "${base}" },
+    headers: () => ({ Authorization: \`Bearer \${token}\` }),
+  });
+});
+`,
+    );
+
+    try {
+      const post = await fetch(`${srv.url}/api/journeys/subjourney.journey.ts/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(post.status).toBe(200);
+      const body = (await post.json()) as {
+        results: Array<{
+          ok: boolean;
+          steps: Array<{
+            name: string;
+            ok: boolean;
+            kind?: string;
+            response?: { body: unknown };
+          }>;
+        }>;
+      };
+      const journeyResult = body.results[0]!;
+      expect(journeyResult.ok).toBe(true);
+      // Pipeline: [sub node, http step].
+      expect(journeyResult.steps).toHaveLength(2);
+      expect(journeyResult.steps[0]!.kind).toBe("sub");
+      expect(journeyResult.steps[0]!.name).toBe("auth.acquire-token");
+      // The bearer token minted by the sub-journey reached the parent step.
+      expect(journeyResult.steps[1]!.response?.body).toEqual({ seen: "Bearer tok-123" });
+    } finally {
+      await new Promise<void>((r) => target.close(() => r()));
+    }
+  });
+
   it("aborts an in-flight run via POST /api/runs/:id/abort", async () => {
     // Slow target so we can fire abort while the first step is still pending.
     const { createServer } = await import("node:http");
