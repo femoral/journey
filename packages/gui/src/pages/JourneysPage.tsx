@@ -331,14 +331,22 @@ export const JourneysPage: Component = () => {
     const file = selected();
     if (!file) return;
     // Invalidate any cached run for this journey and reset its in-memory state.
+    // Keep `plannedSteps` so the discovered pipeline (sub-journeys included)
+    // stays on screen during the gap between kickoff and the run's first
+    // `step:planned` frame — otherwise the timeline flickers back to the
+    // source parse, which can't see `invokeJourney(...)` nodes.
     store.delete(file);
-    setJourneyStates((prev) => ({
-      ...prev,
-      [file]: {
-        runState: "running",
-        inFlight: new Set<number>(),
-      },
-    }));
+    setJourneyStates((prev) => {
+      const planned = prev[file]?.plannedSteps;
+      return {
+        ...prev,
+        [file]: {
+          runState: "running",
+          inFlight: new Set<number>(),
+          ...(planned ? { plannedSteps: planned } : {}),
+        },
+      };
+    });
     subs.get(file)?.close();
     subs.delete(file);
 
