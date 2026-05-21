@@ -199,6 +199,47 @@ describe("petstore — export structure", () => {
     expect(byName["verify pet is gone"]).toBe("GET");
   });
 
+  // ── sub-journey-at-start ────────────────────────────────────────────────────
+
+  it("sub-journey-at-start: sub-journey is a nested folder among the pet steps", async () => {
+    col = await load("sub-journey-at-start");
+    expect(col.item).toHaveLength(1);
+    const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
+    expect(folder.name).toBe("sub-journey at start");
+    // Pipeline: [ sub "authenticate", 4 pet HTTP steps ].
+    expect(folder.item).toHaveLength(5);
+
+    type Folder = {
+      name: string;
+      description?: string;
+      variable?: Array<{ key: string; value: string }>;
+      item: Array<{ name: string; request: { method: string; url: { raw: string } } }>;
+    };
+    type Request = { name: string; request: { method: string } };
+
+    const sub = folder.item[0] as Folder;
+    expect(sub.name).toBe("authenticate");
+    expect(sub.description).toMatch(/Sub-journey/);
+    // `env()` inputs flow through as {{KEY}} folder-scoped variables.
+    expect(sub.variable).toContainEqual({ key: "username", value: "{{USERNAME}}" });
+    expect(sub.variable).toContainEqual({ key: "password", value: "{{PASSWORD}}" });
+    // The reusable journey's single step lives inside the nested folder.
+    expect(sub.item).toHaveLength(1);
+    expect(sub.item[0]!.name).toBe("login via IDP");
+    expect(sub.item[0]!.request.method).toBe("POST");
+    expect(sub.item[0]!.request.url.raw).toContain("{{AUTH_BASE_URL}}");
+    expect(sub.item[0]!.request.url.raw).toContain("/auth/login");
+
+    // The four pet steps are siblings of the nested folder.
+    const petSteps = folder.item.slice(1) as Request[];
+    expect(petSteps.map((s) => s.name)).toEqual([
+      "put a pet up for adoption",
+      "adopt the pet (mark sold)",
+      "confirm adoption",
+      "clean up",
+    ]);
+  });
+
   // ── k6-load-stages ──────────────────────────────────────────────────────────
 
   it("k6-load-stages: exported when no --tag filter; same endpoint as k6-smoke-tag", async () => {

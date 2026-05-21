@@ -1,4 +1,4 @@
-import type { JourneyDef, StepDef } from "@journey/core";
+import type { StepDef } from "@journey/core";
 
 // ---------------------------------------------------------------------------
 // Postman Collection v2.1.0 types
@@ -34,9 +34,21 @@ export interface PostmanItem {
   request: PostmanRequest;
 }
 
+/** Folder-scoped variable — sub-journey inputs are serialized as these. */
+export interface PostmanVariable {
+  key: string;
+  value: string;
+}
+
+/**
+ * A Postman folder. `item` holds requests and/or nested folders, so a
+ * sub-journey invocation nests as a child folder among the parent's requests.
+ */
 export interface PostmanFolder {
   name: string;
-  item: PostmanItem[];
+  item: Array<PostmanItem | PostmanFolder>;
+  description?: string;
+  variable?: PostmanVariable[];
 }
 
 export interface PostmanInfo {
@@ -59,6 +71,32 @@ export interface PostmanEnvironment {
   name: string;
   values: PostmanEnvValue[];
 }
+
+// ---------------------------------------------------------------------------
+// Export pipeline tree
+// ---------------------------------------------------------------------------
+
+/**
+ * The shape `buildFolder` walks. The CLI resolves a journey's `PipelineNode[]`
+ * into this tree — recursing into each sub-journey via `collectSubPipeline` —
+ * so the adapter stays free of a runtime dependency on `@journey/core`.
+ */
+export type ExportNode =
+  | { kind: "step"; def: StepDef }
+  | {
+      kind: "sub";
+      /** Timeline display label — the call's `name` override or the child journey's name. */
+      name: string;
+      /** Resolved call inputs, written as folder-scoped Postman variables. */
+      inputs?: Record<string, unknown>;
+      /** The child journey's own pipeline, already resolved. */
+      nodes: ExportNode[];
+    };
+
+/** Note attached to every sub-journey folder's `description`. */
+const SUB_JOURNEY_NOTE =
+  "Sub-journey invocation. The Journey output cache (cacheKey / cacheTtlMs) is " +
+  "not translated to Postman — this folder re-runs on every collection run.";
 
 // ---------------------------------------------------------------------------
 // Env proxy — env("KEY") returns "{{KEY}}" during step collection
@@ -120,50 +158,83 @@ function buildPostmanUrl(
 }
 
 // ---------------------------------------------------------------------------
+// Item builders
+// ---------------------------------------------------------------------------
+
+async function buildRequestItem(s: StepDef): Promise<PostmanItem> {
+  const params = await tryResolve(s.options.params);
+  const query = await tryResolve(s.options.query);
+  const headers = await tryResolve(s.options.headers);
+  const body = await tryResolve(s.options.body);
+
+  const baseUrl = (s.options.endpoint as { baseUrl?: string }).baseUrl ?? "{{BASE_URL}}";
+  const url = buildPostmanUrl(s.options.endpoint.path, baseUrl, params, query);
+
+  const headerItems: PostmanHeader[] = Object.entries(headers ?? {}).map(([key, value]) => ({
+    key,
+    value: String(value),
+  }));
+
+  let postmanBody: PostmanBody | undefined;
+  if (body !== undefined) {
+    postmanBody = {
+      mode: "raw",
+      raw: typeof body === "string" ? body : JSON.stringify(body, null, 2),
+      options: { raw: { language: "json" } },
+    };
+  }
+
+  return {
+    name: s.name,
+    request: {
+      method: s.options.endpoint.method.toUpperCase(),
+      header: headerItems,
+      url,
+      ...(postmanBody ? { body: postmanBody } : {}),
+    },
+  };
+}
+
+/** Serialize resolved sub-journey inputs as folder-scoped Postman variables. */
+function inputsToVariables(inputs: Record<string, unknown> | undefined): PostmanVariable[] {
+  if (!inputs || typeof inputs !== "object") return [];
+  return Object.entries(inputs).map(([key, value]) => ({
+    key,
+    value: typeof value === "string" ? value : JSON.stringify(value),
+  }));
+}
+
+async function buildItems(
+  nodes: ReadonlyArray<ExportNode>,
+): Promise<Array<PostmanItem | PostmanFolder>> {
+  const items: Array<PostmanItem | PostmanFolder> = [];
+  for (const node of nodes) {
+    if (node.kind === "step") {
+      items.push(await buildRequestItem(node.def));
+      continue;
+    }
+    const folder: PostmanFolder = {
+      name: node.name,
+      item: await buildItems(node.nodes),
+      description: SUB_JOURNEY_NOTE,
+    };
+    const variables = inputsToVariables(node.inputs);
+    if (variables.length > 0) folder.variable = variables;
+    items.push(folder);
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Build the top-level Postman folder for a journey from its resolved tree. */
 export async function buildFolder(
-  def: JourneyDef,
-  steps: ReadonlyArray<StepDef>,
+  name: string,
+  nodes: ReadonlyArray<ExportNode>,
 ): Promise<PostmanFolder> {
-  const items: PostmanItem[] = [];
-
-  for (const s of steps) {
-    const params = await tryResolve(s.options.params);
-    const query = await tryResolve(s.options.query);
-    const headers = await tryResolve(s.options.headers);
-    const body = await tryResolve(s.options.body);
-
-    const baseUrl = (s.options.endpoint as { baseUrl?: string }).baseUrl ?? "{{BASE_URL}}";
-    const url = buildPostmanUrl(s.options.endpoint.path, baseUrl, params, query);
-
-    const headerItems: PostmanHeader[] = Object.entries(headers ?? {}).map(([key, value]) => ({
-      key,
-      value: String(value),
-    }));
-
-    let postmanBody: PostmanBody | undefined;
-    if (body !== undefined) {
-      postmanBody = {
-        mode: "raw",
-        raw: typeof body === "string" ? body : JSON.stringify(body, null, 2),
-        options: { raw: { language: "json" } },
-      };
-    }
-
-    items.push({
-      name: s.name,
-      request: {
-        method: s.options.endpoint.method.toUpperCase(),
-        header: headerItems,
-        url,
-        ...(postmanBody ? { body: postmanBody } : {}),
-      },
-    });
-  }
-
-  return { name: def.name, item: items };
+  return { name, item: await buildItems(nodes) };
 }
 
 export function buildCollection(name: string, folders: PostmanFolder[]): PostmanCollection {

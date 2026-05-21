@@ -4,7 +4,8 @@ import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
   clearRegistry,
-  collectSteps,
+  collectPipeline,
+  collectSubPipeline,
   getRegisteredJourneys,
   listEnvironments,
   loadConfig,
@@ -12,16 +13,67 @@ import {
   resolveConfigPaths,
   setActiveEnvironment,
   type JourneyDef,
+  type PipelineNode,
+  type SubJourneyCallDef,
 } from "@journey/core";
 import {
   ENV_PROXY,
   buildCollection,
   buildEnvironment,
   buildFolder,
+  type ExportNode,
   type PostmanFolder,
 } from "@journey/postman-adapter";
 import { tsImport } from "tsx/esm/api";
 import { discoverJourneyFiles } from "../util/discover.js";
+
+/** Matches the runtime's `MAX_SUB_JOURNEY_DEPTH` — stops runaway recursion. */
+const MAX_SUB_DEPTH = 8;
+
+/** Resolve a sub-journey call's `inputs` to a plain object, best-effort. */
+async function resolveSubInputs(
+  call: SubJourneyCallDef,
+): Promise<Record<string, unknown> | undefined> {
+  const raw = call.inputs;
+  if (raw === undefined) return undefined;
+  try {
+    const value = typeof raw === "function" ? await raw() : raw;
+    return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve a journey's `PipelineNode[]` into the `ExportNode` tree the postman
+ * adapter renders, recursing into each sub-journey via `collectSubPipeline`.
+ * A discovery failure degrades to an empty folder rather than aborting.
+ */
+async function toExportNodes(
+  nodes: ReadonlyArray<PipelineNode>,
+  depth: number,
+): Promise<ExportNode[]> {
+  const out: ExportNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "step") {
+      out.push({ kind: "step", def: node.def });
+      continue;
+    }
+    const name = node.def.name ?? node.def.handle.name;
+    const inputs = await resolveSubInputs(node.def);
+    let childNodes: ExportNode[] = [];
+    if (depth < MAX_SUB_DEPTH) {
+      try {
+        const childPipeline = await collectSubPipeline(node.def);
+        childNodes = await toExportNodes(childPipeline, depth + 1);
+      } catch {
+        // Child body could not be discovered — emit the folder empty.
+      }
+    }
+    out.push({ kind: "sub", name, ...(inputs ? { inputs } : {}), nodes: childNodes });
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -138,8 +190,9 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
 
       const folders: PostmanFolder[] = [];
       for (const def of matching) {
-        const steps = await collectSteps(def);
-        folders.push(await buildFolder(def, steps));
+        const pipeline = await collectPipeline(def);
+        const nodes = await toExportNodes(pipeline, 0);
+        folders.push(await buildFolder(def.name, nodes));
       }
 
       const collection = buildCollection(collectionName, folders);

@@ -53,13 +53,21 @@ function runJourney(
 
 Run a single journey without touching the registry. Does **not** emit `onRunStart` / `onRunEnd` — the caller is responsible if it wants them.
 
-## `collectSteps(def)`
+## `collectPipeline(def)`
 
 ```ts
-function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepDef>>;
+function collectPipeline(def: JourneyDef): Promise<ReadonlyArray<PipelineNode>>;
 ```
 
-Evaluates `def.body()` once, capturing every `step()` call into an ordered list and returning it without executing the steps. Used by `journey export postman` to walk steps without performing HTTP, and available to custom tooling that needs a structural view of a journey. Side effects from the body itself still run each time it's evaluated — keep ID generation, env reads, and outbound HTTP **inside** step hooks (`headers`, `body`, `assert`, `after`) rather than at top level, so a `collectSteps` call followed by a `runJourney` call (which re-evaluates the body) doesn't fire them twice.
+Evaluates `def.body()` once, capturing every `step()` and `invokeJourney()` call into an ordered list of pipeline nodes — `{ kind: "step", def }` or `{ kind: "sub", def }` — and returning it without executing anything. Used by `journey export postman` / `journey export k6` to walk a journey structurally without performing HTTP, and available to custom tooling. Side effects from the body itself still run each time it's evaluated — keep ID generation, env reads, and outbound HTTP **inside** step hooks (`headers`, `body`, `assert`, `after`) rather than at top level, so a `collectPipeline` call followed by a `runJourney` call (which re-evaluates the body) doesn't fire them twice.
+
+## `collectSubPipeline(call)`
+
+```ts
+function collectSubPipeline(call: SubJourneyCallDef): Promise<ReadonlyArray<PipelineNode>>;
+```
+
+Given a `{ kind: "sub" }` node's `def` (a `SubJourneyCallDef`, as returned by `collectPipeline`), resolves the call's `inputs` and evaluates the referenced reusable journey's body with them — so `input.*` references inside the child resolve. Returns the child's pipeline nodes. Best-effort: if input resolution throws, the child is collected with `undefined` input. Exporters call this recursively to walk a journey into its full nested tree.
 
 ## `getRegisteredJourneys()`
 

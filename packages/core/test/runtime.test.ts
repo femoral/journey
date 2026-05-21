@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   clearRegistry,
+  collectPipeline,
+  collectSubPipeline,
   getRegisteredJourneys,
   invokeJourney,
   journey,
@@ -664,6 +666,53 @@ describe("runtime", () => {
     it("invokeJourney called outside a journey body throws", () => {
       const handle = journey("standalone", { reusable: true }, () => {});
       expect(() => invokeJourney(handle, {})).toThrow(/called outside a journey/);
+    });
+
+    it("collectSubPipeline resolves a sub-journey's child pipeline with inputs", async () => {
+      const child = journey(
+        "child",
+        { reusable: true, inputs: z.object({ user: z.string() }) },
+        (input) => {
+          step("greet", { endpoint: { method: "GET", path: `/hello/${input.user}` } });
+        },
+      );
+      journey("parent", () => {
+        invokeJourney(child, { inputs: { user: "alice" } });
+      });
+
+      const [def] = getRegisteredJourneys();
+      const pipeline = await collectPipeline(def!);
+      expect(pipeline).toHaveLength(1);
+      const node = pipeline[0]!;
+      if (node.kind !== "sub") throw new Error("expected a sub node");
+
+      const childNodes = await collectSubPipeline(node.def);
+      expect(childNodes).toHaveLength(1);
+      const childStep = childNodes[0]!;
+      if (childStep.kind !== "step") throw new Error("expected a step node");
+      // The input flowed into the child body — the path interpolated `alice`.
+      expect(childStep.def.options.endpoint.path).toBe("/hello/alice");
+    });
+
+    it("collectSubPipeline tolerates an inputs resolver that throws", async () => {
+      const child = journey("child", { reusable: true }, () => {
+        step("ping", { endpoint: { method: "GET", path: "/ping" } });
+      });
+      journey("parent", () => {
+        invokeJourney(child, {
+          inputs: () => {
+            throw new Error("boom");
+          },
+        });
+      });
+
+      const [def] = getRegisteredJourneys();
+      const pipeline = await collectPipeline(def!);
+      const node = pipeline[0]!;
+      if (node.kind !== "sub") throw new Error("expected a sub node");
+      // Resolution failure falls back to `undefined` input, not a throw.
+      const childNodes = await collectSubPipeline(node.def);
+      expect(childNodes).toHaveLength(1);
     });
   });
 

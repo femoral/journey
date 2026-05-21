@@ -357,21 +357,28 @@ export function clearRegistry(): void {
   state.registry.length = 0;
 }
 
-/**
- * Walks a journey body and returns the **step** nodes only. Kept as a
- * filter-down view for back-compat with exporters that don't yet support
- * sub-journey nesting (#91, #92); new consumers should use `collectPipeline`.
- */
-export async function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepDef>> {
-  const nodes = await collectPipeline(def);
-  return nodes
-    .filter((n): n is { kind: "step"; def: StepDef } => n.kind === "step")
-    .map((n) => n.def);
-}
-
 /** Walks a journey body and returns every pipeline node (step + sub) in order. */
 export async function collectPipeline(def: JourneyDef): Promise<ReadonlyArray<PipelineNode>> {
   return collectPipelineWithInput(def, undefined);
+}
+
+/**
+ * Collects the child pipeline of a sub-journey call, resolving the call's
+ * `inputs` and passing them to the reusable body so `input.*` references in
+ * the child resolve. Lets an exporter (#92) walk a journey into a nested
+ * tree without running it. Best-effort: input resolution failures fall back
+ * to `undefined`, mirroring `discoverChildNodes`.
+ */
+export async function collectSubPipeline(
+  call: SubJourneyCallDef,
+): Promise<ReadonlyArray<PipelineNode>> {
+  let input: unknown;
+  try {
+    input = call.inputs !== undefined ? await resolveLazy(call.inputs) : undefined;
+  } catch {
+    input = undefined;
+  }
+  return collectPipelineWithInput(call.handle.__def, input);
 }
 
 /**
