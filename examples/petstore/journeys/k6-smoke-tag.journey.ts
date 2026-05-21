@@ -1,7 +1,7 @@
 import { AssertionError, env, expect, journey, step } from "@journey/core";
 import { endpoints } from "../generated/endpoints.js";
 
-journey("list available pets", { tags: ["smoke"], k6: { vus: 5, duration: "10s" } }, () => {
+journey("k6 smoke tag", { tags: ["smoke"], k6: { vus: 5, duration: "10s" } }, () => {
   step("findByStatus", {
     endpoint: endpoints.findPetsByStatus,
     query: () => ({ status: "available", limit: Number(env("PET_LIST_LIMIT")) }),

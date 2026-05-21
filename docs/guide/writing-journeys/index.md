@@ -3,7 +3,7 @@ title: Writing journeys
 description: The top-level shape of a .journey.ts file. Start here, then dive into individual topics.
 sources:
   - packages/core/src/runtime.ts
-  - examples/petstore/journeys/pet-crud-flow.journey.ts
+  - examples/petstore/journeys/multi-step-crud.journey.ts
 ---
 
 # Writing journeys
@@ -16,7 +16,7 @@ A **journey** is a `.journey.ts` file that describes a sequence of HTTP steps. E
 import { journey, step, env, expect } from "@journey/core";
 import { endpoints } from "../generated/endpoints.js";
 
-journey("pet CRUD flow", () => {
+journey("multi-step crud", () => {
   let token = "";
   let petId = 0;
 
@@ -63,4 +63,4 @@ Read in this order if you're new:
 9. [`env()` in journeys](./env) — reading environment variables.
 10. [Patterns](./patterns) — auth capture, fixture seeding, conditional assertions.
 
-The full petstore journey — using every HTTP method against a single resource — lives at [`examples/petstore/journeys/pet-crud-flow.journey.ts`](https://github.com/femoral/journey/blob/main/examples/petstore/journeys/pet-crud-flow.journey.ts).
+The full petstore journey — using every HTTP method against a single resource — lives at [`examples/petstore/journeys/multi-step-crud.journey.ts`](https://github.com/femoral/journey/blob/main/examples/petstore/journeys/multi-step-crud.journey.ts).

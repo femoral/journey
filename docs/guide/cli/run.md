@@ -41,7 +41,7 @@ journey run [files...] [--env <name>] [--all] [--debug] [--watch] [--insecure]
 ## Output
 
 ```
-✓ pet CRUD flow (219ms)
+✓ multi-step crud (219ms)
   ✓ login POST http://127.0.0.1:5180/auth/login → 200 (35ms)
   ✓ create pet POST http://127.0.0.1:5180/pet → 201 (28ms)
   ✗ delete pet DELETE http://127.0.0.1:5180/pet/1 → (14ms)

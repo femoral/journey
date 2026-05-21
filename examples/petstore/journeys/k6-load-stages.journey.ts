@@ -3,11 +3,11 @@ import { endpoints } from "../generated/endpoints.js";
 
 /**
  * Demo of journey-level load options. The emitted k6 script bakes the
- * `stages` ramp into `export const options`, so `k6 run load-list-pets.k6.js`
+ * `stages` ramp into `export const options`, so `k6 run k6-load-stages.k6.js`
  * needs no extra flags. Filter the export with `--tag load`.
  */
 journey(
-  "load: list pets",
+  "k6 load stages",
   {
     tags: ["load"],
     k6: {

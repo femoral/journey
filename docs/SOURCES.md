@@ -129,7 +129,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/writing-journeys/index.md` — Writing journeys
 
 - `packages/core/src/runtime.ts`
-- `examples/petstore/journeys/pet-crud-flow.journey.ts`
+- `examples/petstore/journeys/multi-step-crud.journey.ts`
 
 ### `guide/writing-journeys/journey-and-step.md` — journey() and step()
 
@@ -144,7 +144,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/core/src/runtime.ts`
 - `packages/core/src/fetch.ts`
 - `packages/cli/src/server/runBroadcaster.ts`
-- `examples/petstore/journeys/pet-crud-flow.journey.ts`
+- `examples/petstore/journeys/multi-step-crud.journey.ts`
 
 ### `guide/writing-journeys/request-inputs.md` — Request inputs — params, query, headers, body
 
@@ -154,7 +154,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/writing-journeys/state.md` — State between steps
 
 - `packages/core/src/runtime.ts`
-- `examples/petstore/journeys/pet-crud-flow.journey.ts`
+- `examples/petstore/journeys/multi-step-crud.journey.ts`
 
 ### `guide/writing-journeys/timeouts.md` — Timeouts
 
@@ -236,7 +236,7 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `index.md`
 
-### `examples/petstore/journeys/pet-crud-flow.journey.ts`
+### `examples/petstore/journeys/multi-step-crud.journey.ts`
 
 - `guide/writing-journeys/index.md`
 - `guide/writing-journeys/patterns.md`

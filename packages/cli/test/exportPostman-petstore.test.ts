@@ -6,7 +6,7 @@
  *      step count, HTTP methods, and URL paths. Catches regressions when
  *      sample journey files change.
  *   2. Newman e2e — runs the exported collection for the one fully-static
- *      journey (`list-available-pets`) against the real petstore mock server.
+ *      journey (`k6-smoke-tag`) against the real petstore mock server.
  *      Auth/CRUD journeys share state via closures and cannot produce a
  *      runnable static collection; they are covered structurally only.
  */
@@ -130,13 +130,13 @@ describe("petstore — export structure", () => {
     }
   });
 
-  // ── list-available-pets ────────────────────────────────────────────────────
+  // ── k6-smoke-tag ────────────────────────────────────────────────────────────
 
-  it("list-available-pets: 1 folder / 1 step / GET /pet/findByStatus", async () => {
-    col = await load("list-available-pets");
+  it("k6-smoke-tag: 1 folder / 1 step / GET /pet/findByStatus", async () => {
+    col = await load("k6-smoke-tag");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
-    expect(folder.name).toBe("list available pets");
+    expect(folder.name).toBe("k6 smoke tag");
     expect(folder.item).toHaveLength(1);
 
     const step = (
@@ -153,13 +153,13 @@ describe("petstore — export structure", () => {
     expect(queryKeys).toContain("limit");
   });
 
-  // ── whoami ─────────────────────────────────────────────────────────────────
+  // ── env-assertion ───────────────────────────────────────────────────────────
 
-  it("whoami: 1 folder / 2 steps / both at {{AUTH_BASE_URL}}", async () => {
-    col = await load("whoami");
+  it("env-assertion: 1 folder / 2 steps / both at {{AUTH_BASE_URL}}", async () => {
+    col = await load("env-assertion");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
-    expect(folder.name).toBe("whoami");
+    expect(folder.name).toBe("env assertion");
     expect(folder.item).toHaveLength(2);
 
     type Step = { name: string; request: { method: string; url: { raw: string } } };
@@ -175,13 +175,13 @@ describe("petstore — export structure", () => {
     expect(steps[1]!.request.url.raw).toContain("/auth/whoami");
   });
 
-  // ── pet-crud-flow ──────────────────────────────────────────────────────────
+  // ── multi-step-crud ─────────────────────────────────────────────────────────
 
-  it("pet-crud-flow: 1 folder / 9 steps with correct names and methods", async () => {
-    col = await load("pet-crud-flow");
+  it("multi-step-crud: 1 folder / 9 steps with correct names and methods", async () => {
+    col = await load("multi-step-crud");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
-    expect(folder.name).toBe("pet CRUD flow");
+    expect(folder.name).toBe("multi-step crud");
     expect(folder.item).toHaveLength(9);
 
     type Step = { name: string; request: { method: string } };
@@ -199,13 +199,13 @@ describe("petstore — export structure", () => {
     expect(byName["verify pet is gone"]).toBe("GET");
   });
 
-  // ── load-list-pets ─────────────────────────────────────────────────────────
+  // ── k6-load-stages ──────────────────────────────────────────────────────────
 
-  it("load-list-pets: exported when no --tag filter; same endpoint as list-available-pets", async () => {
-    col = await load("load-list-pets");
+  it("k6-load-stages: exported when no --tag filter; same endpoint as k6-smoke-tag", async () => {
+    col = await load("k6-load-stages");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
-    expect(folder.name).toBe("load: list pets");
+    expect(folder.name).toBe("k6 load stages");
     expect(folder.item).toHaveLength(1);
 
     type Step = { request: { method: string; url: { raw: string } } };
@@ -214,11 +214,11 @@ describe("petstore — export structure", () => {
     expect(step.request.url.raw).toContain("/pet/findByStatus");
   });
 
-  it("load-list-pets: skipped when --tag filter is smoke (only tagged load)", async () => {
+  it("k6-load-stages: skipped when --tag filter is smoke (only tagged load)", async () => {
     const filteredDir = await makeTmp();
     try {
       await runExportPostman({
-        path: join(petstoreJourneys, "load-list-pets.journey.ts"),
+        path: join(petstoreJourneys, "k6-load-stages.journey.ts"),
         outDir: filteredDir,
         tags: ["smoke"],
       });
@@ -232,7 +232,7 @@ describe("petstore — export structure", () => {
 
 // ── Newman e2e against real petstore server ───────────────────────────────────
 
-describe("petstore — Newman e2e (list-available-pets)", () => {
+describe("petstore — Newman e2e (k6-smoke-tag)", () => {
   let apiServer: { url: string; proc: ChildProcess };
   let outDir: string;
 
@@ -243,7 +243,7 @@ describe("petstore — Newman e2e (list-available-pets)", () => {
     ]);
 
     await runExportPostman({
-      path: join(petstoreJourneys, "list-available-pets.journey.ts"),
+      path: join(petstoreJourneys, "k6-smoke-tag.journey.ts"),
       outDir,
       tags: [],
       env: "local",
@@ -266,7 +266,7 @@ describe("petstore — Newman e2e (list-available-pets)", () => {
   });
 
   it("collection runs against the petstore mock with no Newman failures", async () => {
-    const collectionPath = join(outDir, "list-available-pets.postman_collection.json");
+    const collectionPath = join(outDir, "k6-smoke-tag.postman_collection.json");
     const envPath = join(outDir, "local.postman_environment.json");
     const summary = await runNewman(collectionPath, envPath);
 

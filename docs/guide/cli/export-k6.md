@@ -80,7 +80,7 @@ If the journey declares a `k6` block, the emitted script bakes it in as `export 
 
 ```ts
 journey(
-  "load: list pets",
+  "k6 load stages",
   {
     tags: ["load"],
     k6: {

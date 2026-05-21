@@ -35,7 +35,7 @@ features:
 import { journey, step, env, expect } from "@journey/core";
 import { endpoints } from "../generated/endpoints.js";
 
-journey("pet CRUD flow", () => {
+journey("multi-step crud", () => {
   let token = "";
   let petId = 0;
 
@@ -71,5 +71,5 @@ journey("pet CRUD flow", () => {
 ```
 
 ```sh
-journey run journeys/pet-crud-flow.journey.ts --env dev
+journey run journeys/multi-step-crud.journey.ts --env dev
 ```

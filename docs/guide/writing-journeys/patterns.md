@@ -5,7 +5,7 @@ sources:
   - packages/core/src/runtime.ts
   - packages/core/src/fetch.ts
   - packages/cli/src/server/runBroadcaster.ts
-  - examples/petstore/journeys/pet-crud-flow.journey.ts
+  - examples/petstore/journeys/multi-step-crud.journey.ts
 ---
 
 # Patterns

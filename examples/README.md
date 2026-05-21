@@ -45,11 +45,31 @@ mock.
 
 ### Journeys
 
-- `list-available-pets.journey.ts` — single GET with query params.
-- `pet-crud-flow.journey.ts` — 9-step lifecycle: log in, create a pet,
+Each journey file is named for the Journey feature or edge case it exercises —
+the sample project doubles as living coverage for the runtime.
+
+- `multi-step-crud.journey.ts` — 9-step lifecycle: log in, create a pet,
   fetch it, PATCH the status, PUT it whole, attach a note, list notes,
   delete the pet, then verify the GET 404s. Closure variables (`token`,
   `petId`) chain state between steps.
+- `env-assertion.journey.ts` — round-trips a token through the IDP and
+  asserts the active environment is the one selected; calls two APIs in
+  one flow.
+- `k6-smoke-tag.journey.ts` — single GET with query params; tagged
+  `smoke` and carries a `k6` block.
+- `k6-load-stages.journey.ts` — journey-level `k6` load `stages`, tagged
+  `load`.
+- `sub-journey-at-start.journey.ts` — `invokeJourney` node as the first
+  pipeline node (auth via the reusable `acquireToken` sub-journey).
+- `sub-journey-mid-pipeline.journey.ts` — `invokeJourney` node between
+  two HTTP steps.
+- `sub-journey-nested.journey.ts` — two-level nesting: a reusable
+  sub-journey that itself invokes another.
+- `sub-journey-failure.journey.ts` — a sub-journey that fails (bad
+  credentials); failure propagates and halts the parent run. Expected
+  to fail.
+- `slow-run.journey.ts` — ten sequential GETs under simulated latency;
+  long enough to exercise the Stop button mid-run.
 
 ### Pointing at your own project
 

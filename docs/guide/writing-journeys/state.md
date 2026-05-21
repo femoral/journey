@@ -3,7 +3,7 @@ title: State between steps
 description: How values flow from one step to the next — plain closure variables, no templating.
 sources:
   - packages/core/src/runtime.ts
-  - examples/petstore/journeys/pet-crud-flow.journey.ts
+  - examples/petstore/journeys/multi-step-crud.journey.ts
 ---
 
 # State between steps

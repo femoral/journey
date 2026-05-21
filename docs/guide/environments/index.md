@@ -35,7 +35,7 @@ const port = Number(env("PORT"));
 
 If `journey.config.json` has no top-level `baseUrl`, the runtime falls back to `env("BASE_URL")` from the active environment. This lets each environment target a different primary API without editing config — useful when CI, staging, and local point at different deployments. Per-step descriptors with their own `baseUrl` (e.g. `baseUrl: env("AUTH_BASE_URL")`) still override on a step-by-step basis.
 
-The example project under `examples/petstore` ships three environments — `local`, `ci`, `staging` — to illustrate this pattern. See `examples/petstore/environments/` and `examples/petstore/journeys/whoami.journey.ts` for a journey that calls two different APIs in one flow.
+The example project under `examples/petstore` ships three environments — `local`, `ci`, `staging` — to illustrate this pattern. See `examples/petstore/environments/` and `examples/petstore/journeys/env-assertion.journey.ts` for a journey that calls two different APIs in one flow.
 
 ## Validation
 

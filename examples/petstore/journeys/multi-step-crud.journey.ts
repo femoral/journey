@@ -5,7 +5,7 @@ import { endpoints } from "../generated/endpoints.js";
  * End-to-end pet lifecycle. Exercises every method on the example API and
  * passes state between steps via plain closure variables — no templating.
  */
-journey("pet CRUD flow", () => {
+journey("multi-step crud", () => {
   let token = "";
   let petId = 0;
 

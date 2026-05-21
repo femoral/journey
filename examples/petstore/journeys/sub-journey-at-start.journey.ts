@@ -3,14 +3,13 @@ import { endpoints } from "../generated/endpoints.js";
 import { acquireToken } from "./helpers/auth.js";
 
 /**
- * Adoption flow: authenticate, list a pet, mark it sold, confirm, clean up.
- *
- * Auth is a sub-journey node — `invokeJourney(acquireToken, ...)` — not an
- * inline `step`. It sits in the pipeline as a peer of the HTTP steps; the
- * token it mints flows forward through a closure variable, exactly like
- * step-to-step state.
+ * Sub-journey node at the *start* of the pipeline. `invokeJourney(acquireToken,
+ * ...)` is the first node — a peer of the HTTP steps, not an inline `step`.
+ * The token it mints flows forward through a closure variable, exactly like
+ * step-to-step state. The pet-adoption steps below are a realistic payload
+ * for the scenario.
  */
-journey("adopt a pet", () => {
+journey("sub-journey at start", () => {
   let token = "";
   let petId = 0;
 

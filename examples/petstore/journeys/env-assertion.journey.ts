@@ -5,7 +5,7 @@ import { env, expect, journey, step } from "@journey/core";
  * really is the one the operator selected. Running with `--env ci` against the
  * `local` mock data fails loudly, which makes env wiring observable.
  */
-journey("whoami", () => {
+journey("env assertion", () => {
   let token = "";
 
   step("login via IDP", {
