@@ -81,6 +81,7 @@ export type { ZodType, ZodTypeAny, infer as ZodInfer } from "zod";
 export {
   clearRegistry,
   collectPipeline,
+  planJourney,
   collectSteps,
   getCurrentCtx,
   getRegisteredJourneys,

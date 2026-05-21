@@ -476,6 +476,40 @@ journey("grouped", () => {
     }
   });
 
+  it("GET /api/journeys/:file/plan resolves the nested plan tree without running", async () => {
+    await writeFile(
+      join(projectDir, "journeys", "planned.journey.ts"),
+      `import { journey, step, invokeJourney } from "@journey/core";
+
+const child = journey("child.sub", { reusable: true }, () => {
+  step("inner", { endpoint: { method: "GET", path: "/x", baseUrl: "http://127.0.0.1:1" } });
+});
+
+journey("planned", () => {
+  step("first", { endpoint: { method: "GET", path: "/a", baseUrl: "http://127.0.0.1:1" } });
+  invokeJourney(child, {});
+});
+`,
+    );
+
+    const res = await fetch(`${srv.url}/api/journeys/planned.journey.ts/plan`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      journeys: Array<{
+        name: string;
+        steps: Array<{ kind?: string; name: string; children?: Array<{ name: string }> }>;
+      }>;
+    };
+    // Reusable journeys aren't auto-registered, so only the entry is planned.
+    const plan = body.journeys.find((j) => j.name === "planned");
+    expect(plan).toBeDefined();
+    expect(plan!.steps).toHaveLength(2);
+    expect(plan!.steps[0]).toMatchObject({ kind: "step", name: "first" });
+    expect(plan!.steps[1]!.kind).toBe("sub");
+    expect(plan!.steps[1]!.name).toBe("child.sub");
+    expect(plan!.steps[1]!.children?.map((c) => c.name)).toEqual(["inner"]);
+  });
+
   it("aborts an in-flight run via POST /api/runs/:id/abort", async () => {
     // Slow target so we can fire abort while the first step is still pending.
     const { createServer } = await import("node:http");

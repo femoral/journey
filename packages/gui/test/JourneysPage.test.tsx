@@ -129,6 +129,8 @@ interface StubOpts {
   captured?: Captured;
   runEvents?: string | Response;
   runIdByFile?: Record<string, string>;
+  /** Body returned for `GET /api/journeys/:file/plan`; defaults to an empty plan. */
+  plan?: unknown;
 }
 
 function stubFetch(opts: StubOpts = {}) {
@@ -150,6 +152,13 @@ function stubFetch(opts: StubOpts = {}) {
         if (captured) (captured.abortedRunIds ??= []).push(runId);
         return new Response(JSON.stringify({ runId, aborted: true }), {
           status: 202,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const planMatch = url.match(/\/api\/journeys\/([^/]+)\/plan(?:\?|$)/);
+      if (planMatch) {
+        return new Response(JSON.stringify(opts.plan ?? { journeys: [] }), {
+          status: 200,
           headers: { "content-type": "application/json" },
         });
       }
@@ -468,6 +477,42 @@ describe("JourneysPage", () => {
       expect(groupRow.textContent).toContain("verify token");
     });
     expect(groupRow.querySelectorAll('[data-testid="sub-journey-badge"]').length).toBe(2);
+  });
+
+  it("pre-renders sub-journey rows from the plan endpoint, before any run", async () => {
+    vi.unstubAllGlobals();
+    // The plan endpoint discovers sub-journeys a source parse can't see. With
+    // no run triggered, the idle timeline must still show the sub-journey
+    // group row (and its discovered child count).
+    stubFetch({
+      plan: {
+        journeys: [
+          {
+            name: "demo",
+            steps: [
+              {
+                kind: "sub",
+                name: "authenticate",
+                children: [{ kind: "step", name: "login via IDP", method: "POST", path: "/token" }],
+              },
+              { kind: "step", name: "create pet", method: "POST", path: "/pet" },
+            ],
+          },
+        ],
+      },
+    });
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+
+    // Idle (no run): the sub-journey row is rendered from the plan endpoint.
+    const groupRow = await waitFor(() => screen.getByTestId("step-card-0"));
+    expect(groupRow.querySelector('[data-testid="sub-journey-badge"]')).toBeTruthy();
+    expect(groupRow.textContent).toContain("authenticate");
+    expect(groupRow.textContent).toContain("1 step");
+    expect(screen.getByTestId("step-card-1").textContent).toContain("create pet");
   });
 
   it("renders parsed steps in an idle state before any run", async () => {

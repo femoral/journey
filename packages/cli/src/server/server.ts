@@ -12,6 +12,7 @@ import {
 } from "@journey/core";
 import { collectOperations, generate, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
+import { planJourneyFile } from "./planner.js";
 import { computeSpecDrift } from "./specDrift.js";
 import {
   abortRun,
@@ -481,6 +482,28 @@ async function route(
         }
         return;
       }
+    }
+    const journeyPlanMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)\/plan$/);
+    if (journeyPlanMatch && req.method === "GET") {
+      const file = decodeURIComponent(journeyPlanMatch[1]!);
+      const env = url.searchParams.get("env") ?? undefined;
+      const loaded = await loadConfig(projectDir);
+      const { journeysDir, environmentsDir } = resolveConfigPaths(loaded);
+      try {
+        const journeys = await planJourneyFile({
+          loaded,
+          journeysDir,
+          environmentsDir,
+          file,
+          ...(env !== undefined ? { env } : {}),
+        });
+        send(res, 200, { journeys });
+      } catch (err) {
+        // Plan discovery is best-effort — a load failure (bad env, body throws)
+        // is not fatal; the GUI falls back to its source parse.
+        send(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      }
+      return;
     }
     const runMatch = url.pathname.match(/^\/api\/journeys\/([^/]+)\/run$/);
     if (runMatch && req.method === "POST") {

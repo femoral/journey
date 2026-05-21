@@ -95,6 +95,31 @@ function emptyRuntimeState(): JourneyRuntimeState {
   return { runState: "idle", inFlight: new Set<number>() };
 }
 
+/**
+ * Maps a wire `PlannedNode` (from `step:planned` or the plan endpoint) to the
+ * page's `PlannedNode`, recursing into sub-journey children. `parsed` is the
+ * source-parsed step list, consulted only to recover an endpoint token for a
+ * step the runtime reported without method/path.
+ */
+function mapPlannedNode(s: WirePlannedNode, parsed: ParsedStep[]): PlannedNode {
+  const kind: "step" | "sub" = s.kind === "sub" ? "sub" : "step";
+  const node: PlannedNode = { name: s.name, kind };
+  if (kind === "step") {
+    if (s.method && s.path) {
+      // Synthesize an inline-descriptor token so resolveIdleEndpoint can
+      // produce the MethodBadge + URL subtext.
+      node.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
+    } else {
+      const match = parsed.find((p) => p.name === s.name);
+      if (match?.endpoint !== undefined) node.endpoint = match.endpoint;
+    }
+  } else {
+    // Recurse into the discovered child pipeline (nested subs included).
+    node.children = (s.children ?? []).map((c) => mapPlannedNode(c, parsed));
+  }
+  return node;
+}
+
 export const JourneysPage: Component = () => {
   const cons = useConsole();
   const envSel = useEnvSelection();
@@ -219,6 +244,42 @@ export const JourneysPage: Component = () => {
     }
   });
 
+  // Best-effort plan tree for the selected journey, fetched from the server's
+  // plan endpoint. A source parse alone can't see `invokeJourney(...)` calls;
+  // the plan endpoint evaluates the journey (and its sub-journeys) so the
+  // timeline can render sub-journey rows — nested children included — before
+  // the first run. Resolves to `undefined` if the plan can't be loaded.
+  const [idlePlan] = createResource(
+    () => {
+      const file = selected();
+      if (!file) return undefined;
+      return { file, env: envSel?.selectedEnv() };
+    },
+    async ({ file, env }) => {
+      try {
+        const { journeys } = await api.getJourneyPlan(file, env);
+        const steps = journeys?.[0]?.steps ?? [];
+        // Empty plan → treat as "no plan"; the source parse fallback wins.
+        return steps.length > 0 ? { file, steps } : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  );
+
+  // Seed `plannedSteps` once the plan resolves so idle sub-journey rows render
+  // up front. A live run's `step:planned` later overrides this with the
+  // authoritative tree. Keyed on the plan's own `file` so a slow response
+  // can't land on a journey the user has since switched away from.
+  createEffect(() => {
+    const plan = idlePlan();
+    if (!plan) return;
+    const parsed = untrack(() => idleSource()?.parsed) ?? [];
+    updateJourneyState(plan.file, {
+      plannedSteps: plan.steps.map((s) => mapPlannedNode(s, parsed)),
+    });
+  });
+
   const current = (): JourneyRuntimeState | undefined => {
     const f = selected();
     return f ? journeyStates()[f] : undefined;
@@ -327,25 +388,9 @@ export const JourneysPage: Component = () => {
             // journeys that might run in the same SSE stream.
             if (event.journeyIdx !== 0) break;
             const parsed = idleSource()?.parsed ?? [];
-            const toPlanned = (s: WirePlannedNode): PlannedNode => {
-              const kind: "step" | "sub" = s.kind === "sub" ? "sub" : "step";
-              const node: PlannedNode = { name: s.name, kind };
-              if (kind === "step") {
-                if (s.method && s.path) {
-                  // Synthesize an inline-descriptor token so resolveIdleEndpoint
-                  // can produce the MethodBadge + URL subtext.
-                  node.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
-                } else {
-                  const match = parsed.find((p) => p.name === s.name);
-                  if (match?.endpoint !== undefined) node.endpoint = match.endpoint;
-                }
-              } else {
-                // Recurse into the discovered child pipeline (nested subs included).
-                node.children = (s.children ?? []).map(toPlanned);
-              }
-              return node;
-            };
-            updateJourneyState(file, { plannedSteps: event.steps.map(toPlanned) });
+            updateJourneyState(file, {
+              plannedSteps: event.steps.map((s) => mapPlannedNode(s, parsed)),
+            });
             break;
           }
           case "group:start": {

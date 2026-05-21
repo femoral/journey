@@ -1,3 +1,5 @@
+import type { PlannedNode } from "./runEvents";
+
 export interface ProjectSummary {
   projectDir: string;
   config: {
@@ -200,6 +202,18 @@ export const api = {
     }),
   getJourneySource: (file: string) =>
     req<{ file: string; source: string }>(`/api/journeys/${encodeURIComponent(file)}`),
+  /**
+   * Resolves a journey's plan tree without running it — the nested pipeline
+   * (steps + sub-journeys, recursively discovered). Lets the timeline render
+   * sub-journey rows before the first run. Best-effort: the server may 500 if
+   * the file fails to load, in which case callers fall back to a source parse.
+   */
+  getJourneyPlan: (file: string, env?: string) =>
+    req<JourneyPlanResponse>(
+      `/api/journeys/${encodeURIComponent(file)}/plan${
+        env ? `?env=${encodeURIComponent(env)}` : ""
+      }`,
+    ),
   saveJourneySource: (file: string, source: string) =>
     req<{ file: string; bytes: number }>(`/api/journeys/${encodeURIComponent(file)}`, {
       method: "PUT",
@@ -218,6 +232,10 @@ export const api = {
       method: "POST",
     }),
 };
+
+export interface JourneyPlanResponse {
+  journeys: Array<{ name: string; steps: PlannedNode[] }>;
+}
 
 export interface DriftEndpoint {
   method: string;

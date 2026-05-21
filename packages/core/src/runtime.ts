@@ -456,6 +456,21 @@ async function planPipeline(
   return out;
 }
 
+/**
+ * Resolves a journey's plan tree without executing it — the same nested
+ * `PlannedNode[]` that `onPlanned` broadcasts at run start. Evaluates the
+ * journey body (and, best-effort, each sub-journey body) to discover steps;
+ * performs no HTTP. Lets a surface pre-render a timeline before the run.
+ *
+ * `env()` references in the body are resolved against the active environment,
+ * so callers should `setActiveEnvironment(...)` first, exactly as they would
+ * before a run.
+ */
+export async function planJourney(def: JourneyDef): Promise<PlannedNode[]> {
+  const nodes = await collectPipeline(def);
+  return planPipeline(nodes, 0);
+}
+
 interface ExecMeta {
   runId: string;
   journeyIdx: number;
