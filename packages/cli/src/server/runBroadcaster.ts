@@ -28,12 +28,9 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{
-        kind?: "step" | "sub";
-        name: string;
-        method?: string;
-        path?: string;
-      }>;
+      // Nested plan tree — a `sub` entry carries its discovered child pipeline
+      // under `children`. Mirrors core's `RunPlannedEvent["steps"]`.
+      steps: RunPlannedEvent["steps"];
     }
   | {
       kind: "step:start";

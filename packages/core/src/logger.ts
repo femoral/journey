@@ -51,24 +51,47 @@ export interface RunEndEvent {
  * positions in `steps` back to the monotonic `stepIdx` values that subsequent
  * `step:start` / `step:end` events will carry.
  */
+/**
+ * One entry in a planned pipeline. `kind` is `"step"` for an HTTP step
+ * (carries method/path from the endpoint) and `"sub"` for an
+ * `invokeJourney(...)` node (carries the child journey's display name;
+ * method/path are unset).
+ *
+ * A `"sub"` node carries `children` — the best-effort plan of the child
+ * pipeline, discovered by evaluating the reusable journey body at plan time
+ * (recursively, so nested sub-journeys are included). `incomplete` is set
+ * when that discovery could not run — e.g. the body threw, or the recursion
+ * cap was hit — in which case `children` is absent and subscribers fall back
+ * to the live `onGroupStart` / step events once the sub-journey executes.
+ *
+ * Plan-time discovery is best-effort: conditional `step()` calls and a
+ * sub-journey that turns out to be a cache hit can make the planned tree
+ * differ from what actually runs. The live group/step events are always
+ * authoritative.
+ */
+export interface PlannedNode {
+  kind?: "step" | "sub";
+  name: string;
+  method?: string;
+  path?: string;
+  /** Sub-journey only — best-effort plan of the child pipeline. */
+  children?: PlannedNode[];
+  /** Sub-journey only — true when the child pipeline could not be discovered. */
+  incomplete?: boolean;
+}
+
 export interface RunPlannedEvent {
   runId: string;
   journeyIdx: number;
   journeyName: string;
   stepIdxOffset: number;
   /**
-   * Resolved pipeline entries. `kind` is `"step"` for an HTTP step (carries
-   * method/path from the endpoint) and `"sub"` for an `invokeJourney(...)` node
-   * (carries the child journey's display name; method/path are unset). Child
-   * steps inside a sub-journey are not listed at this level — they appear via
-   * `onGroupStart` / step events once the sub-journey is entered.
+   * Resolved pipeline entries, in order. A `"sub"` entry nests its child
+   * pipeline under `children` (see `PlannedNode`) so subscribers can
+   * pre-render the full tree — including nested sub-journeys — without
+   * waiting for the run to enter each group.
    */
-  steps: ReadonlyArray<{
-    kind?: "step" | "sub";
-    name: string;
-    method?: string;
-    path?: string;
-  }>;
+  steps: ReadonlyArray<PlannedNode>;
 }
 
 /**

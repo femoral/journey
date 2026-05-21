@@ -11,6 +11,21 @@
  * writes — keep the two in sync.
  */
 
+/**
+ * One entry in a planned pipeline (mirrors core's `PlannedNode`). A `sub`
+ * entry nests its best-effort discovered child pipeline under `children`;
+ * `incomplete` marks a sub-journey whose children could not be discovered at
+ * plan time (the live group/step events fill it in once the run reaches it).
+ */
+export interface PlannedNode {
+  kind?: "step" | "sub";
+  name: string;
+  method?: string;
+  path?: string;
+  children?: PlannedNode[];
+  incomplete?: boolean;
+}
+
 export type RunEvent =
   | { kind: "run:start"; runId: string; journeyNames: string[] }
   | {
@@ -19,12 +34,7 @@ export type RunEvent =
       journeyIdx: number;
       journeyName: string;
       stepIdxOffset: number;
-      steps: ReadonlyArray<{
-        kind?: "step" | "sub";
-        name: string;
-        method?: string;
-        path?: string;
-      }>;
+      steps: ReadonlyArray<PlannedNode>;
     }
   | {
       kind: "step:start";

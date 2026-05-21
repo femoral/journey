@@ -402,6 +402,74 @@ describe("JourneysPage", () => {
     });
   });
 
+  it("pre-renders a discovered sub-journey tree from step:planned, before the group runs", async () => {
+    vi.unstubAllGlobals();
+    // step:planned carries a nested plan tree (best-effort discovery). With no
+    // step/group events following, the timeline must render the planned tree:
+    // a sub-journey group whose children — including a nested sub-journey —
+    // are visible on expand, before the run ever enters the group.
+    const frames = sseFrames([
+      { kind: "run:start", runId: "r1", journeyNames: ["demo"] },
+      {
+        kind: "step:planned",
+        runId: "r1",
+        journeyIdx: 0,
+        journeyName: "demo",
+        stepIdxOffset: 0,
+        steps: [
+          {
+            kind: "sub",
+            name: "open a session",
+            children: [
+              {
+                kind: "sub",
+                name: "acquire token",
+                children: [{ kind: "step", name: "login via IDP", method: "POST", path: "/token" }],
+              },
+              { kind: "step", name: "verify token", method: "GET", path: "/whoami" },
+            ],
+          },
+          { kind: "step", name: "create a pet", method: "POST", path: "/pet" },
+        ],
+      },
+      {
+        kind: "run:end",
+        runId: "r1",
+        ok: true,
+        durationMs: 1,
+        results: [{ name: "demo", ok: true }],
+      },
+    ]);
+    stubFetch({ runEvents: frames });
+    renderWithConsole();
+    await waitFor(() => {
+      expect(screen.getByText("auth.journey.ts")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("auth.journey.ts"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("run-button")));
+
+    // Two top-level rows: the sub-journey group + the sibling step.
+    await waitFor(() => {
+      expect(screen.getByTestId("step-card-0")).toBeTruthy();
+      expect(screen.getByTestId("step-card-1")).toBeTruthy();
+    });
+    const groupRow = screen.getByTestId("step-card-0");
+    expect(groupRow.querySelector('[data-testid="sub-journey-badge"]')).toBeTruthy();
+    expect(groupRow.textContent).toContain("open a session");
+    // Badge reflects the discovered child count, even though the group never ran.
+    expect(groupRow.textContent).toContain("2 steps");
+
+    // Expand the group → its planned children are visible, including the
+    // nested sub-journey ("acquire token") with its own group badge.
+    const groupToggle = groupRow.querySelector("button[aria-expanded]") as HTMLButtonElement;
+    fireEvent.click(groupToggle);
+    await waitFor(() => {
+      expect(groupRow.textContent).toContain("acquire token");
+      expect(groupRow.textContent).toContain("verify token");
+    });
+    expect(groupRow.querySelectorAll('[data-testid="sub-journey-badge"]').length).toBe(2);
+  });
+
   it("renders parsed steps in an idle state before any run", async () => {
     renderWithConsole();
     await waitFor(() => {

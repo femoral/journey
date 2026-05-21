@@ -1,7 +1,12 @@
 import type { ZodType } from "zod";
 import type { Endpoint, ResponseOf } from "./endpoint.js";
 import { buildRequest, execute, type HttpContext, type HttpResponse } from "./http.js";
-import { describeError, type GroupEndEvent, type GroupStartEvent } from "./logger.js";
+import {
+  describeError,
+  type GroupEndEvent,
+  type GroupStartEvent,
+  type PlannedNode,
+} from "./logger.js";
 
 /** Caller-supplied run metadata. runId is forwarded to every lifecycle event. */
 export interface RunMeta {
@@ -363,11 +368,21 @@ export async function collectSteps(def: JourneyDef): Promise<ReadonlyArray<StepD
 
 /** Walks a journey body and returns every pipeline node (step + sub) in order. */
 export async function collectPipeline(def: JourneyDef): Promise<ReadonlyArray<PipelineNode>> {
+  return collectPipelineWithInput(def, undefined);
+}
+
+/**
+ * Evaluates a journey body to collect its pipeline nodes, passing `input` to
+ * the body. Entry bodies ignore the argument; reusable bodies receive it as
+ * their declared input. `state.collecting` is saved and restored so a
+ * collection can nest inside another (used by plan-time sub-journey discovery).
+ */
+async function collectPipelineWithInput(def: JourneyDef, input: unknown): Promise<PipelineNode[]> {
   const nodes: PipelineNode[] = [];
   const prev = state.collecting;
   state.collecting = nodes;
   try {
-    await def.body();
+    await def.body(input);
   } finally {
     state.collecting = prev;
   }
@@ -377,6 +392,68 @@ export async function collectPipeline(def: JourneyDef): Promise<ReadonlyArray<Pi
 async function resolveLazy<T>(v: Lazy<T> | undefined): Promise<T | undefined> {
   if (v === undefined) return undefined;
   return typeof v === "function" ? await (v as () => T | Promise<T>)() : v;
+}
+
+/**
+ * Best-effort plan-time discovery of a sub-journey's child pipeline. Evaluates
+ * the reusable journey body — no HTTP, just `step()` / `invokeJourney()`
+ * registration — with the call's resolved inputs. Returns `null` when input
+ * resolution or the body itself throws, so the caller can mark the planned
+ * node `incomplete`.
+ *
+ * The child body also runs at execution time (`executeSubNode`), so an
+ * `inputs` resolver with side effects fires twice. Inputs are normally pure
+ * (env reads, references to the parent's input), so this is acceptable for a
+ * best-effort plan.
+ */
+async function discoverChildNodes(call: SubJourneyCallDef): Promise<PipelineNode[] | null> {
+  let input: unknown;
+  try {
+    input = call.inputs !== undefined ? await resolveLazy(call.inputs) : undefined;
+  } catch {
+    input = undefined;
+  }
+  try {
+    return await collectPipelineWithInput(call.handle.__def, input);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Walks a resolved pipeline into the nested `PlannedNode` tree broadcast on
+ * `onPlanned`. Recurses into sub-journey nodes — best-effort, see
+ * `discoverChildNodes` — and marks a node `incomplete` when its child
+ * pipeline could not be discovered or the recursion cap is reached.
+ */
+async function planPipeline(
+  nodes: ReadonlyArray<PipelineNode>,
+  depth: number,
+): Promise<PlannedNode[]> {
+  const out: PlannedNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "step") {
+      out.push({
+        kind: "step",
+        name: node.def.name,
+        method: node.def.options.endpoint.method,
+        path: node.def.options.endpoint.path,
+      });
+      continue;
+    }
+    const planned: PlannedNode = {
+      kind: "sub",
+      name: node.def.name ?? node.def.handle.name,
+    };
+    const childNodes = depth < MAX_SUB_JOURNEY_DEPTH ? await discoverChildNodes(node.def) : null;
+    if (childNodes) {
+      planned.children = await planPipeline(childNodes, depth + 1);
+    } else {
+      planned.incomplete = true;
+    }
+    out.push(planned);
+  }
+  return out;
 }
 
 interface ExecMeta {
@@ -691,24 +768,16 @@ export async function runJourney(
   const stepIdxOffset = opts.stepIdxOffset ?? 0;
 
   // Announce the resolved plan up front so subscribers (notably the GUI) can
-  // pre-render the full pipeline — including any helper-injected steps and
+  // pre-render the full pipeline — including helper-injected steps and
   // sub-journey nodes that a static parse of the source would miss — without
-  // waiting for each `onStepStart` to arrive.
+  // waiting for each `onStepStart` to arrive. `planPipeline` recurses into
+  // sub-journey nodes so the announced tree includes nested child steps.
   ctx.logger?.onPlanned?.({
     runId,
     journeyIdx,
     journeyName: def.name,
     stepIdxOffset,
-    steps: nodes.map((n) =>
-      n.kind === "step"
-        ? {
-            kind: "step",
-            name: n.def.name,
-            method: n.def.options.endpoint.method,
-            path: n.def.options.endpoint.path,
-          }
-        : { kind: "sub", name: n.def.name ?? n.def.handle.name },
-    ),
+    steps: await planPipeline(nodes, 0),
   });
 
   const journeyStart = Date.now();

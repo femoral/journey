@@ -10,7 +10,12 @@ import {
   step,
 } from "../src/runtime.js";
 import { expect as jExpect } from "../src/expect.js";
-import type { GroupEndEvent, GroupStartEvent, JourneyLogger } from "../src/logger.js";
+import type {
+  GroupEndEvent,
+  GroupStartEvent,
+  JourneyLogger,
+  RunPlannedEvent,
+} from "../src/logger.js";
 
 afterEach(() => clearRegistry());
 
@@ -383,6 +388,47 @@ describe("runtime", () => {
       expect(sub.name).toBe("auth.acquire-token");
       expect(sub.children).toHaveLength(1);
       expect(sub.children![0]!.name).toBe("exchange");
+    });
+
+    it("step:planned discovers nested sub-journey children at plan time", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+      let planned: RunPlannedEvent | undefined;
+      const logger: JourneyLogger = {
+        onPlanned(e) {
+          planned = e;
+        },
+      };
+
+      const grandchild = journey("grandchild", { reusable: true }, () => {
+        step("deep", { endpoint: { method: "GET", path: "/deep", operationId: "d" } });
+      });
+      const child = journey("child", { reusable: true }, () => {
+        invokeJourney(grandchild, {});
+        step("mid", { endpoint: { method: "GET", path: "/mid", operationId: "m" } });
+      });
+      journey("parent", () => {
+        step("first", { endpoint: { method: "GET", path: "/first", operationId: "f" } });
+        invokeJourney(child, {});
+      });
+
+      await runAllRegistered({ baseUrl: "https://x", fetchImpl, logger });
+
+      expect(planned).toBeDefined();
+      const steps = planned!.steps;
+      expect(steps).toHaveLength(2);
+      expect(steps[0]).toMatchObject({ kind: "step", name: "first", method: "GET" });
+
+      const sub = steps[1]!;
+      expect(sub).toMatchObject({ kind: "sub", name: "child" });
+      expect(sub.children).toHaveLength(2);
+
+      // Nested sub-journey is discovered recursively.
+      const nested = sub.children![0]!;
+      expect(nested).toMatchObject({ kind: "sub", name: "grandchild" });
+      expect(nested.children).toHaveLength(1);
+      expect(nested.children![0]).toMatchObject({ kind: "step", name: "deep" });
+
+      expect(sub.children![1]).toMatchObject({ kind: "step", name: "mid" });
     });
 
     it("emits group:start/group:end bracketing the child step events", async () => {

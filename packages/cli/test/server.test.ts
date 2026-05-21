@@ -457,6 +457,20 @@ journey("grouped", () => {
       // The child step event carries the firstChildStepIdx slot.
       const childStart = events.find((e) => e.kind === "step:start");
       expect(childStart!.stepIdx).toBe(1);
+
+      // step:planned carries the nested plan tree — the sub-journey's child
+      // step is discovered at plan time, before the group runs.
+      const planned = events.find((e) => e.kind === "step:planned") as
+        | {
+            steps: Array<{ kind?: string; name: string; children?: Array<{ name: string }> }>;
+          }
+        | undefined;
+      expect(planned).toBeDefined();
+      expect(planned!.steps).toHaveLength(2);
+      expect(planned!.steps[0]!.kind).toBe("sub");
+      expect(planned!.steps[0]!.name).toBe("auth.sub");
+      expect(planned!.steps[0]!.children?.map((c) => c.name)).toEqual(["exchange"]);
+      expect(planned!.steps[1]!.name).toBe("after-auth");
     } finally {
       await new Promise<void>((r) => target.close(() => r()));
     }

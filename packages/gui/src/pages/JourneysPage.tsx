@@ -15,7 +15,7 @@ import {
   type JSX,
 } from "solid-js";
 import { api, type JourneyResult, type RunSummary, type StepResult } from "../api/client";
-import { runEvents } from "../api/runEvents";
+import { runEvents, type PlannedNode as WirePlannedNode } from "../api/runEvents";
 import { parseSteps, type ParsedStep } from "../util/parseSteps";
 import {
   createLocalStorageRunStateStore,
@@ -50,16 +50,20 @@ import {
 type UiRunState = "idle" | "running" | "done";
 
 /**
- * One entry in a journey's resolved top-level pipeline, as broadcast by
- * `step:planned`. `kind: "sub"` marks an `invokeJourney(...)` node; the child
- * steps inside it are not listed here — they stream in via `group:start` and
- * the step events that follow.
+ * One entry in a journey's resolved pipeline, as broadcast by `step:planned`.
+ * `kind: "sub"` marks an `invokeJourney(...)` node; its best-effort discovered
+ * child pipeline is carried in `children` (recursively, for nesting) so the
+ * timeline can pre-render nested rows before the sub-journey runs. A `sub`
+ * node with no `children` was not discoverable at plan time — its rows fill in
+ * live via `group:start` / step events.
  */
 interface PlannedNode {
   name: string;
   kind: "step" | "sub";
   /** Endpoint token fed to `resolveIdleEndpoint`; absent for sub-journey nodes. */
   endpoint?: string;
+  /** Sub-journey only — best-effort discovered child pipeline. */
+  children?: PlannedNode[];
 }
 
 interface JourneyRuntimeState {
@@ -323,7 +327,7 @@ export const JourneysPage: Component = () => {
             // journeys that might run in the same SSE stream.
             if (event.journeyIdx !== 0) break;
             const parsed = idleSource()?.parsed ?? [];
-            const nodes: PlannedNode[] = event.steps.map((s) => {
+            const toPlanned = (s: WirePlannedNode): PlannedNode => {
               const kind: "step" | "sub" = s.kind === "sub" ? "sub" : "step";
               const node: PlannedNode = { name: s.name, kind };
               if (kind === "step") {
@@ -335,10 +339,13 @@ export const JourneysPage: Component = () => {
                   const match = parsed.find((p) => p.name === s.name);
                   if (match?.endpoint !== undefined) node.endpoint = match.endpoint;
                 }
+              } else {
+                // Recurse into the discovered child pipeline (nested subs included).
+                node.children = (s.children ?? []).map(toPlanned);
               }
               return node;
-            });
-            updateJourneyState(file, { plannedSteps: nodes });
+            };
+            updateJourneyState(file, { plannedSteps: event.steps.map(toPlanned) });
             break;
           }
           case "group:start": {
@@ -878,6 +885,26 @@ function nodeRunState(s: StepResult, inFlight: Set<number>): RunState {
   return "running";
 }
 
+/**
+ * Builds an idle (not-yet-run) timeline node from a planned pipeline entry,
+ * recursing into a sub-journey's discovered child pipeline so nested rows
+ * render before the run reaches them. No `stepIdx` is assigned — these are
+ * placeholders until the live run events arrive.
+ */
+function idlePlannedToStep(
+  p: PlannedNode,
+  resolveEndpoint: (token: string | undefined) => { method: string; url: string } | undefined,
+): StepResult {
+  const step: StepResult = { name: p.name, ok: false, durationMs: 0, kind: p.kind };
+  if (p.kind === "sub") {
+    step.children = (p.children ?? []).map((c) => idlePlannedToStep(c, resolveEndpoint));
+  } else {
+    const resolved = resolveEndpoint(p.endpoint);
+    if (resolved) step.request = resolved;
+  }
+  return step;
+}
+
 function StepTimeline(props: {
   runState: UiRunState;
   results: JourneyResult[] | undefined;
@@ -910,14 +937,11 @@ function StepTimeline(props: {
         out.push({ step, state: nodeRunState(liveStep, props.inFlight), index: i });
       } else {
         const p = idle[i]!;
-        const idleStep: StepResult = { name: p.name, ok: false, durationMs: 0, kind: p.kind };
-        if (p.kind === "sub") {
-          idleStep.children = [];
-        } else {
-          const resolved = props.resolveEndpoint(p.endpoint);
-          if (resolved) idleStep.request = resolved;
-        }
-        out.push({ step: idleStep, state: "idle", index: i });
+        out.push({
+          step: idlePlannedToStep(p, props.resolveEndpoint),
+          state: "idle",
+          index: i,
+        });
       }
     }
     return out;

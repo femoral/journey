@@ -50,6 +50,7 @@ export {
   type RequestLog,
   type ResponseLog,
   type LogEvent,
+  type PlannedNode,
   type RunStartEvent,
   type RunEndEvent,
   type RunPlannedEvent,
