@@ -5,6 +5,7 @@ import {
   clearActiveEnvironment,
   clearRegistry,
   createConsoleLogger,
+  createSubJourneyCache,
   loadConfig,
   loadEnvironment,
   loggerFromEnv,
@@ -14,6 +15,7 @@ import {
   runAllRegistered,
   setActiveEnvironment,
   writeRun,
+  type CacheMode,
   type HttpContext,
   type JourneyResult,
 } from "@journey/core";
@@ -31,6 +33,10 @@ export interface RunOptions {
   watch?: boolean;
   /** When true, disable TLS certificate verification. Survives a recursive watch-mode rerun. */
   insecure?: boolean;
+  /** Sub-journey output cache lifetime; defaults to `process`. */
+  cache?: CacheMode;
+  /** Default TTL (ms) for sub-journey cache entries. */
+  cacheTtlMs?: number;
 }
 
 /**
@@ -88,6 +94,11 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   if (opts.insecure || loaded.config.tlsRejectUnauthorized === false) {
     ctx.dispatcher = await enableInsecureTls();
   }
+  const subCache = createSubJourneyCache(opts.cache ?? "process", {
+    diskDir: join(opts.projectDir, ".journey", "cache", "sub-journey"),
+  });
+  if (subCache) ctx.subJourneyCache = subCache;
+  if (opts.cacheTtlMs !== undefined) ctx.subJourneyCacheTtlMs = opts.cacheTtlMs;
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);
 

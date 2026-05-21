@@ -3,12 +3,15 @@ import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import {
   JourneyConfigSchema,
+  createSubJourneyCache,
   listRuns,
   loadConfig,
   listEnvironments,
   readRun,
   resolveConfigPaths,
+  type CacheMode,
   type LoadedConfig,
+  type SubJourneyCache,
 } from "@journey/core";
 import { collectOperations, generate, loadSpec, operationName } from "@journey/codegen";
 import { runJourneyFile } from "./runner.js";
@@ -30,6 +33,32 @@ export interface StartServerOptions {
   port?: number;
   /** When true, journey runs triggered through the API log every request. */
   debug?: boolean;
+  /** Sub-journey output cache lifetime; defaults to `process`. */
+  cache?: CacheMode;
+  /** Default TTL (ms) for sub-journey cache entries. */
+  cacheTtlMs?: number;
+}
+
+/**
+ * Builds a per-run cache resolver for the given mode. `process` returns one
+ * shared in-memory cache for the server's lifetime (auth tokens stay hot
+ * across runs); `run` returns a fresh cache per run; `disk` is rooted at the
+ * current project's `.journey/cache/sub-journey/`; `off` returns none.
+ */
+function makeCacheResolver(mode: CacheMode): (projectDir: string) => SubJourneyCache | undefined {
+  let processCache: SubJourneyCache | undefined;
+  let processInit = false;
+  return (projectDir: string) => {
+    const diskDir = join(projectDir, ".journey", "cache", "sub-journey");
+    if (mode === "process") {
+      if (!processInit) {
+        processCache = createSubJourneyCache("process", { diskDir });
+        processInit = true;
+      }
+      return processCache;
+    }
+    return createSubJourneyCache(mode, { diskDir });
+  };
 }
 
 export interface RunningServer {
@@ -308,6 +337,8 @@ async function route(
   projectDir: string,
   debug: boolean,
   setProjectDir: (next: string) => void,
+  cacheFor: (projectDir: string) => SubJourneyCache | undefined,
+  cacheTtlMs: number | undefined,
 ): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -519,6 +550,7 @@ async function route(
       const broadcaster = registerBroadcaster(runId);
       const abortController = new AbortController();
       registerAbortController(runId, abortController);
+      const subJourneyCache = cacheFor(projectDir);
       const runPromise = runJourneyFile({
         loaded,
         journeysDir,
@@ -530,6 +562,8 @@ async function route(
         ...(body.env !== undefined ? { env: body.env } : {}),
         ...(typeof body.upToStepIdx === "number" ? { upToStepIdx: body.upToStepIdx } : {}),
         ...(debug ? { debug: true } : {}),
+        ...(subJourneyCache !== undefined ? { subJourneyCache } : {}),
+        ...(cacheTtlMs !== undefined ? { subJourneyCacheTtlMs: cacheTtlMs } : {}),
       });
       if (body.stream) {
         // Fire-and-forget: the broadcaster owns event delivery from here. We
@@ -633,8 +667,18 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     state.projectDir = next;
   };
 
+  const cacheFor = makeCacheResolver(opts.cache ?? "process");
+
   const http: Server = createServer((req, res) => {
-    void route(req, res, state.projectDir, opts.debug ?? false, setProjectDir);
+    void route(
+      req,
+      res,
+      state.projectDir,
+      opts.debug ?? false,
+      setProjectDir,
+      cacheFor,
+      opts.cacheTtlMs,
+    );
   });
 
   await new Promise<void>((resolve, reject) => {

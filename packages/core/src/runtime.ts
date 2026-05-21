@@ -1,5 +1,6 @@
 import type { ZodType } from "zod";
 import type { Endpoint, ResponseOf } from "./endpoint.js";
+import { subJourneyCacheKey } from "./cache.js";
 import { buildRequest, execute, type HttpContext, type HttpResponse } from "./http.js";
 import {
   describeError,
@@ -136,6 +137,8 @@ export interface StepResult {
   children?: StepResult[];
   /** Set on sub-journey nodes — distinguishes a group entry from a regular step. */
   kind?: "step" | "sub";
+  /** Set on sub-journey nodes — whether the output cache was hit or missed. */
+  cacheStatus?: "hit" | "miss";
 }
 
 export interface JourneyResult {
@@ -604,6 +607,75 @@ async function executeSubNode(
   }
 
   const resolvedKey = resolveCacheKey(call.cacheKey, input);
+  const cache = ctx.subJourneyCache;
+  // Caching is active for this call only when a store is wired, the call
+  // opted in with a `cacheKey`, and it isn't a per-call `cache: "off"`.
+  const cacheKeyStr =
+    cache !== undefined && resolvedKey !== undefined && call.cache !== "off"
+      ? subJourneyCacheKey(call.handle.name, resolvedKey)
+      : undefined;
+
+  // Cache hit: replay the stored output, skip the child run entirely. No
+  // child step events fire; `group:start`/`group:end` bracket nothing.
+  if (cache !== undefined && cacheKeyStr !== undefined) {
+    const entry = await cache.get(cacheKeyStr);
+    if (entry !== undefined) {
+      ctx.logger?.onGroupStart?.({
+        runId: meta.runId,
+        journeyIdx: meta.journeyIdx,
+        name: displayName,
+        childJourneyName: call.handle.name,
+        stepIdx,
+        firstChildStepIdx,
+        cacheStatus: "hit",
+        resolvedKey: resolvedKey!,
+      });
+      let cachedOutput: unknown = entry.value;
+      let ok = true;
+      let error: string | undefined;
+      // Re-validate against the schema — guards against a stale disk entry
+      // written by an older version of the child journey.
+      if (call.handle.outputs) {
+        try {
+          cachedOutput = call.handle.outputs.parse(entry.value);
+        } catch (err) {
+          ok = false;
+          error = `sub-journey "${call.handle.name}" cached output failed validation: ${describeError(err)}`;
+        }
+      }
+      if (ok) {
+        try {
+          if (call.assert) await call.assert(cachedOutput);
+          if (call.after) await call.after(cachedOutput);
+        } catch (err) {
+          ok = false;
+          error = describeError(err);
+        }
+      }
+      const durationMs = Date.now() - start;
+      ctx.logger?.onGroupEnd?.({
+        runId: meta.runId,
+        journeyIdx: meta.journeyIdx,
+        name: displayName,
+        childJourneyName: call.handle.name,
+        stepIdx,
+        lastChildStepIdx: stepIdx,
+        ok,
+        durationMs,
+        ...(error !== undefined ? { error } : {}),
+      });
+      return {
+        name: displayName,
+        ok,
+        durationMs,
+        kind: "sub",
+        children: [],
+        cacheStatus: "hit",
+        ...(error !== undefined ? { error } : {}),
+      };
+    }
+  }
+
   const groupStart: GroupStartEvent = {
     runId: meta.runId,
     journeyIdx: meta.journeyIdx,
@@ -611,7 +683,6 @@ async function executeSubNode(
     childJourneyName: call.handle.name,
     stepIdx,
     firstChildStepIdx,
-    // Cache store lookup lands in #90 — until then every call is a miss.
     cacheStatus: "miss",
     ...(resolvedKey !== undefined ? { resolvedKey } : {}),
   };
@@ -675,6 +746,14 @@ async function executeSubNode(
     }
   }
 
+  // Store the child's output on a successful miss so identical inputs
+  // short-circuit next time. Written before parent assert/after — those run
+  // per-call and are not part of the child's cacheable result.
+  if (childOk && cache !== undefined && cacheKeyStr !== undefined) {
+    const ttlMs = call.cacheTtlMs ?? ctx.subJourneyCacheTtlMs;
+    await cache.set(cacheKeyStr, validatedOutput, ttlMs);
+  }
+
   // Run parent-side assert/after only when the child succeeded.
   if (childOk) {
     try {
@@ -707,6 +786,7 @@ async function executeSubNode(
     durationMs,
     kind: "sub",
     children,
+    cacheStatus: "miss",
     ...(childError !== undefined ? { error: childError } : {}),
   };
 }

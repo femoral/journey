@@ -10,6 +10,7 @@ import {
   step,
 } from "../src/runtime.js";
 import { expect as jExpect } from "../src/expect.js";
+import { MemorySubJourneyCache } from "../src/cache.js";
 import type {
   GroupEndEvent,
   GroupStartEvent,
@@ -465,6 +466,82 @@ describe("runtime", () => {
         "stepEnd#1",
         "groupEnd#0..1:pass",
       ]);
+    });
+
+    it("cache hit replays the output and skips the child run", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ access_token: "tok" }));
+      const cache = new MemorySubJourneyCache();
+      const auth = journey(
+        "auth.sub",
+        { reusable: true, outputs: z.object({ token: z.string() }) },
+        () => {
+          step("exchange", {
+            endpoint: { method: "POST", path: "/token", operationId: "t" },
+            after: (res) => output({ token: (res.body as { access_token: string }).access_token }),
+          });
+        },
+      );
+      const seen: string[] = [];
+      journey("parent", () => {
+        invokeJourney(auth, {
+          cacheKey: "k",
+          after: (o) => {
+            seen.push(o.token);
+          },
+        });
+        invokeJourney(auth, {
+          cacheKey: "k",
+          after: (o) => {
+            seen.push(o.token);
+          },
+        });
+      });
+
+      const [result] = await runAllRegistered({
+        baseUrl: "https://x",
+        fetchImpl,
+        subJourneyCache: cache,
+      });
+
+      expect(result!.ok).toBe(true);
+      // The child journey ran once; the second invocation was served from cache.
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual(["tok", "tok"]);
+      expect(result!.steps[0]!.cacheStatus).toBe("miss");
+      expect(result!.steps[1]!.cacheStatus).toBe("hit");
+      expect(result!.steps[1]!.children).toEqual([]);
+    });
+
+    it('cache is bypassed per-call with cache: "off"', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ access_token: "tok" }));
+      const cache = new MemorySubJourneyCache();
+      const auth = journey("auth.sub", { reusable: true }, () => {
+        step("exchange", { endpoint: { method: "POST", path: "/token", operationId: "t" } });
+      });
+      journey("parent", () => {
+        invokeJourney(auth, { cacheKey: "k", cache: "off" });
+        invokeJourney(auth, { cacheKey: "k", cache: "off" });
+      });
+
+      await runAllRegistered({ baseUrl: "https://x", fetchImpl, subJourneyCache: cache });
+      // Both invocations ran the child — the store was never consulted.
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it("a call without cacheKey is never cached", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ access_token: "tok" }));
+      const cache = new MemorySubJourneyCache();
+      const auth = journey("auth.sub", { reusable: true }, () => {
+        step("exchange", { endpoint: { method: "POST", path: "/token", operationId: "t" } });
+      });
+      journey("parent", () => {
+        invokeJourney(auth, {});
+        invokeJourney(auth, {});
+      });
+
+      await runAllRegistered({ baseUrl: "https://x", fetchImpl, subJourneyCache: cache });
+      // Caching is opt-in per call; no cacheKey → both ran.
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
 
     it("input schema mismatch fails the sub-journey node without running any child step", async () => {

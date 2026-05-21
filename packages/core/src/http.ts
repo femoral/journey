@@ -1,3 +1,4 @@
+import type { SubJourneyCache } from "./cache.js";
 import { isEndpointRef, type Endpoint, type HttpMethod } from "./endpoint.js";
 import type { JourneyLogger, RequestLog } from "./logger.js";
 
@@ -31,6 +32,15 @@ export interface HttpContext {
    * in-flight run.
    */
   signal?: AbortSignal;
+  /**
+   * Optional sub-journey output cache. When set, an `invokeJourney(...)` call
+   * that supplies a `cacheKey` (and isn't `cache: "off"`) replays a stored
+   * output instead of re-running the child. Absent → caching disabled
+   * (`--cache=off`). Wired by the CLI from the `--cache` flag.
+   */
+  subJourneyCache?: SubJourneyCache;
+  /** Default TTL (ms) for sub-journey cache writes; per-call `cacheTtlMs` overrides. */
+  subJourneyCacheTtlMs?: number;
 }
 
 export interface RequestSpec {

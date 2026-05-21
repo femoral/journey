@@ -1,5 +1,6 @@
 import { resolve as resolvePath } from "node:path";
 import { Command } from "commander";
+import type { CacheMode } from "@journey/core";
 import { runEnvList } from "./commands/envList.js";
 import { runExportK6 } from "./commands/exportK6.js";
 import { runExportPostman } from "./commands/exportPostman.js";
@@ -7,6 +8,13 @@ import { runGenerate } from "./commands/generate.js";
 import { runInit } from "./commands/init.js";
 import { runCommand } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
+
+function parseCacheMode(value: string): CacheMode {
+  if (value === "off" || value === "run" || value === "process" || value === "disk") {
+    return value;
+  }
+  throw new Error(`--cache must be one of off|run|process|disk (got "${value}")`);
+}
 
 async function handle(fn: () => Promise<number | void>): Promise<never> {
   try {
@@ -57,6 +65,13 @@ export function buildProgram(): Command {
       "Disable TLS certificate verification (for self-signed / corporate CAs)",
       false,
     )
+    .option(
+      "--cache <mode>",
+      "Sub-journey output cache: off|run|process|disk",
+      parseCacheMode,
+      "process",
+    )
+    .option("--cache-ttl <ms>", "Default sub-journey cache TTL in ms", (v) => parseInt(v, 10))
     .description("Run one or more journeys (or --all)")
     .action(
       (
@@ -67,6 +82,8 @@ export function buildProgram(): Command {
           debug?: boolean;
           watch?: boolean;
           insecure?: boolean;
+          cache?: CacheMode;
+          cacheTtl?: number;
         },
       ) =>
         handle(() =>
@@ -78,6 +95,8 @@ export function buildProgram(): Command {
             ...(options.debug !== undefined ? { debug: options.debug } : {}),
             ...(options.watch !== undefined ? { watch: options.watch } : {}),
             ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
+            ...(options.cache !== undefined ? { cache: options.cache } : {}),
+            ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
           }),
         ),
     );
@@ -163,6 +182,13 @@ export function buildProgram(): Command {
       "Disable TLS certificate verification for journey runs triggered via the API",
       false,
     )
+    .option(
+      "--cache <mode>",
+      "Sub-journey output cache: off|run|process|disk",
+      parseCacheMode,
+      "process",
+    )
+    .option("--cache-ttl <ms>", "Default sub-journey cache TTL in ms", (v) => parseInt(v, 10))
     .description("Run the GUI backend API for the current project")
     .action(
       (options: {
@@ -171,6 +197,8 @@ export function buildProgram(): Command {
         project?: string;
         debug?: boolean;
         insecure?: boolean;
+        cache?: CacheMode;
+        cacheTtl?: number;
       }) => {
         const projectDir = options.project
           ? resolvePath(process.cwd(), options.project)
@@ -182,6 +210,8 @@ export function buildProgram(): Command {
             ...(options.host !== undefined ? { host: options.host } : {}),
             ...(options.debug !== undefined ? { debug: options.debug } : {}),
             ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
+            ...(options.cache !== undefined ? { cache: options.cache } : {}),
+            ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
           }),
         );
       },

@@ -15,6 +15,7 @@ import {
   type JourneyLogger,
   type JourneyResult,
   type LoadedConfig,
+  type SubJourneyCache,
 } from "@journey/core";
 import { tsImport } from "tsx/esm/api";
 import { enableInsecureTls } from "../commands/run.js";
@@ -42,6 +43,10 @@ export interface RunJourneyFileOptions {
    * steps. Used by the dev server's `POST /api/runs/:id/abort` route.
    */
   signal?: AbortSignal;
+  /** Sub-journey output cache; absent → caching disabled for this run. */
+  subJourneyCache?: SubJourneyCache;
+  /** Default TTL (ms) for sub-journey cache writes. */
+  subJourneyCacheTtlMs?: number;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -74,6 +79,10 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (logger) ctx.logger = logger;
   if (dispatcher !== undefined) ctx.dispatcher = dispatcher;
   if (opts.signal !== undefined) ctx.signal = opts.signal;
+  if (opts.subJourneyCache !== undefined) ctx.subJourneyCache = opts.subJourneyCache;
+  if (opts.subJourneyCacheTtlMs !== undefined) {
+    ctx.subJourneyCacheTtlMs = opts.subJourneyCacheTtlMs;
+  }
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
   let results;
   try {

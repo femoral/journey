@@ -70,6 +70,16 @@ export {
 
 export { fetch } from "./fetch.js";
 
+export {
+  DiskSubJourneyCache,
+  MemorySubJourneyCache,
+  createSubJourneyCache,
+  subJourneyCacheKey,
+  type CacheEntry,
+  type CacheMode,
+  type SubJourneyCache,
+} from "./cache.js";
+
 // Re-export zod so journey files can declare `inputs` / `outputs` schemas
 // without adding a dependency. A Journey project carries no deps of its own
 // (only the planted `@journey/core` symlink), so `import { z } from "zod"`
