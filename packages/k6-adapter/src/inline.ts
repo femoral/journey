@@ -51,12 +51,20 @@ export function findRelativeImports(
 }
 
 /**
- * Replace a `import { endpoints } from "../generated/endpoints"` (and .js) in
- * the user's journey source with the inlined endpoint module's body.
+ * Replace relative imports (`import { endpoints } from "../generated/endpoints"`,
+ * helper modules, reusable sub-journeys, …) in the user's journey source with
+ * the imported module's body.
+ *
+ * Recurses: an inlined module's own relative imports are inlined too — needed
+ * for a journey that invokes a sub-journey which itself imports another
+ * (e.g. `establishSession` → `acquireToken`). `visited` dedupes by resolved
+ * path, so a module imported from two places is inlined once and any later
+ * import line is dropped; it also breaks import cycles.
  */
 export async function inlineRelativeImports(
   journeySource: string,
   journeyPath: string,
+  visited: Set<string> = new Set(),
 ): Promise<string> {
   const imports = findRelativeImports(journeySource, journeyPath);
   let out = journeySource;
@@ -76,18 +84,27 @@ export async function inlineRelativeImports(
         // keep trying
       }
     }
-    if (!resolved) continue;
-    // Strip type imports and @journey/core imports from the inlined module too.
-    const cleaned = stripCoreImports(stripTypeImports(resolved.content));
-    // Replace the import line with the inlined module body. We turn
-    //   import { endpoints } from "./generated/endpoints"
-    // into just the module body, which exports `endpoints` as a const.
-    // In k6 land we can't re-export, so: rewrite `export const` → `const`.
-    const converted = cleaned.replace(/^\s*export\s+(const|function|class)\s+/gm, "$1 ");
     const importLineRe = new RegExp(
       `^\\s*import\\s+[^;]*?from\\s+["']${imp.specifier.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}["'];?\\s*$`,
       "m",
     );
+    if (!resolved) continue;
+    // Already inlined from another import site — drop the duplicate line so the
+    // module body (and its `const` declarations) appears exactly once.
+    if (visited.has(resolved.path)) {
+      out = out.replace(importLineRe, "");
+      continue;
+    }
+    visited.add(resolved.path);
+    // Strip type imports and @journey/core imports from the inlined module too.
+    const cleaned = stripCoreImports(stripTypeImports(resolved.content));
+    // Recurse: inline the module's own relative imports before splicing it in.
+    const recursed = await inlineRelativeImports(cleaned, resolved.path, visited);
+    // Replace the import line with the inlined module body. We turn
+    //   import { endpoints } from "./generated/endpoints"
+    // into just the module body, which exports `endpoints` as a const.
+    // In k6 land we can't re-export, so: rewrite `export const` → `const`.
+    const converted = recursed.replace(/^\s*export\s+(const|function|class)\s+/gm, "$1 ");
     out = out.replace(
       importLineRe,
       `\n// ----- inlined from ${imp.specifier} -----\n${converted}\n// ----- end inlined -----\n`,

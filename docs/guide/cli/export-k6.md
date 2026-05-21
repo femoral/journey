@@ -49,8 +49,8 @@ Filtering is at the file level: if **any** journey in a file carries every reque
 ## Behaviour
 
 1. Reads the journey source.
-2. Strips `@journey/core` imports; inlines relative imports.
-3. Prepends k6 shims that re-implement `journey()` / `step()` / `expect()` on top of k6 primitives.
+2. Strips `@journey/core` imports; inlines relative imports (recursively — a sub-journey imported from a helper that itself imports another is inlined too).
+3. Prepends k6 shims that re-implement `journey()` / `step()` / `invokeJourney()` / `output()` / `expect()` on top of k6 primitives.
 4. Emits a single `.js` file.
 
 ## Output
@@ -105,12 +105,35 @@ For ad-hoc overrides, k6's CLI flags (`--vus`, `--duration`, `--stage`) still ta
 
 ## What maps to what
 
-| Journey               | k6                                          |
-| --------------------- | ------------------------------------------- |
-| `step("name", { … })` | `group("name", () => { … })`                |
-| `assert(res)` throws  | `check(res, { … })` / fail via `check`      |
-| `env("KEY")`          | `__ENV.KEY` (k6 reads `JOURNEY_*` env vars) |
-| `fetch(url, …)`       | `http.get/post/put/…`                       |
+| Journey                        | k6                                          |
+| ------------------------------ | ------------------------------------------- |
+| `step("name", { … })`          | `http.request(…)` + a named `check`         |
+| `invokeJourney(handle, { … })` | `group("child journey", () => { … })`       |
+| `assert(res)` throws           | `check(res, { … })` / fail via `check`      |
+| `env("KEY")`                   | `__ENV.KEY` (k6 reads `JOURNEY_*` env vars) |
+| `fetch(url, …)`                | `http.get/post/put/…`                       |
+
+## Sub-journeys
+
+A sub-journey node — `invokeJourney(handle, { … })` — is **inlined** at its call
+site. The child journey's steps are emitted under a k6
+[`group()`](https://grafana.com/docs/k6/latest/using-k6/tags-and-groups/#groups)
+named after the child (the `name` override, falling back to the child journey's
+own name), so k6's per-group metrics break the load profile down by sub-journey.
+Nesting works to 8 levels.
+
+`output(value)` in a child step's `after` flows to the call's `after(out)` /
+`assert(out)` hooks, exactly as it does in a normal run.
+
+The output cache does **not** translate. `cacheKey`, `cacheTtlMs`, and `cache`
+on an `invokeJourney` call are ignored — every VU iteration re-runs the child
+journey in full. This is deliberate: k6 measures the real per-iteration cost,
+and a hot cache would understate it. The emitted shim carries a comment noting
+the divergence.
+
+Reusable journeys declare `inputs` / `outputs` schemas with `z`, but k6 has no
+zod runtime, so the schemas are replaced by a no-op stub — child inputs and
+outputs are passed through unvalidated in the exported script.
 
 ## Limits
 

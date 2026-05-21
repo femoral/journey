@@ -52,7 +52,7 @@ journey("list pets", () => {
       expect(result.outFile).toMatch(/list-pets\.k6\.js$/);
       const src = await readFile(result.outFile, "utf8");
       expect(src).toContain('import http from "k6/http"');
-      expect(src).toContain('import { check } from "k6"');
+      expect(src).toContain('import { check, group } from "k6"');
       expect(src).not.toContain("@journey/core");
       expect(src).toContain("const endpoints = {");
       expect(src).toContain("listPets:");
@@ -128,6 +128,95 @@ journey("p", () => { step("s", { endpoint: { method: "GET", path: "/" } }); });
   });
 });
 
+describe("exportToK6 — sub-journeys", () => {
+  it("emits invokeJourney calls and the k6 group import for inlining", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "journey-k6-sub-"));
+    try {
+      const journey = join(tmp, "with-sub.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step, invokeJourney, output, z } from "@journey/core";
+
+const warmUp = journey(
+  "warm up",
+  { reusable: true, outputs: z.object({ count: z.number() }) },
+  () => {
+    step("ping", {
+      endpoint: { method: "GET", path: "/ping" },
+      after: () => output({ count: 1 }),
+    });
+  },
+);
+
+journey("with sub", () => {
+  let count = 0;
+  invokeJourney(warmUp, { name: "warm", after: (out) => { count = out.count; } });
+  step("main", { endpoint: { method: "GET", path: "/main" } });
+});
+`,
+      );
+      const result = await exportToK6({ journeyFile: journey });
+      const src = await readFile(result.outFile, "utf8");
+      // The shim provides group() so sub-journey nodes can be inlined under it.
+      expect(src).toContain('import { check, group } from "k6"');
+      // User code is preserved verbatim — the shim's journey()/invokeJourney()
+      // do the inlining at runtime.
+      expect(src).toContain("invokeJourney(warmUp,");
+      expect(src).toContain("reusable: true");
+      expect(src).not.toContain("@journey/core");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("recursively inlines a sub-journey imported from a helper file", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "journey-k6-helper-"));
+    try {
+      await mkdir(join(tmp, "helpers"));
+      await writeFile(
+        join(tmp, "helpers", "auth.ts"),
+        `import { journey, step, output, z } from "@journey/core";
+export const acquireToken = journey(
+  "auth.acquire-token",
+  { reusable: true, outputs: z.object({ token: z.string() }) },
+  () => {
+    step("login", {
+      endpoint: { method: "POST", path: "/login" },
+      after: () => output({ token: "t" }),
+    });
+  },
+);
+`,
+      );
+      const journey = join(tmp, "checkout.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step, invokeJourney } from "@journey/core";
+import { acquireToken } from "./helpers/auth.js";
+
+journey("checkout", () => {
+  let token = "";
+  invokeJourney(acquireToken, { after: (out) => { token = out.token; } });
+  step("order", {
+    endpoint: { method: "POST", path: "/orders" },
+    headers: () => ({ Authorization: "Bearer " + token }),
+  });
+});
+`,
+      );
+      const result = await exportToK6({ journeyFile: journey });
+      const src = await readFile(result.outFile, "utf8");
+      expect(src).toContain("// ----- inlined from ./helpers/auth.js -----");
+      // `export const` from the helper is rewritten to a plain `const`.
+      expect(src).toContain("const acquireToken =");
+      expect(src).not.toContain("export const acquireToken");
+      expect(src).not.toContain("@journey/core");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
 describeIfK6("exportToK6 — live k6 run", () => {
   let server: Server;
   let baseUrl: string;
@@ -192,6 +281,70 @@ journey("list pets", () => {
       expect(code, `k6 failed:\n${stdout}\n${stderr}`).toBe(0);
       const combined = stdout + stderr;
       expect(combined).toMatch(/list pets.*fetch/);
+      expect(combined).toMatch(/checks.*100\.00%/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it("k6 run executes a journey with an inlined sub-journey", async () => {
+    const testDir = dirname(fileURLToPath(import.meta.url));
+    const base = join(testDir, "..", ".test-tmp");
+    await mkdir(base, { recursive: true });
+    const tmp = await mkdtemp(join(base, "k6-sub-run-"));
+    try {
+      const journey = join(tmp, "checkout.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step, expect, invokeJourney, output, z } from "@journey/core";
+
+const warmUp = journey(
+  "warm up",
+  { reusable: true, outputs: z.object({ ok: z.boolean() }) },
+  () => {
+    step("prefetch pets", {
+      endpoint: { method: "GET", path: "/pets" },
+      assert(res) {
+        expect(res.status).toBe(200);
+      },
+      after: () => output({ ok: true }),
+    });
+  },
+);
+
+journey("checkout", () => {
+  let warmed = false;
+  invokeJourney(warmUp, { name: "warm up", after: (out) => { warmed = out.ok; } });
+  step("fetch", {
+    endpoint: { method: "GET", path: "/pets" },
+    assert(res) {
+      expect(res.status).toBe(200);
+      expect(warmed).toBe(true);
+    },
+  });
+});
+`,
+      );
+      const { outFile } = await exportToK6({ journeyFile: journey });
+      const child = spawn("k6", ["run", "--vus=1", "--iterations=1", outFile], {
+        env: { ...process.env, JOURNEY_BASE_URL: baseUrl },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+      const code: number = await new Promise((res, rej) => {
+        child.once("error", rej);
+        child.once("close", (c) => res(c ?? 0));
+      });
+      expect(code, `k6 failed:\n${stdout}\n${stderr}`).toBe(0);
+      const combined = stdout + stderr;
+      // The sub-journey ran under a k6 group named "warm up".
+      expect(combined).toContain("warm up");
       expect(combined).toMatch(/checks.*100\.00%/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
