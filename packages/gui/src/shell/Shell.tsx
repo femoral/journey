@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js";
 import { createEffect, createResource, createSignal, createMemo } from "solid-js";
-import { useLocation } from "@solidjs/router";
+import { useLocation, useNavigate } from "@solidjs/router";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { ProjectSwitcher } from "./ProjectSwitcher";
@@ -14,7 +14,7 @@ import {
   type RecentProject,
 } from "./recentProjects";
 import { api } from "../api/client";
-import { projectRefreshTick } from "../api/projectRefresh";
+import { bumpProjectRefresh, projectRefreshTick } from "../api/projectRefresh";
 import { openProjectAtPath, pickAndOpenProjectFolder } from "./openProjectFolder";
 import { RouteFade } from "../ui";
 import { createConsoleStore } from "./consoleStore";
@@ -24,8 +24,8 @@ import { loadSelectedEnv, saveSelectedEnv } from "./selectedEnv";
 
 export function Shell(props: { children?: JSX.Element }): JSX.Element {
   const [project] = createResource(projectRefreshTick, () => api.getProject());
-  const [drift] = createResource(() => api.getSpecDrift());
-  const [envs] = createResource(() => api.getEnvironments());
+  const [drift] = createResource(projectRefreshTick, () => api.getSpecDrift());
+  const [envs] = createResource(projectRefreshTick, () => api.getEnvironments());
   const [switcherOpen, setSwitcherOpen] = createSignal(false);
   const [consoleOpen, setConsoleOpen] = createSignal(false);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
@@ -98,6 +98,20 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
   });
 
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Swap the loaded project in place — no `window.location.reload()`, so the
+  // webview never repaints white. Bumping the refresh tick refetches every
+  // project-scoped Shell resource (project, drift, envs); routing home
+  // remounts the page-level ones against the new backend state. The console
+  // and the selected env belong to the old project, so reset both.
+  const applyProjectSwitch = () => {
+    consoleStore.clear();
+    setSelectedEnvSignal(undefined);
+    setSwitcherOpen(false);
+    navigate("/");
+    bumpProjectRefresh();
+  };
 
   return (
     <ConsoleContext.Provider value={consoleStore}>
@@ -142,7 +156,7 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
               if (p.path === project()?.projectDir) return;
               const result = await openProjectAtPath(p.path);
               if (result.ok) {
-                window.location.reload();
+                applyProjectSwitch();
                 return;
               }
               if (result.reason === "invalid") {
@@ -152,9 +166,7 @@ export function Shell(props: { children?: JSX.Element }): JSX.Element {
             onOpenFolder={async () => {
               const result = await pickAndOpenProjectFolder();
               if (result.ok) {
-                // Full reload rebinds every project-scoped resource (envs,
-                // tree, drift, recents memo) to the new backend state.
-                window.location.reload();
+                applyProjectSwitch();
                 return;
               }
               if (result.reason === "invalid") {

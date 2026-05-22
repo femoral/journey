@@ -29,8 +29,8 @@ import { experimentalEnabled } from "../experimental";
 export const ProjectPage: Component = () => {
   const navigate = useNavigate();
   const [project] = createResource(projectRefreshTick, () => api.getProject());
-  const [runs] = createResource(api.listRuns);
-  const [drift] = createResource(api.getSpecDrift);
+  const [runs] = createResource(projectRefreshTick, () => api.listRuns());
+  const [drift] = createResource(projectRefreshTick, () => api.getSpecDrift());
   const [tlsError, setTlsError] = createSignal<string | undefined>(undefined);
   const [tlsSaving, setTlsSaving] = createSignal(false);
   const toggleTls = async (insecure: boolean): Promise<void> => {

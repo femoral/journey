@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { fireEvent, render, screen } from "@solidjs/testing-library";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { createSignal } from "solid-js";
 import { TopBar } from "../src/shell/TopBar";
 import { Sidebar } from "../src/shell/Sidebar";
 import { ProjectSwitcher } from "../src/shell/ProjectSwitcher";
+import { Shell } from "../src/shell/Shell";
 import {
   loadRecentProjects,
   saveRecentProjects,
@@ -164,5 +165,79 @@ describe("ProjectSwitcher", () => {
       />
     ));
     expect(screen.getByText("No recent projects yet.")).toBeDefined();
+  });
+});
+
+describe("Shell — project switch", () => {
+  const projectA = {
+    projectDir: "/tmp/alpha",
+    config: { name: "alpha", spec: "openapi.yaml", tlsRejectUnauthorized: true },
+    counts: { journeys: 1, environments: 1, endpoints: 1 },
+  };
+  const projectB = {
+    projectDir: "/tmp/bravo",
+    config: { name: "bravo", spec: "openapi.yaml", tlsRejectUnauthorized: true },
+    counts: { journeys: 2, environments: 2, endpoints: 2 },
+  };
+
+  // Mutable so `/api/project/open` can flip what `/api/project` returns next —
+  // a stand-in for the serve backend swapping its loaded project.
+  let current = projectA;
+
+  beforeEach(() => {
+    current = projectA;
+    localStorage.clear();
+    localStorage.setItem(
+      "jrn:recentProjects",
+      JSON.stringify([{ name: "bravo", path: "/tmp/bravo" }]),
+    );
+    const json = (body: unknown) =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        // `/api/project/open` must be matched before `/api/project`.
+        if (url.includes("/api/project/open")) {
+          current = projectB;
+          return json(projectB);
+        }
+        if (url.includes("/api/project")) return json(current);
+        if (url.includes("/api/spec/drift"))
+          return json({ added: [], removed: [], count: 0, hasGenerated: true, hasSpec: true });
+        if (url.includes("/api/environments"))
+          return json({ environments: [], defaultEnvironment: undefined });
+        return json({});
+      }) as typeof fetch,
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("swaps the loaded project in place — no full-page reload", async () => {
+    render(() => (
+      <Router root={Shell}>
+        <Route path="/" component={() => <div>route content</div>} />
+      </Router>
+    ));
+
+    // Project A is loaded.
+    await waitFor(() => expect(screen.getByText("alpha")).toBeDefined());
+
+    // Open the switcher and pick the "bravo" recent.
+    fireEvent.click(screen.getByTitle("Switch project"));
+    await waitFor(() => expect(screen.getByText("bravo")).toBeDefined());
+    fireEvent.click(screen.getByText("bravo"));
+
+    // The TopBar now shows project B. If the old `window.location.reload()`
+    // path were still in place, jsdom would not reload and the shell would
+    // stay bound to project A — so this asserts the in-place swap worked.
+    await waitFor(() => expect(screen.getByText("bravo")).toBeDefined());
+    expect(screen.queryByText("alpha")).toBeNull();
   });
 });
