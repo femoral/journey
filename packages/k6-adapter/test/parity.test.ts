@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { clearRegistry, runAllRegistered } from "@journey/core";
 import { describe, expect, it } from "vitest";
@@ -75,7 +78,15 @@ async function runViaCore(): Promise<CapturedRequest[]> {
 /** Path B — execute the emitted k6 script with stubbed k6 globals. */
 async function runViaK6Shim(): Promise<{ requests: CapturedRequest[]; groups: string[] }> {
   const fixture = fileURLToPath(new URL("./fixtures/parity.journey.ts", import.meta.url));
-  const { source } = await exportToK6({ journeyFile: fixture });
+  // exportToK6 always writes the emitted script; aim it at a temp dir so the
+  // repo source tree stays clean. Only `source` is used here.
+  const outDir = await mkdtemp(join(tmpdir(), "journey-k6-parity-"));
+  let source: string;
+  try {
+    ({ source } = await exportToK6({ journeyFile: fixture, outDir }));
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
 
   // Drop the `k6/http` + `k6` imports (we inject those) and turn the
   // `export default function` entry point into a value the factory returns.
