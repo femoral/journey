@@ -1,9 +1,7 @@
 import { watch } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
-  clearRegistry,
   createConsoleLogger,
   createSubJourneyCache,
   loadConfig,
@@ -19,9 +17,9 @@ import {
   type HttpContext,
   type JourneyResult,
 } from "@journey/core";
-import { tsImport } from "tsx/esm/api";
 import { overallOk, printResults } from "../report.js";
 import { discoverJourneyFiles } from "../util/discover.js";
+import { importJourneyFiles } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface RunOptions {
@@ -81,10 +79,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   }
 
   await ensureProjectCoreLink(opts.projectDir);
-  clearRegistry();
-  for (const file of files) {
-    await tsImport(pathToFileURL(file).href, import.meta.url);
-  }
+  await importJourneyFiles(files);
 
   const ctx: HttpContext = {};
   const baseUrl = resolveBaseUrl(loaded.config);

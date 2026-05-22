@@ -1,12 +1,9 @@
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
-  clearRegistry,
   collectPipeline,
   collectSubPipeline,
-  getRegisteredJourneys,
   listEnvironments,
   loadConfig,
   loadEnvironment,
@@ -24,8 +21,8 @@ import {
   type ExportNode,
   type PostmanFolder,
 } from "@journey/postman-adapter";
-import { tsImport } from "tsx/esm/api";
 import { discoverJourneyFiles } from "../util/discover.js";
+import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 
 /** Matches the runtime's `MAX_SUB_JOURNEY_DEPTH` — stops runaway recursion. */
 const MAX_SUB_DEPTH = 8;
@@ -89,18 +86,6 @@ export interface ExportPostmanCliOptions {
   allEnvs?: boolean;
   /** Override cwd for locating journey.config.json (used by tests). */
   projectDir?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Journey loading (same pattern as exportK6.ts)
-// ---------------------------------------------------------------------------
-
-async function loadJourneyFile(file: string): Promise<ReadonlyArray<JourneyDef>> {
-  clearRegistry();
-  await tsImport(pathToFileURL(file).href, import.meta.url);
-  const defs = getRegisteredJourneys().slice();
-  clearRegistry();
-  return defs;
 }
 
 function matches(def: JourneyDef, tags: string[]): boolean {
@@ -177,7 +162,7 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
 
   try {
     for (const file of files) {
-      const defs = await loadJourneyFile(file);
+      const defs = await loadJourneyDefs(file);
       const matching = defs.filter((d) => matches(d, tags));
 
       if (matching.length === 0) {

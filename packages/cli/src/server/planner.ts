@@ -1,16 +1,13 @@
 import { isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
-  clearRegistry,
-  getRegisteredJourneys,
   loadEnvironment,
   planJourney,
   setActiveEnvironment,
   type LoadedConfig,
   type PlannedNode,
 } from "@journey/core";
-import { tsImport } from "tsx/esm/api";
+import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface PlanJourneyFileOptions {
@@ -53,14 +50,10 @@ export async function planJourneyFile(opts: PlanJourneyFileOptions): Promise<Pla
   }
 
   await ensureProjectCoreLink(opts.loaded.projectDir);
-  clearRegistry();
-  await tsImport(pathToFileURL(abs).href, import.meta.url);
-
-  const defs = getRegisteredJourneys().slice();
+  const defs = await loadJourneyDefs(abs);
   const journeys: PlannedJourney[] = [];
   for (const def of defs) {
     journeys.push({ name: def.name, steps: await planJourney(def) });
   }
-  clearRegistry();
   return journeys;
 }

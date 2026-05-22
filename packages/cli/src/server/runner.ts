@@ -1,8 +1,6 @@
 import { isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   clearActiveEnvironment,
-  clearRegistry,
   createConsoleLogger,
   loadEnvironment,
   loggerFromEnv,
@@ -17,9 +15,9 @@ import {
   type LoadedConfig,
   type SubJourneyCache,
 } from "@journey/core";
-import { tsImport } from "tsx/esm/api";
 import { enableInsecureTls } from "../commands/run.js";
 import { patchConsole } from "./consolePatch.js";
+import { importJourneyFiles } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface RunJourneyFileOptions {
@@ -69,8 +67,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   }
 
   await ensureProjectCoreLink(opts.loaded.projectDir);
-  clearRegistry();
-  await tsImport(pathToFileURL(abs).href, import.meta.url);
+  await importJourneyFiles([abs]);
 
   const ctx: HttpContext = {};
   const baseUrl = resolveBaseUrl(opts.loaded.config);

@@ -1,10 +1,9 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { clearRegistry, getRegisteredJourneys, type JourneyDef } from "@journey/core";
+import type { JourneyDef } from "@journey/core";
 import { exportToK6 } from "@journey/k6-adapter";
-import { tsImport } from "tsx/esm/api";
 import { discoverJourneyFiles } from "../util/discover.js";
+import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 
 export interface ExportK6CliOptions {
   /** File or directory. */
@@ -18,14 +17,6 @@ export interface ExportK6CliOptions {
 interface FileExport {
   file: string;
   defs: ReadonlyArray<JourneyDef>;
-}
-
-async function loadJourneyFile(file: string): Promise<ReadonlyArray<JourneyDef>> {
-  clearRegistry();
-  await tsImport(pathToFileURL(file).href, import.meta.url);
-  const defs = getRegisteredJourneys().slice();
-  clearRegistry();
-  return defs;
 }
 
 function matches(def: JourneyDef, tags: string[]): boolean {
@@ -79,7 +70,7 @@ export async function runExportK6(opts: ExportK6CliOptions): Promise<number> {
 
   const work: FileExport[] = [];
   for (const file of files) {
-    const defs = await loadJourneyFile(file);
+    const defs = await loadJourneyDefs(file);
     work.push({ file, defs });
   }
 
