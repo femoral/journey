@@ -48,13 +48,14 @@ mock.
 Each journey file is named for the Journey feature or edge case it exercises —
 the sample project doubles as living coverage for the runtime.
 
-- `multi-step-crud.journey.ts` — 9-step lifecycle: log in, create a pet,
-  fetch it, PATCH the status, PUT it whole, attach a note, list notes,
-  delete the pet, then verify the GET 404s. Closure variables (`token`,
-  `petId`) chain state between steps.
-- `env-assertion.journey.ts` — round-trips a token through the IDP and
-  asserts the active environment is the one selected; calls two APIs in
-  one flow.
+- `multi-step-crud.journey.ts` — full pet lifecycle: authenticate via the
+  reusable `acquireToken` sub-journey, then create a pet, fetch it, PATCH
+  the status, PUT it whole, attach a note, list notes, delete the pet, and
+  verify the GET 404s. Closure variables (`token`, `petId`) chain state
+  between nodes.
+- `env-assertion.journey.ts` — authenticates via the `acquireToken`
+  sub-journey, then asserts the active environment is the one selected;
+  calls two APIs in one flow.
 - `k6-smoke-tag.journey.ts` — single GET with query params; tagged
   `smoke` and carries a `k6` block.
 - `k6-load-stages.journey.ts` — journey-level `k6` load `stages`, tagged

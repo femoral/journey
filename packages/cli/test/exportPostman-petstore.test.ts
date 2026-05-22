@@ -155,40 +155,65 @@ describe("petstore — export structure", () => {
 
   // ── env-assertion ───────────────────────────────────────────────────────────
 
-  it("env-assertion: 1 folder / 2 steps / both at {{AUTH_BASE_URL}}", async () => {
+  it("env-assertion: authenticate sub-journey folder + whoami step", async () => {
     col = await load("env-assertion");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
     expect(folder.name).toBe("env assertion");
+    // Pipeline: [ sub "authenticate", step "whoami" ].
     expect(folder.item).toHaveLength(2);
 
-    type Step = { name: string; request: { method: string; url: { raw: string } } };
-    const steps = folder.item as Step[];
-    expect(steps[0]!.name).toBe("login via IDP");
-    expect(steps[0]!.request.method).toBe("POST");
-    expect(steps[0]!.request.url.raw).toContain("{{AUTH_BASE_URL}}");
-    expect(steps[0]!.request.url.raw).toContain("/auth/login");
+    type Folder = {
+      name: string;
+      description?: string;
+      variable?: Array<{ key: string; value: string }>;
+      item: Array<{ name: string; request: { method: string; url: { raw: string } } }>;
+    };
+    type Request = { name: string; request: { method: string; url: { raw: string } } };
 
-    expect(steps[1]!.name).toBe("whoami");
-    expect(steps[1]!.request.method).toBe("GET");
-    expect(steps[1]!.request.url.raw).toContain("{{AUTH_BASE_URL}}");
-    expect(steps[1]!.request.url.raw).toContain("/auth/whoami");
+    const sub = folder.item[0] as Folder;
+    expect(sub.name).toBe("authenticate");
+    expect(sub.description).toMatch(/Sub-journey/);
+    expect(sub.variable).toContainEqual({ key: "username", value: "{{USERNAME}}" });
+    expect(sub.item).toHaveLength(1);
+    expect(sub.item[0]!.name).toBe("login via IDP");
+    expect(sub.item[0]!.request.method).toBe("POST");
+    expect(sub.item[0]!.request.url.raw).toContain("{{AUTH_BASE_URL}}");
+    expect(sub.item[0]!.request.url.raw).toContain("/auth/login");
+
+    const whoami = folder.item[1] as Request;
+    expect(whoami.name).toBe("whoami");
+    expect(whoami.request.method).toBe("GET");
+    expect(whoami.request.url.raw).toContain("{{AUTH_BASE_URL}}");
+    expect(whoami.request.url.raw).toContain("/auth/whoami");
   });
 
   // ── multi-step-crud ─────────────────────────────────────────────────────────
 
-  it("multi-step-crud: 1 folder / 9 steps with correct names and methods", async () => {
+  it("multi-step-crud: login sub-journey folder + 8 pet steps", async () => {
     col = await load("multi-step-crud");
     expect(col.item).toHaveLength(1);
     const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
     expect(folder.name).toBe("multi-step crud");
+    // Pipeline: [ sub "login", 8 pet HTTP steps ].
     expect(folder.item).toHaveLength(9);
 
-    type Step = { name: string; request: { method: string } };
-    const steps = folder.item as Step[];
-    const byName = Object.fromEntries(steps.map((s) => [s.name, s.request.method]));
+    type Folder = {
+      name: string;
+      description?: string;
+      item: Array<{ name: string; request: { method: string } }>;
+    };
+    type Request = { name: string; request: { method: string } };
 
-    expect(byName["login"]).toBe("POST");
+    const login = folder.item[0] as Folder;
+    expect(login.name).toBe("login");
+    expect(login.description).toMatch(/Sub-journey/);
+    expect(login.item).toHaveLength(1);
+    expect(login.item[0]!.name).toBe("login via IDP");
+    expect(login.item[0]!.request.method).toBe("POST");
+
+    const steps = folder.item.slice(1) as Request[];
+    const byName = Object.fromEntries(steps.map((s) => [s.name, s.request.method]));
     expect(byName["create pet"]).toBe("POST");
     expect(byName["fetch pet"]).toBe("GET");
     expect(byName["patch status to pending"]).toBe("PATCH");

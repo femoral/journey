@@ -1,25 +1,22 @@
-import { env, expect, journey, step } from "@journey/core";
+import { env, expect, invokeJourney, journey, step } from "@journey/core";
+import { acquireToken } from "./helpers/auth.js";
 
 /**
  * Round-trips a token through the IDP and asserts that the active environment
  * really is the one the operator selected. Running with `--env ci` against the
  * `local` mock data fails loudly, which makes env wiring observable.
+ *
+ * The token comes from the `acquireToken` reusable sub-journey rather than an
+ * inline login step — the same auth bootstrap every authed journey shares.
  */
 journey("env assertion", () => {
   let token = "";
 
-  step("login via IDP", {
-    endpoint: {
-      method: "POST",
-      path: "/auth/login",
-      baseUrl: env("AUTH_BASE_URL"),
-    },
-    body: { username: env("USERNAME"), password: env("PASSWORD") },
-    assert(res) {
-      expect(res.status).toBe(200);
-    },
-    after(res) {
-      token = (res.body as { token: string }).token;
+  invokeJourney(acquireToken, {
+    name: "authenticate",
+    inputs: { username: env("USERNAME"), password: env("PASSWORD") },
+    after: (out) => {
+      token = out.token;
     },
   });
 

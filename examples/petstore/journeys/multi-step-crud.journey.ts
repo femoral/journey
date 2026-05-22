@@ -1,5 +1,6 @@
-import { env, expect, journey, step } from "@journey/core";
+import { env, expect, invokeJourney, journey, step } from "@journey/core";
 import { endpoints } from "../generated/endpoints.js";
+import { acquireToken } from "./helpers/auth.js";
 
 /**
  * End-to-end pet lifecycle. Exercises every method on the example API and
@@ -9,24 +10,17 @@ journey("multi-step crud", () => {
   let token = "";
   let petId = 0;
 
-  // Auth lives behind a separate IDP mock on its own port. Use a descriptor
-  // endpoint with `baseUrl: env("AUTH_BASE_URL")` so a single journey can hit
-  // two different services without faking a unified spec.
-  step("login", {
-    endpoint: {
-      method: "POST",
-      path: "/auth/login",
-      baseUrl: env("AUTH_BASE_URL"),
+  // Auth lives behind a separate IDP mock on its own port. The `acquireToken`
+  // reusable sub-journey owns that exchange, so this journey just invokes it
+  // and reads the minted token — the same bootstrap every authed flow shares.
+  invokeJourney(acquireToken, {
+    name: "login",
+    inputs: { username: env("USERNAME"), password: env("PASSWORD") },
+    assert: (out) => {
+      expect(out.expiresIn).toBe(3600);
     },
-    body: { username: env("USERNAME"), password: env("PASSWORD") },
-    assert(res) {
-      expect(res.status).toBe(200);
-      const body = res.body as { token: string; expiresIn: number };
-      expect(body.token).toBeDefined();
-      expect(body.expiresIn).toBe(3600);
-    },
-    after(res) {
-      token = (res.body as { token: string }).token;
+    after: (out) => {
+      token = out.token;
     },
   });
 
