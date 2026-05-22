@@ -16,7 +16,6 @@ import {
 } from "solid-js";
 import { api, type JourneyResult, type RunSummary, type StepResult } from "../api/client";
 import { runEvents, type PlannedNode as WirePlannedNode } from "../api/runEvents";
-import { parseSteps, type ParsedStep } from "../util/parseSteps";
 import {
   createLocalStorageRunStateStore,
   fnv1a,
@@ -97,11 +96,9 @@ function emptyRuntimeState(): JourneyRuntimeState {
 
 /**
  * Maps a wire `PlannedNode` (from `step:planned` or the plan endpoint) to the
- * page's `PlannedNode`, recursing into sub-journey children. `parsed` is the
- * source-parsed step list, consulted only to recover an endpoint token for a
- * step the runtime reported without method/path.
+ * page's `PlannedNode`, recursing into sub-journey children.
  */
-function mapPlannedNode(s: WirePlannedNode, parsed: ParsedStep[]): PlannedNode {
+function mapPlannedNode(s: WirePlannedNode): PlannedNode {
   const kind: "step" | "sub" = s.kind === "sub" ? "sub" : "step";
   const node: PlannedNode = { name: s.name, kind };
   if (kind === "step") {
@@ -109,13 +106,10 @@ function mapPlannedNode(s: WirePlannedNode, parsed: ParsedStep[]): PlannedNode {
       // Synthesize an inline-descriptor token so resolveIdleEndpoint can
       // produce the MethodBadge + URL subtext.
       node.endpoint = `{ method: "${s.method}", path: "${s.path}" }`;
-    } else {
-      const match = parsed.find((p) => p.name === s.name);
-      if (match?.endpoint !== undefined) node.endpoint = match.endpoint;
     }
   } else {
     // Recurse into the discovered child pipeline (nested subs included).
-    node.children = (s.children ?? []).map((c) => mapPlannedNode(c, parsed));
+    node.children = (s.children ?? []).map((c) => mapPlannedNode(c));
   }
   return node;
 }
@@ -178,15 +172,9 @@ export const JourneysPage: Component = () => {
     });
   }
 
-  // Endpoint catalog used to pre-resolve idle steps' method + URL before any
-  // run. Map keyed by the generated endpoint identifier (e.g. "findPetsByStatus").
+  // Endpoint catalog — only its `baseUrl` is needed now that the plan endpoint
+  // supplies each step's method + path directly.
   const [endpointsRes] = createResource(() => api.getEndpoints());
-  const endpointMap = createMemo(() => {
-    const list = endpointsRes()?.endpoints ?? [];
-    const m = new Map<string, { method: string; path: string }>();
-    for (const ep of list) m.set(ep.name, { method: ep.method, path: ep.path });
-    return m;
-  });
   // Prefer the selected environment's BASE_URL when /api/endpoints returns no
   // configured baseUrl (petstore-style projects set BASE_URL via env vars, not
   // journey.config.json). Falls back to the endpoint catalog value, then "".
@@ -196,19 +184,12 @@ export const JourneysPage: Component = () => {
     return endpointsRes()?.baseUrl ?? "";
   };
 
+  // Idle steps carry a synthesized `{ method: "GET", path: "/foo" }` token
+  // produced by `mapPlannedNode` from the plan endpoint's method + path.
   function resolveIdleEndpoint(
     token: string | undefined,
   ): { method: string; url: string } | undefined {
     if (!token) return undefined;
-    // Reference form: `endpoints.findPetsByStatus` / `e.findById` etc.
-    // parseSteps captures up to comma or newline, so the token may include
-    // trailing `});` — just match the leading identifier(s).
-    const refMatch = token.match(/^\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)?([A-Za-z_$][\w$]*)\b/);
-    if (refMatch) {
-      const ep = endpointMap().get(refMatch[1]!);
-      if (ep) return { method: ep.method, url: `${baseUrl()}${ep.path}` };
-    }
-    // Inline form: `{ method: "GET", path: "/foo" }`
     const methodMatch = token.match(/method\s*:\s*["']([A-Z]+)["']/);
     const pathMatch = token.match(/path\s*:\s*["']([^"']+)["']/);
     if (methodMatch && pathMatch) {
@@ -217,16 +198,14 @@ export const JourneysPage: Component = () => {
     return undefined;
   }
 
-  // Parsed step list + checksum for the currently selected journey. Used both
-  // to render the idle step list before any run and to detect drift between a
-  // cached run and the current on-disk source.
+  // Source checksum for the currently selected journey — used to detect drift
+  // between a cached run and the current on-disk source.
   const [idleSource] = createResource(selected, async (file) => {
     try {
       const { source } = await api.getJourneySource(file);
-      const src = source ?? "";
-      return { source: src, parsed: parseSteps(src), checksum: fnv1a(src) };
+      return { checksum: fnv1a(source ?? "") };
     } catch {
-      return { source: "", parsed: [] as ParsedStep[], checksum: "" };
+      return { checksum: "" };
     }
   });
 
@@ -244,11 +223,11 @@ export const JourneysPage: Component = () => {
     }
   });
 
-  // Best-effort plan tree for the selected journey, fetched from the server's
-  // plan endpoint. A source parse alone can't see `invokeJourney(...)` calls;
-  // the plan endpoint evaluates the journey (and its sub-journeys) so the
-  // timeline can render sub-journey rows — nested children included — before
-  // the first run. Resolves to `undefined` if the plan can't be loaded.
+  // Plan tree for the selected journey, fetched from the server's plan
+  // endpoint — the sole source for the idle timeline. The plan endpoint
+  // evaluates the journey (and its sub-journeys) so the timeline can render
+  // sub-journey rows — nested children included — before the first run.
+  // `failed: true` marks a journey body that could not be evaluated.
   const [idlePlan] = createResource(
     () => {
       const file = selected();
@@ -259,10 +238,9 @@ export const JourneysPage: Component = () => {
       try {
         const { journeys } = await api.getJourneyPlan(file, env);
         const steps = journeys?.[0]?.steps ?? [];
-        // Empty plan → treat as "no plan"; the source parse fallback wins.
-        return steps.length > 0 ? { file, steps } : undefined;
+        return { file, steps, failed: false };
       } catch {
-        return undefined;
+        return { file, steps: [] as WirePlannedNode[], failed: true };
       }
     },
   );
@@ -273,10 +251,9 @@ export const JourneysPage: Component = () => {
   // can't land on a journey the user has since switched away from.
   createEffect(() => {
     const plan = idlePlan();
-    if (!plan) return;
-    const parsed = untrack(() => idleSource()?.parsed) ?? [];
+    if (!plan || plan.failed) return;
     updateJourneyState(plan.file, {
-      plannedSteps: plan.steps.map((s) => mapPlannedNode(s, parsed)),
+      plannedSteps: plan.steps.map(mapPlannedNode),
     });
   });
 
@@ -395,9 +372,8 @@ export const JourneysPage: Component = () => {
             // This page renders one journey per file; ignore additional
             // journeys that might run in the same SSE stream.
             if (event.journeyIdx !== 0) break;
-            const parsed = idleSource()?.parsed ?? [];
             updateJourneyState(file, {
-              plannedSteps: event.steps.map((s) => mapPlannedNode(s, parsed)),
+              plannedSteps: event.steps.map(mapPlannedNode),
             });
             break;
           }
@@ -638,18 +614,10 @@ export const JourneysPage: Component = () => {
         >
           {(file) => {
             const state = (): JourneyRuntimeState => current() ?? emptyRuntimeState();
-            // Top-level pipeline for idle rendering: the runtime-broadcast plan
-            // when available, else the regex parse of the source (which can
-            // only see HTTP steps, never sub-journeys).
-            const idleNodes = (): PlannedNode[] => {
-              const planned = state().plannedSteps;
-              if (planned) return planned;
-              return (idleSource()?.parsed ?? []).map((p) => ({
-                name: p.name,
-                kind: "step" as const,
-                ...(p.endpoint !== undefined ? { endpoint: p.endpoint } : {}),
-              }));
-            };
+            // Top-level pipeline for idle rendering — the plan tree seeded
+            // from the plan endpoint, then overridden by a live run's
+            // `step:planned` broadcast.
+            const idleNodes = (): PlannedNode[] => state().plannedSteps ?? [];
             const stepCount = () =>
               Math.max(state().results?.[0]?.steps.length ?? 0, idleNodes().length);
             return (
@@ -678,6 +646,28 @@ export const JourneysPage: Component = () => {
                     }}
                   >
                     {state().error}
+                  </div>
+                </Show>
+
+                <Show
+                  when={
+                    idlePlan()?.failed === true &&
+                    !idlePlan.loading &&
+                    (state().plannedSteps?.length ?? 0) === 0 &&
+                    !state().results
+                  }
+                >
+                  <div
+                    data-testid="plan-unavailable"
+                    style={{
+                      padding: "10px 20px",
+                      "font-size": "12px",
+                      color: "var(--fg-2)",
+                      "border-bottom": "1px solid var(--bd-1)",
+                    }}
+                  >
+                    Plan unavailable — this journey's body could not be evaluated without running
+                    it. Run the journey to see its resolved steps.
                   </div>
                 </Show>
 

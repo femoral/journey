@@ -32,6 +32,24 @@ function sourceFor(file: string): string {
   return "";
 }
 
+// Plan tree the server's `GET /api/journeys/:file/plan` endpoint returns for
+// the checkout journey — the sole source for the idle timeline.
+const checkoutPlan = {
+  journeys: [
+    {
+      name: "checkout",
+      steps: [
+        { kind: "step", name: "addItem", method: "POST", path: "/cart/items" },
+        { kind: "step", name: "pay", method: "POST", path: "/cart/pay" },
+      ],
+    },
+  ],
+};
+
+function planFor(file: string): unknown {
+  return file === "checkout.journey.ts" ? checkoutPlan : { journeys: [] };
+}
+
 function sseFrames(events: unknown[]): string {
   return events.map((e) => `data: ${JSON.stringify(e)}`).join("\n\n") + "\n\n";
 }
@@ -129,8 +147,11 @@ interface StubOpts {
   captured?: Captured;
   runEvents?: string | Response;
   runIdByFile?: Record<string, string>;
-  /** Body returned for `GET /api/journeys/:file/plan`; defaults to an empty plan. */
-  plan?: unknown;
+  /**
+   * Body returned for `GET /api/journeys/:file/plan`; defaults to an empty
+   * plan. Pass a function to vary the plan per journey file.
+   */
+  plan?: unknown | ((file: string) => unknown);
 }
 
 function stubFetch(opts: StubOpts = {}) {
@@ -157,7 +178,12 @@ function stubFetch(opts: StubOpts = {}) {
       }
       const planMatch = url.match(/\/api\/journeys\/([^/]+)\/plan(?:\?|$)/);
       if (planMatch) {
-        return new Response(JSON.stringify(opts.plan ?? { journeys: [] }), {
+        const planFile = decodeURIComponent(planMatch[1]!);
+        const planBody =
+          typeof opts.plan === "function"
+            ? (opts.plan as (file: string) => unknown)(planFile)
+            : (opts.plan ?? { journeys: [] });
+        return new Response(JSON.stringify(planBody), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -515,7 +541,9 @@ describe("JourneysPage", () => {
     expect(screen.getByTestId("step-card-1").textContent).toContain("create pet");
   });
 
-  it("renders parsed steps in an idle state before any run", async () => {
+  it("renders planned steps in an idle state before any run", async () => {
+    vi.unstubAllGlobals();
+    stubFetch({ plan: planFor });
     renderWithConsole();
     await waitFor(() => {
       expect(screen.getByText("checkout.journey.ts")).toBeTruthy();
@@ -528,7 +556,8 @@ describe("JourneysPage", () => {
     expect(screen.queryByTestId("empty-run")).toBeNull();
     // Idle rows show "—" duration rather than 0ms.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
-    // Pre-resolved method + URL arrive after /api/endpoints resolves.
+    // Method + URL are resolved from the plan's method/path once
+    // /api/endpoints resolves the base URL.
     await waitFor(() => {
       expect(screen.getAllByText("POST").length).toBeGreaterThanOrEqual(2);
       expect(screen.getByText("https://api.test/cart/items")).toBeTruthy();
@@ -584,6 +613,8 @@ describe("JourneysPage", () => {
   });
 
   it("preserves last-run results when switching journeys and back", async () => {
+    vi.unstubAllGlobals();
+    stubFetch({ plan: planFor });
     renderWithConsole();
     await waitFor(() => {
       expect(screen.getByText("auth.journey.ts")).toBeTruthy();
