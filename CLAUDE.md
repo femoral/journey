@@ -32,7 +32,7 @@ Product overview, runnable example, and architecture diagram live in [`README.md
 | `@journey/codegen`         | OpenAPI → `generated/{models,endpoints}.ts` (wraps `openapi-typescript`)                                                   | —                                          |
 | `@journey/cli`             | `commander`-based CLI: `init`, `generate`, `run`, `serve` (SSE), `export k6`, `export postman`, `env list`. Bin: `journey` | core, codegen, k6-adapter, postman-adapter |
 | `@journey/gui`             | Tauri 2 + Solid + Kobalte + Tailwind. Ships as desktop app and as a Vite web build                                         | core                                       |
-| `@journey/k6-adapter`      | Transpiles `.journey.ts` → k6 script; `assert()` → k6 `check()`                                                            | —                                          |
+| `@journey/k6-adapter`      | Transpiles `.journey.ts` → k6 script; `assert()` → k6 `check()`                                                            | core (test only, devDep)                   |
 | `@journey/postman-adapter` | Serializes loaded `JourneyDef`/`StepDef` → Postman Collection v2.1.0 JSON + environment files                              | core (types only, devDep)                  |
 
 `@journey/docs` is the VitePress site (workspace member, not a library).

@@ -149,7 +149,11 @@ importers:
         specifier: ^2.1.2
         version: 2.1.9(@types/node@22.19.17)(jsdom@25.0.1)
 
-  packages/k6-adapter: {}
+  packages/k6-adapter:
+    devDependencies:
+      "@journey/core":
+        specifier: workspace:*
+        version: link:../core
 
   packages/postman-adapter:
     devDependencies:
