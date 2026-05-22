@@ -16,6 +16,11 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/cli/src/commands/exportK6.ts`
 - `packages/k6-adapter/src/index.ts`
 
+### `guide/cli/export-postman.md` — journey export postman
+
+- `packages/cli/src/commands/exportPostman.ts`
+- `packages/postman-adapter/src/index.ts`
+
 ### `guide/cli/generate.md` — journey generate
 
 - `packages/cli/src/commands/generate.ts`
@@ -250,6 +255,10 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 ### `packages/cli/src/commands/exportK6.ts`
 
 - `guide/cli/export-k6.md`
+
+### `packages/cli/src/commands/exportPostman.ts`
+
+- `guide/cli/export-postman.md`
 
 ### `packages/cli/src/commands/generate.ts`
 
@@ -492,3 +501,7 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 ### `packages/k6-adapter/src/index.ts`
 
 - `guide/cli/export-k6.md`
+
+### `packages/postman-adapter/src/index.ts`
+
+- `guide/cli/export-postman.md`

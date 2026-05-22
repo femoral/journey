@@ -64,6 +64,7 @@ export default defineConfig({
             { text: "journey generate", link: "/guide/cli/generate" },
             { text: "journey run", link: "/guide/cli/run" },
             { text: "journey export k6", link: "/guide/cli/export-k6" },
+            { text: "journey export postman", link: "/guide/cli/export-postman" },
             { text: "journey serve", link: "/guide/cli/serve" },
             { text: "journey env list", link: "/guide/cli/env-list" },
           ],

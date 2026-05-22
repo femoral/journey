@@ -14,14 +14,15 @@ All commands print errors as `journey: <message>` to stderr and exit with code `
 
 ## Commands
 
-| Command                            | Purpose                                          |
-| ---------------------------------- | ------------------------------------------------ |
-| [`journey init`](./init)           | Scaffold a new project from an OpenAPI spec.     |
-| [`journey generate`](./generate)   | Regenerate typed endpoints/models from the spec. |
-| [`journey run`](./run)             | Run one or more journeys.                        |
-| [`journey export k6`](./export-k6) | Transpile a journey into a k6 script.            |
-| [`journey serve`](./serve)         | Run the HTTP backend the GUI talks to.           |
-| [`journey env list`](./env-list)   | List configured environments.                    |
+| Command                                      | Purpose                                          |
+| -------------------------------------------- | ------------------------------------------------ |
+| [`journey init`](./init)                     | Scaffold a new project from an OpenAPI spec.     |
+| [`journey generate`](./generate)             | Regenerate typed endpoints/models from the spec. |
+| [`journey run`](./run)                       | Run one or more journeys.                        |
+| [`journey export k6`](./export-k6)           | Transpile a journey into a k6 script.            |
+| [`journey export postman`](./export-postman) | Export a journey as a Postman Collection.        |
+| [`journey serve`](./serve)                   | Run the HTTP backend the GUI talks to.           |
+| [`journey env list`](./env-list)             | List configured environments.                    |
 
 ## Global behaviour
 
