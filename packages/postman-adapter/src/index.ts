@@ -95,8 +95,11 @@ export type ExportNode =
 
 /** Note attached to every sub-journey folder's `description`. */
 const SUB_JOURNEY_NOTE =
-  "Sub-journey invocation. The Journey output cache (cacheKey / cacheTtlMs) is " +
-  "not translated to Postman — this folder re-runs on every collection run.";
+  "Sub-journey invocation. Postman's sidebar lists folders above sibling " +
+  "requests, so a sub-journey invoked mid-pipeline looks reordered there — " +
+  "execution order (Collection Runner / Newman) still follows the journey " +
+  "pipeline. The Journey output cache (cacheKey / cacheTtlMs) is not " +
+  "translated to Postman — this folder re-runs on every collection run.";
 
 // ---------------------------------------------------------------------------
 // Env proxy — env("KEY") returns "{{KEY}}" during step collection
