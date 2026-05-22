@@ -14,6 +14,8 @@ A **sub-journey** is a journey that other journeys invoke. It is registered once
 
 The motivating case is auth: a dozen journeys each need a bearer token. Without sub-journeys you either copy a `login` step into every file or smuggle one in through a helper that calls `step()`. A sub-journey makes the bootstrap a first-class, named, typed unit.
 
+The same applies to any **common endpoint** several journeys share — seeding a fixture before a flow, a teardown that hits a cleanup endpoint, a status poll. Anything you'd otherwise copy-paste as a step (or a cluster of steps) into multiple files belongs in a reusable journey instead. See [Common-endpoint sub-journeys](#common-endpoint-sub-journeys) below for a non-auth example.
+
 ## Two kinds of journey
 
 `journey()` has two modes, picked by the options argument:
@@ -117,6 +119,63 @@ State flows out exactly like a step's: `after(out)` closes over a caller-scoped 
 | `cacheKey`          | Opt into the output cache — see below.                                  |
 | `cacheTtlMs`        | Per-entry time-to-live.                                                 |
 | `cache`             | `"off"` disables caching for this one call.                             |
+
+## Common-endpoint sub-journeys
+
+Auth is the loudest case, but the pattern is not auth-specific. Any endpoint — or short sequence of endpoints — that several journeys hit the same way is a candidate: a fixture-seeding call, a cleanup call, a readiness poll.
+
+A **setup** sub-journey creates a fixture and `output()`s its id; parents invoke it at the start and read the id from `after`:
+
+```ts
+// journeys/helpers/fixtures.ts
+import { endpoints } from "../../generated/endpoints.js";
+import { expect, journey, output, step, z } from "@journey/core";
+
+export const seedPet = journey(
+  "fixtures.seed-pet",
+  {
+    reusable: true,
+    inputs: z.object({ name: z.string().min(1) }),
+    outputs: z.object({ petId: z.number() }),
+  },
+  (input) => {
+    step("create pet", {
+      endpoint: endpoints.createPet,
+      body: { name: input.name, status: "available" },
+      assert(res) {
+        expect(res.status).toBe(201);
+      },
+      after(res) {
+        output({ petId: res.body.id });
+      },
+    });
+  },
+);
+```
+
+```ts
+journey("update a seeded pet", () => {
+  let petId = 0;
+
+  invokeJourney(seedPet, {
+    name: "seed a pet",
+    inputs: { name: "Biscuit" },
+    after: (out) => {
+      petId = out.petId;
+    },
+  });
+
+  step("rename it", {
+    endpoint: endpoints.updatePet,
+    params: () => ({ id: petId }),
+    body: () => ({ name: "Biscuit II", status: "available" }),
+  });
+});
+```
+
+A **teardown** sub-journey is the mirror image — invoked last, its `inputs` carry the id to delete. Because `invokeJourney` is a pipeline node, a journey can be `seed → steps → teardown` end to end with no copied steps.
+
+> **Don't copy-paste the step.** Pasting the same `create pet` / `login` step into ten files means ten places to fix when the endpoint changes, and no type link between them. A reusable journey is one definition; the handle's input/output types are checked at every call site, and a rename refactors through the LSP.
 
 ## Nesting
 

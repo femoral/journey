@@ -203,11 +203,14 @@ step("signed request", {
 Each lazy field gets its own closure — they don't see each other's results. If `headers` and `body`
 share a base value, compute it in a closure variable both can read (or in a prior step's `after`).
 
-### Reusable sub-journey (auth bootstrap)
+### Reusable sub-journey (shared setup / common endpoints)
 
-When the same flow — almost always an auth bootstrap — is needed across many journey **files**,
-make it a **reusable journey** and invoke it as a pipeline node. This is the recommended idiom for
-shared setup.
+When the same call sequence is needed across many journey **files** — an auth bootstrap, seeding a
+fixture before a flow, a teardown that hits a common cleanup endpoint — make it a **reusable
+journey** and invoke it as a pipeline node. This is the recommended idiom for shared setup: it
+replaces both the copy-pasted step and the older helper-injected-step trick. The example below is
+auth (the most common case); the same shape covers any common-endpoint sequence — see the
+common-endpoint note after it.
 
 Define it once with `reusable: true` and a typed `inputs` / `outputs` schema (`z` is re-exported
 from `@journey/core` — a Journey project carries no deps, so `import { z } from "zod"` would not
@@ -261,6 +264,40 @@ journey("flow A", () => {
     endpoint: endpoints.thing,
     headers: () => ({ Authorization: `Bearer ${token}` }),
   });
+});
+```
+
+**Common-endpoint sub-journeys — not just auth.** The same shape factors any shared call sequence.
+A fixture a dozen journeys need (create a pet, capture its id) becomes a reusable journey invoked at
+the **start**; a teardown that hits a common cleanup endpoint becomes one invoked at the **end**.
+`invokeJourney` is a pipeline node — placeable anywhere a `step()` goes.
+
+```ts
+// journeys/helpers/fixtures.ts
+export const seedPet = journey(
+  "fixtures.seed-pet",
+  {
+    reusable: true,
+    inputs: z.object({ name: z.string().min(1) }),
+    outputs: z.object({ petId: z.number() }),
+  },
+  (input) => {
+    step("create pet", {
+      endpoint: endpoints.createPet,
+      body: { name: input.name, status: "available" },
+      assert: (res) => expect(res.status).toBe(201),
+      after: (res) => output({ petId: res.body.id }),
+    });
+  },
+);
+
+// in a parent journey
+let petId = 0;
+invokeJourney(seedPet, {
+  inputs: { name: "Biscuit" },
+  after: (out) => {
+    petId = out.petId;
+  },
 });
 ```
 

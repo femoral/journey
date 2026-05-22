@@ -150,6 +150,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/core/src/fetch.ts`
 - `packages/cli/src/server/runBroadcaster.ts`
 - `examples/petstore/journeys/multi-step-crud.journey.ts`
+- `examples/petstore/journeys/helpers/auth.ts`
 
 ### `guide/writing-journeys/request-inputs.md` — Request inputs — params, query, headers, body
 
@@ -256,6 +257,7 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 ### `examples/petstore/journeys/helpers/auth.ts`
 
+- `guide/writing-journeys/patterns.md`
 - `guide/writing-journeys/sub-journeys.md`
 
 ### `examples/petstore/journeys/multi-step-crud.journey.ts`

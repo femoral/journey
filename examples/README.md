@@ -66,6 +66,10 @@ the sample project doubles as living coverage for the runtime.
   two HTTP steps.
 - `sub-journey-nested.journey.ts` — two-level nesting: a reusable
   sub-journey that itself invokes another.
+- `sub-journey-fixture-cleanup.journey.ts` — non-auth common-endpoint
+  sub-journeys: `seedPet` and `removePet` (in `helpers/fixtures.ts`)
+  bracket the test steps as setup and teardown nodes — the create/delete
+  calls factored out of every file that needs a scratch pet.
 - `sub-journey-failure.journey.ts` — a sub-journey that fails (bad
   credentials); failure propagates and halts the parent run. Expected
   to fail.

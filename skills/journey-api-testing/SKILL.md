@@ -57,10 +57,10 @@ journey init my-api --spec ./openapi.yaml          # add --force to init into a 
    overwrite the copy if the source spec moves).
 4. Writes a minimal `journey.config.json`.
 5. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
-6. Writes `package.json` (`"type": "module"`, depends on `@journey/core`, dev-depends on `@journey/cli`, both pinned to `^<cli-version>`).
+6. Writes a minimal `package.json` (`"type": "module"`, `"private": true`) — **no dependencies, no install step**. The CLI bundles `@journey/core` and plants a `node_modules/@journey/core` symlink the first time a journey runs.
 7. Runs code generation once → `generated/endpoints.ts` + `generated/models.ts`.
 
-After init you'll see `Initialized Journey project at /abs/path (N operations).` followed by `Next: cd into the project and run \`pnpm install\` (or \`npm install\`).`Always run the install — without it,`journey run`fails with`Cannot find package '@journey/core'`. If `N`is`0`, an extra warning prints — your `generated/endpoints.ts`is empty and you'll only be able to use descriptor endpoints. A`swagger.json`/`swagger.yaml` works the same way; "Swagger" and "OpenAPI" are the same input here as long as it's OpenAPI 3.x or Swagger 2.x.
+After init you'll see `Initialized Journey project at /abs/path (N operations).` — `journey run` works immediately, there is **no per-project `pnpm install` / `npm install`** (the CLI satisfies the `@journey/core` import via the symlink it plants on first run). If `N` is `0`, an extra warning prints — your `generated/endpoints.ts` is empty and you'll only be able to use descriptor endpoints. A `swagger.json` / `swagger.yaml` works the same way; "Swagger" and "OpenAPI" are the same input here as long as it's OpenAPI 3.x or Swagger 2.x.
 
 ### Make it runnable: set `baseUrl`
 
@@ -222,10 +222,14 @@ a static value (`body: { username: env("USERNAME") }`) — the env is set before
 - **One journey = one user-meaningful flow** (sign up → create resource → read it back → delete it).
   Keep ordering meaningful; later steps depend on earlier ones via closures.
 - **Auth once, reuse everywhere**: extract the token in the auth step's `after`, read it from
-  `headers: () => ({ Authorization: \`Bearer ${token}\` })` in every protected step. When the same
-auth bootstrap is needed across many journey **files**, make it a reusable **sub-journey**
-(`journey(name, { reusable: true, inputs, outputs }, body)`) and `invokeJourney(handle, …)` it —
-  one typed, named unit instead of a copied step. See the patterns reference.
+  `headers: () => ({ Authorization: \`Bearer ${token}\` })` in every protected step.
+- **Shared setup → reusable sub-journey, not a copied step.** When the same call sequence is needed
+  across many journey **files** — an auth bootstrap, seeding a fixture, a teardown that hits a
+  common endpoint — make it a reusable **sub-journey**
+  (`journey(name, { reusable: true, inputs, outputs }, body)`) and `invokeJourney(handle, …)` it as
+  a pipeline node. One typed, named, LSP-renameable unit instead of a step copy-pasted into every
+  file (which drifts). **Anti-pattern:** copy-pasting a `login` / `seed` step across files. See the
+  patterns reference — _Reusable sub-journey_.
 - **Negative paths are journeys too**: a step that asserts `res.status` is `400`/`404`/`409` is
   perfectly normal — assert the failure you expect.
 - **Multiple journeys per file** is fine — `journey()` called N times registers N journeys, run in

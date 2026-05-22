@@ -265,6 +265,49 @@ describe("petstore — export structure", () => {
     ]);
   });
 
+  // ── sub-journey-fixture-cleanup ─────────────────────────────────────────────
+
+  it("sub-journey-fixture-cleanup: seed + teardown sub-journey folders bracket the test steps", async () => {
+    col = await load("sub-journey-fixture-cleanup");
+    expect(col.item).toHaveLength(1);
+    const folder = (col.item as Array<{ name: string; item: unknown[] }>)[0]!;
+    expect(folder.name).toBe("sub-journey fixture cleanup");
+    // Pipeline: [ sub "authenticate", sub "seed a pet", step, sub "tear down the pet", step ].
+    expect(folder.item).toHaveLength(5);
+
+    type Folder = {
+      name: string;
+      description?: string;
+      item: Array<{ name: string; request: { method: string } }>;
+    };
+    type Request = { name: string; request: { method: string } };
+
+    const auth = folder.item[0] as Folder;
+    expect(auth.name).toBe("authenticate");
+    expect(auth.description).toMatch(/Sub-journey/);
+
+    // Non-auth common-endpoint sub-journey: a single nested POST /pet folder.
+    const seed = folder.item[1] as Folder;
+    expect(seed.name).toBe("seed a pet");
+    expect(seed.description).toMatch(/Sub-journey/);
+    expect(seed.item).toHaveLength(1);
+    expect(seed.item[0]!.name).toBe("create fixture pet");
+    expect(seed.item[0]!.request.method).toBe("POST");
+
+    // Teardown sub-journey: a single nested DELETE /pet/{id} folder.
+    const teardown = folder.item[3] as Folder;
+    expect(teardown.name).toBe("tear down the pet");
+    expect(teardown.description).toMatch(/Sub-journey/);
+    expect(teardown.item).toHaveLength(1);
+    expect(teardown.item[0]!.name).toBe("delete fixture pet");
+    expect(teardown.item[0]!.request.method).toBe("DELETE");
+
+    // The two verification steps are siblings of the nested folders.
+    const steps = [folder.item[2], folder.item[4]] as Request[];
+    expect(steps.map((s) => s.name)).toEqual(["the seeded pet is available", "the pet is gone"]);
+    expect(steps.every((s) => s.request.method === "GET")).toBe(true);
+  });
+
   // ── k6-load-stages ──────────────────────────────────────────────────────────
 
   it("k6-load-stages: exported when no --tag filter; same endpoint as k6-smoke-tag", async () => {
