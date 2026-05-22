@@ -42,6 +42,7 @@ export default defineConfig({
             { text: "State between steps", link: "/guide/writing-journeys/state" },
             { text: "expect() matchers", link: "/guide/writing-journeys/expect" },
             { text: "env() in journeys", link: "/guide/writing-journeys/env" },
+            { text: "Sub-journeys", link: "/guide/writing-journeys/sub-journeys" },
             { text: "Patterns", link: "/guide/writing-journeys/patterns" },
           ],
         },
@@ -95,6 +96,7 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: "Runtime", link: "/reference/journey-api/runtime" },
+            { text: "Sub-journeys", link: "/reference/journey-api/sub-journey" },
             { text: "HTTP", link: "/reference/journey-api/http" },
             { text: "Fetch", link: "/reference/journey-api/fetch" },
             { text: "Endpoints", link: "/reference/journey-api/endpoints" },

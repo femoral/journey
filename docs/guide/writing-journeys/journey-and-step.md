@@ -25,6 +25,10 @@ Two consequences:
 1. **`step()` must be called inside a `journey()` body.** Calling it at the top level throws: `step("foo") called outside a journey(...) body`.
 2. **Top-level code runs at import time, not per-run.** Put per-run state inside the `journey` callback — module-level variables are shared across runs.
 
+::: tip Reusable journeys
+`journey()` has a second mode — `journey(name, { reusable: true, inputs, outputs }, body)` returns a typed handle instead of registering for auto-run, so other journeys can `invokeJourney(handle, …)` it as a pipeline node. See [Sub-journeys](./sub-journeys).
+:::
+
 ## `step(name, options)`
 
 ```ts

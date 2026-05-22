@@ -161,6 +161,13 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/core/src/runtime.ts`
 - `examples/petstore/journeys/multi-step-crud.journey.ts`
 
+### `guide/writing-journeys/sub-journeys.md` — Sub-journeys
+
+- `packages/core/src/runtime.ts`
+- `packages/core/src/cache.ts`
+- `examples/petstore/journeys/helpers/auth.ts`
+- `examples/petstore/journeys/sub-journey-at-start.journey.ts`
+
 ### `guide/writing-journeys/timeouts.md` — Timeouts
 
 - `packages/core/src/http.ts`
@@ -215,6 +222,12 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 
 - `packages/core/src/runtime.ts`
 
+### `reference/journey-api/sub-journey.md` — Sub-journeys
+
+- `packages/core/src/runtime.ts`
+- `packages/core/src/cache.ts`
+- `packages/core/src/logger.ts`
+
 ### `reference/openapi-codegen.md` — OpenAPI codegen
 
 - `packages/codegen/src/index.ts`
@@ -241,11 +254,19 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `index.md`
 
+### `examples/petstore/journeys/helpers/auth.ts`
+
+- `guide/writing-journeys/sub-journeys.md`
+
 ### `examples/petstore/journeys/multi-step-crud.journey.ts`
 
 - `guide/writing-journeys/index.md`
 - `guide/writing-journeys/patterns.md`
 - `guide/writing-journeys/state.md`
+
+### `examples/petstore/journeys/sub-journey-at-start.journey.ts`
+
+- `guide/writing-journeys/sub-journeys.md`
 
 ### `packages/cli/src/commands/envList.ts`
 
@@ -337,6 +358,11 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `reference/openapi-codegen.md`
 
+### `packages/core/src/cache.ts`
+
+- `guide/writing-journeys/sub-journeys.md`
+- `reference/journey-api/sub-journey.md`
+
 ### `packages/core/src/config.ts`
 
 - `guide/getting-started.md`
@@ -391,6 +417,7 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `guide/environments/secrets.md`
 - `reference/journey-api/logging.md`
+- `reference/journey-api/sub-journey.md`
 
 ### `packages/core/src/runtime.ts`
 
@@ -402,8 +429,10 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 - `guide/writing-journeys/patterns.md`
 - `guide/writing-journeys/request-inputs.md`
 - `guide/writing-journeys/state.md`
+- `guide/writing-journeys/sub-journeys.md`
 - `reference/journey-api/fetch.md`
 - `reference/journey-api/runtime.md`
+- `reference/journey-api/sub-journey.md`
 - `reference/step-options.md`
 
 ### `packages/gui/src/App.tsx`

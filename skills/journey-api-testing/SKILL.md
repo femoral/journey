@@ -222,7 +222,10 @@ a static value (`body: { username: env("USERNAME") }`) — the env is set before
 - **One journey = one user-meaningful flow** (sign up → create resource → read it back → delete it).
   Keep ordering meaningful; later steps depend on earlier ones via closures.
 - **Auth once, reuse everywhere**: extract the token in the auth step's `after`, read it from
-  `headers: () => ({ Authorization: \`Bearer ${token}\` })` in every protected step.
+  `headers: () => ({ Authorization: \`Bearer ${token}\` })` in every protected step. When the same
+auth bootstrap is needed across many journey **files**, make it a reusable **sub-journey**
+(`journey(name, { reusable: true, inputs, outputs }, body)`) and `invokeJourney(handle, …)` it —
+  one typed, named unit instead of a copied step. See the patterns reference.
 - **Negative paths are journeys too**: a step that asserts `res.status` is `400`/`404`/`409` is
   perfectly normal — assert the failure you expect.
 - **Multiple journeys per file** is fine — `journey()` called N times registers N journeys, run in
@@ -235,8 +238,8 @@ a static value (`body: { username: env("USERNAME") }`) — the env is set before
   response goes in that prior step's `after`.
 
 More worked patterns — auth capture, external seeding, conditional assertions, multi-service flows,
-shared helper steps, `journey()` `options` with `tags` / `k6` — are in
-`references/patterns-and-troubleshooting.md`.
+reusable sub-journeys (`invokeJourney` + `output`, the output cache), `journey()` `options` with
+`tags` / `k6` — are in `references/patterns-and-troubleshooting.md`.
 
 ## 4. Run journeys with the CLI
 
@@ -325,6 +328,6 @@ stderr.
 ## Where to go deeper
 
 `references/patterns-and-troubleshooting.md` — full `journey.config.json` field table; the
-`journey()` `options` arg (`tags`, `k6`); worked patterns (auth capture, external fixture seeding,
-conditional assertions, multi-service flows, shared helper steps, two journeys per file); the
-extended error catalogue; and notes on `export k6` / `export postman` / `serve`.
+`journey()` `options` arg (`tags`, `k6`, reusable mode); worked patterns (auth capture, external
+fixture seeding, conditional assertions, multi-service flows, reusable sub-journeys, two journeys
+per file); the extended error catalogue; and notes on `export k6` / `export postman` / `serve`.

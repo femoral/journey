@@ -14,9 +14,9 @@ function journey(name: string, body: () => void | Promise<void>): void;
 function journey(name: string, options: JourneyOptions, body: () => void | Promise<void>): void;
 ```
 
-Registers a journey. The body runs at registration time (collecting `step()` calls), not per run. See [Writing journeys → journey() and step()](../../guide/writing-journeys/journey-and-step).
+Registers a journey. The body runs at registration time (collecting `step()` and `invokeJourney()` calls), not per run. See [Writing journeys → journey() and step()](../../guide/writing-journeys/journey-and-step).
 
-The optional `options` object carries cross-cutting metadata — currently `tags` (used by [`journey export k6 --tag`](../../guide/cli/export-k6) to filter which journeys ship to k6) and `k6` (load options baked into the emitted k6 script's `export const options`).
+The optional `options` object carries cross-cutting metadata. For an **entry** journey: `tags` (used by [`journey export k6 --tag`](../../guide/cli/export-k6) to filter which journeys ship to k6) and `k6` (load options baked into the emitted k6 script's `export const options`). With `{ reusable: true, inputs, outputs }` it switches to the **reusable** overload — returns a `JourneyHandle` instead of registering for auto-run. See [Sub-journeys](./sub-journey).
 
 ## `step(name, options)`
 
@@ -67,7 +67,9 @@ Evaluates `def.body()` once, capturing every `step()` and `invokeJourney()` call
 function collectSubPipeline(call: SubJourneyCallDef): Promise<ReadonlyArray<PipelineNode>>;
 ```
 
-Given a `{ kind: "sub" }` node's `def` (a `SubJourneyCallDef`, as returned by `collectPipeline`), resolves the call's `inputs` and evaluates the referenced reusable journey's body with them — so `input.*` references inside the child resolve. Returns the child's pipeline nodes. Best-effort: if input resolution throws, the child is collected with `undefined` input. Exporters call this recursively to walk a journey into its full nested tree.
+Given a `{ kind: "sub" }` node's `def` (a `SubJourneyCallDef`, as returned by `collectPipeline`), resolves the call's `inputs` and evaluates the referenced reusable journey's body with them — so `input.*` references inside the child resolve. Returns the child's pipeline nodes. Best-effort: if input resolution throws, the child is collected with `undefined` input.
+
+A reusable journey may itself invoke another, so the returned nodes can contain further `sub` nodes — exporters call `collectSubPipeline` recursively to walk a journey into its full nested tree. This re-entrancy is capped at 8 levels at execution time; the runtime throws beyond that.
 
 ## `getRegisteredJourneys()`
 

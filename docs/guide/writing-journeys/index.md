@@ -61,6 +61,7 @@ Read in this order if you're new:
 7. [`expect()` matchers](./expect) — the built-in assertion helper.
 8. [Timeouts](./timeouts) — per-step `timeoutMs`.
 9. [`env()` in journeys](./env) — reading environment variables.
-10. [Patterns](./patterns) — auth capture, fixture seeding, conditional assertions.
+10. [Sub-journeys](./sub-journeys) — reusable journeys invoked from another journey.
+11. [Patterns](./patterns) — auth capture, fixture seeding, conditional assertions.
 
 The full petstore journey — using every HTTP method against a single resource — lives at [`examples/petstore/journeys/multi-step-crud.journey.ts`](https://github.com/femoral/journey/blob/main/examples/petstore/journeys/multi-step-crud.journey.ts).

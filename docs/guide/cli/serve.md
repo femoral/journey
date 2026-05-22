@@ -13,22 +13,29 @@ sources:
 Start the HTTP backend the GUI talks to. Also usable standalone for custom UIs or scripting against a running project.
 
 ```sh
-journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecure]
+journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecure] \
+              [--cache <mode>] [--cache-ttl <ms>]
 ```
 
 ## Flags
 
-| Flag              | Type    | Default     | Required | Purpose                                                                                                                                      |
-| ----------------- | ------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--port <n>`      | number  | `5181`      | No       | TCP port to listen on.                                                                                                                       |
-| `--host <host>`   | string  | `127.0.0.1` | No       | Host to bind to. Default is localhost-only.                                                                                                  |
-| `--project <dir>` | path    | `cwd`       | No       | Project directory (absolute or relative to `cwd`).                                                                                           |
-| `--debug`         | boolean | `false`     | No       | Log every request/response while running journeys.                                                                                           |
-| `--insecure`      | boolean | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`. |
+| Flag               | Type                                  | Default     | Required | Purpose                                                                                                                                      |
+| ------------------ | ------------------------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <n>`       | number                                | `5181`      | No       | TCP port to listen on.                                                                                                                       |
+| `--host <host>`    | string                                | `127.0.0.1` | No       | Host to bind to. Default is localhost-only.                                                                                                  |
+| `--project <dir>`  | path                                  | `cwd`       | No       | Project directory (absolute or relative to `cwd`).                                                                                           |
+| `--debug`          | boolean                               | `false`     | No       | Log every request/response while running journeys.                                                                                           |
+| `--insecure`       | boolean                               | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`. |
+| `--cache <mode>`   | `off` \| `run` \| `process` \| `disk` | `process`   | No       | Sub-journey output cache lifetime. See below.                                                                                                |
+| `--cache-ttl <ms>` | integer                               | —           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds.                                                                        |
 
 ## Behaviour
 
 Exposes REST endpoints for project metadata, journeys, runs, run replay, environments, and spec-drift detection. CORS is enabled (`Access-Control-Allow-Origin: *`). Runs until `SIGINT` / `SIGTERM`.
+
+## Sub-journey output cache
+
+`serve` holds **one** cache for its whole lifetime, shared across every run triggered through the API. With the default `--cache=process`, a sub-journey output cached during one run (one that supplies a `cacheKey`) is replayed on the next — an auth token stays hot between GUI run-button presses instead of re-minting each time. `--cache=disk` additionally persists it across server restarts; `--cache=run` clears it after each run; `--cache=off` disables it. `--cache-ttl <ms>` caps entry age. See [`journey run` → Sub-journey output cache](./run#sub-journey-output-cache) for the mode table.
 
 ## Output
 

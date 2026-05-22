@@ -68,7 +68,8 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **`headers` and `body` accept functions** so they evaluate after prior steps run. Static values are also fine.
 - **`endpoint`** is either a generated reference (typed response) or a `{ method, path, baseUrl? }` descriptor (response is `unknown` unless annotated).
 - **`assert(res)`** is the assertion hook — typed when `endpoint` is a reference. **`after(res)`** is the extraction/side-effect hook.
-- **`journey()` accepts an optional middle `options` arg** — `{ tags?: string[]; k6?: K6JourneyOptions }`. `tags` drives `journey export k6 --tag` filtering; `k6` is baked into the emitted script's `export const options` (module-scoped, so at most one journey per file may declare a `k6` block).
+- **`journey()` has two modes via the optional middle `options` arg.** Entry (default): `{ tags?, k6? }` — `tags` drives `journey export k6 --tag` filtering, `k6` is baked into the emitted script's `export const options` (module-scoped, so at most one journey per file may declare a `k6` block). Reusable (`{ reusable: true, inputs?, outputs? }`): returns a typed `JourneyHandle` instead of registering for auto-run. The two option sets are disjoint; a reusable journey pushed into the entry registry fails fast in `runAllRegistered`.
+- **Sub-journeys are pipeline nodes.** `invokeJourney(handle, opts)` registers a call to a reusable journey as a peer of `step()` in the parent body. The child terminates with `output(value)`; the parent's `invokeJourney({ after, assert })` receives it. Nesting is capped at 8 levels. The output cache is opt-in **per call** via `cacheKey`; lifetime is process-wide policy set by the `--cache=off|run|process|disk` flag on `run`/`serve` (default `process`). Exporters do not translate the cache — k6 inlines child steps under `group()`, postman emits a nested folder; both ignore `cacheKey`/`cacheTtlMs`/`cache` and document the divergence.
 - **Codegen is one-way.** `pnpm journey generate` writes only under `generated/`; never touches `journeys/`. Don't hand-edit `generated/*.ts`.
 - **One runtime core, multiple surfaces.** CLI, GUI, and k6 adapter all consume `@journey/core`. Don't fork run-loop logic per surface.
 - **Local-first / zero lock-in.** No cloud, no login. Project files are diffable JSON / YAML / TS.
@@ -77,7 +78,7 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 
 ## Where to find what
 
-- **Run loop and APIs** → `packages/core/src/{runtime,http,expect,env,logger,history}.ts`
+- **Run loop and APIs** → `packages/core/src/{runtime,http,expect,env,logger,history,cache}.ts`
 - **CLI commands** → `packages/cli/src/commands/{init,generate,run,serve,exportK6,exportPostman,envList}.ts`
 - **CLI dev server (SSE backend)** → `packages/cli/src/server/{server,runner,runBroadcaster,specDrift,consolePatch}.ts`
 - **GUI pages** → `packages/gui/src/pages/{ProjectPage,EndpointsPage,JourneysPage,EnvironmentsPage,FilesPage,JourneyEditorPage,HistoryPage,DiffPage}.tsx`
