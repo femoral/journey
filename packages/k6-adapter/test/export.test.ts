@@ -58,6 +58,13 @@ journey("list pets", () => {
       expect(src).toContain("listPets:");
       expect(src).toContain('journey("list pets"');
       expect(src).toContain("export default function");
+      // The inlined generated endpoints carried TypeScript (`as unknown as
+      // EndpointRef`, `as const`); k6's goja engine is JS-only, so the emitted
+      // script must be free of all type syntax.
+      expect(src).not.toContain("as unknown as");
+      expect(src).not.toContain("as const");
+      expect(src).not.toContain("EndpointRef");
+      expect(src).not.toMatch(/^\s*type\s/m);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -206,8 +213,10 @@ journey("checkout", () => {
       );
       const result = await exportToK6({ journeyFile: journey });
       const src = await readFile(result.outFile, "utf8");
-      expect(src).toContain("// ----- inlined from ./helpers/auth.js -----");
-      // `export const` from the helper is rewritten to a plain `const`.
+      // The helper body is inlined as a plain `const` (its `export` rewritten,
+      // its `@journey/core` import stripped). The TS→JS transpile pass strips
+      // the `// ----- inlined from -----` marker comment, so assert on the
+      // surviving declaration rather than the cosmetic marker.
       expect(src).toContain("const acquireToken =");
       expect(src).not.toContain("export const acquireToken");
       expect(src).not.toContain("@journey/core");
@@ -282,6 +291,66 @@ journey("list pets", () => {
       const combined = stdout + stderr;
       expect(combined).toMatch(/list pets.*fetch/);
       expect(combined).toMatch(/checks.*100\.00%/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it("k6 run executes a journey that imports a generated endpoints.ts", async () => {
+    // Regression: generated `endpoints.ts` carries TypeScript (`type` alias,
+    // `as unknown as EndpointRef`, `as const`). The inliner splices raw source,
+    // so without a TS→JS transpile pass those leak into the emitted script and
+    // goja fails to parse it. This is the real-world path (typed endpoints) the
+    // descriptor-based tests above don't cover.
+    const testDir = dirname(fileURLToPath(import.meta.url));
+    const base = join(testDir, "..", ".test-tmp");
+    await mkdir(base, { recursive: true });
+    const tmp = await mkdtemp(join(base, "k6-typed-run-"));
+    try {
+      await mkdir(join(tmp, "generated"));
+      await writeFile(
+        join(tmp, "generated", "endpoints.ts"),
+        `import type { EndpointRef } from "@journey/core";
+type JsonResponse = unknown;
+export const endpoints = {
+  listPets: { method: "GET", path: "/pets", operationId: "listPets" } as unknown as EndpointRef<JsonResponse>,
+} as const;
+`,
+      );
+      const journey = join(tmp, "typed.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step, expect } from "@journey/core";
+import { endpoints } from "./generated/endpoints.js";
+
+journey("typed pets", () => {
+  step("fetch", {
+    endpoint: endpoints.listPets,
+    assert(res) {
+      expect(res.status).toBe(200);
+    },
+  });
+});
+`,
+      );
+      const { outFile } = await exportToK6({ journeyFile: journey });
+      const child = spawn("k6", ["run", "--vus=1", "--iterations=1", outFile], {
+        env: { ...process.env, JOURNEY_BASE_URL: baseUrl },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+      const code: number = await new Promise((res, rej) => {
+        child.once("error", rej);
+        child.once("close", (c) => res(c ?? 0));
+      });
+      expect(code, `k6 failed:\n${stdout}\n${stderr}`).toBe(0);
+      expect(stdout + stderr).toMatch(/checks.*100\.00%/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

@@ -150,6 +150,10 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(jsdom@25.0.1)
 
   packages/k6-adapter:
+    dependencies:
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
     devDependencies:
       "@journey/core":
         specifier: workspace:*

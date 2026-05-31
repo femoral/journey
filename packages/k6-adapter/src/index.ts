@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
+import { transform } from "esbuild";
 import { inlineRelativeImports, stripCoreImports, stripTypeImports } from "./inline.js";
 import { ENTRY_SOURCE, SHIM_SOURCE } from "./shim.js";
 
@@ -35,6 +36,16 @@ export async function exportToK6(opts: ExportK6Options): Promise<ExportK6Result>
   const inlined = await inlineRelativeImports(withoutTypeImports, journeyPath);
   const withoutCore = stripCoreImports(inlined);
 
+  // The inlined user code is still TypeScript — generated `endpoints.ts` carries
+  // `type` aliases, `as unknown as` casts, `as const`, etc. k6's JS engine (goja)
+  // can't parse those, so strip all type syntax to plain JS. Import/export lines
+  // are already gone (stripped above + rewritten by the inliner), so a bare
+  // `transform` with the TS loader just erases types.
+  const { code: userCode } = await transform(withoutCore, {
+    loader: "ts",
+    format: "esm",
+  });
+
   const fileBase = basename(journeyPath).replace(/\.journey\.ts$/, "");
   const outFile = opts.outFile
     ? resolve(process.cwd(), opts.outFile)
@@ -51,7 +62,7 @@ export async function exportToK6(opts: ExportK6Options): Promise<ExportK6Result>
     SHIM_SOURCE,
     optionsBlock,
     "// ===== user journey =====",
-    withoutCore.trimStart(),
+    userCode.trimStart(),
     ENTRY_SOURCE,
   ].join("\n");
 
