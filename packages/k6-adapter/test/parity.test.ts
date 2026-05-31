@@ -137,10 +137,11 @@ describe("k6 shim ⇄ @journey/core parity", () => {
     const coreRequests = await runViaCore();
     const { requests: k6Requests, groups } = await runViaK6Shim();
 
-    // Sanity: the fixture is login (sub-journey) → list → create.
+    // Sanity: login (sub-journey) → get one (param + query) → create. The
+    // `get one` URL proves path interpolation (`{id}` → 42) and query building.
     expect(coreRequests.map((r) => `${r.method} ${r.url}`)).toEqual([
       `POST ${BASE}/login`,
-      `GET ${BASE}/items`,
+      `GET ${BASE}/items/42?verbose=true&limit=5`,
       `POST ${BASE}/items`,
     ]);
 

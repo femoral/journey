@@ -100,6 +100,16 @@ function __mergeHeaders(h) {
   return out;
 }
 
+function __buildQuery(query) {
+  if (!query) return "";
+  const parts = [];
+  for (const k of Object.keys(query)) {
+    const v = query[k];
+    if (v !== undefined) parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(String(v)));
+  }
+  return parts.length ? "?" + parts.join("&") : "";
+}
+
 // Evaluate a journey body, collecting its pipeline nodes (step + sub).
 function __collectNodes(body, input) {
   const nodes = [];
@@ -113,9 +123,13 @@ function __executeStep(current, journeyName) {
   const opts = current.opts;
   const headers = typeof opts.headers === "function" ? opts.headers() : (opts.headers || {});
   const body = typeof opts.body === "function" ? opts.body() : opts.body;
-  const path = __interpolate(opts.endpoint.path, opts.params);
+  // params and query are lazy in the core runtime — resolve a function form
+  // before interpolating the path / building the query string, like headers/body.
+  const params = typeof opts.params === "function" ? opts.params() : opts.params;
+  const query = typeof opts.query === "function" ? opts.query() : opts.query;
+  const path = __interpolate(opts.endpoint.path, params);
   const base = opts.endpoint.baseUrl || __BASE_URL;
-  const url = base + path;
+  const url = base + path + __buildQuery(query);
   const requestHeaders = __mergeHeaders(headers);
   if (body !== undefined && !("Content-Type" in requestHeaders) && !("content-type" in requestHeaders)) {
     requestHeaders["Content-Type"] = "application/json";

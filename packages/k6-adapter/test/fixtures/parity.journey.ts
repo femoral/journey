@@ -1,7 +1,8 @@
 // Fixture for the k6-shim ⇄ @journey/core parity test. Exercises the surfaces
-// the shim re-implements: HTTP steps, function-valued `headers`/`body` (lazy
-// evaluation order matters — `token` is set by the sub-journey's `after`),
-// an `assert` + `after` hook, and one `invokeJourney` sub-journey call.
+// the shim re-implements: HTTP steps, function-valued `headers`/`body`/`params`/
+// `query` (lazy evaluation order matters — `token` is set by the sub-journey's
+// `after`), path-param interpolation, query-string building, an `assert` +
+// `after` hook, and one `invokeJourney` sub-journey call.
 import { journey, step, invokeJourney, output, expect, z } from "@journey/core";
 
 let token = "";
@@ -22,8 +23,12 @@ journey("parity fixture", () => {
       token = out.token;
     },
   });
-  step("list", {
-    endpoint: { method: "GET", path: "/items" },
+  // Function-valued params (path interpolation) + query (string building) — the
+  // surfaces the shim historically dropped. `id` lands in `/items/{id}`.
+  step("get one", {
+    endpoint: { method: "GET", path: "/items/{id}" },
+    params: () => ({ id: 42 }),
+    query: () => ({ verbose: true, limit: 5 }),
     headers: () => ({ Authorization: `Bearer ${token}` }),
     assert(res) {
       counter.n += 1;
