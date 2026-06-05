@@ -20,9 +20,10 @@ journey("sub-journey at start", () => {
       username: env("USERNAME"),
       password: env("PASSWORD"),
     },
-    // Cache key — the runtime resolves and reports it on the group event.
-    // The cache store itself lands in a later milestone issue (#90); until
-    // then this is a documented no-op that already shows the call shape.
+    // Cache key — a hit replays the token and skips the child run. The key
+    // captures everything that varies the output (the credentials, keyed by
+    // username here). `journey export k6` honors this in-memory per-VU and
+    // `journey export postman` skips the request via a collection variable.
     cacheKey: () => env("USERNAME"),
     after: (out) => {
       token = out.token;

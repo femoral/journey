@@ -40,15 +40,30 @@ export interface PostmanVariable {
   value: string;
 }
 
+/** A Postman script — `exec` is the source split into lines. */
+export interface PostmanScript {
+  type: "text/javascript";
+  exec: string[];
+}
+
+/** A pre-request or test script bound to an item (request or folder). */
+export interface PostmanEvent {
+  listen: "prerequest" | "test";
+  script: PostmanScript;
+}
+
 /**
  * A Postman folder. `item` holds requests and/or nested folders, so a
  * sub-journey invocation nests as a child folder among the parent's requests.
+ * `event` carries folder-scoped pre-request / test scripts (used to translate
+ * the sub-journey output cache — see `buildItems`).
  */
 export interface PostmanFolder {
   name: string;
   item: Array<PostmanItem | PostmanFolder>;
   description?: string;
   variable?: PostmanVariable[];
+  event?: PostmanEvent[];
 }
 
 export interface PostmanInfo {
@@ -91,6 +106,14 @@ export type ExportNode =
       inputs?: Record<string, unknown>;
       /** The child journey's own pipeline, already resolved. */
       nodes: ExportNode[];
+      /**
+       * Composite cache key `childName:resolvedKey`, resolved at export time.
+       * Present only when the call opts into the cache (`cacheKey` set,
+       * `cache !== "off"`); its presence emits the folder cache scripts.
+       */
+      cacheKey?: string;
+      /** Per-call TTL in ms; absent → cache for the whole collection run. */
+      cacheTtlMs?: number;
     };
 
 /** Note attached to every sub-journey folder's `description`. */
@@ -98,8 +121,14 @@ const SUB_JOURNEY_NOTE =
   "Sub-journey invocation. Postman's sidebar lists folders above sibling " +
   "requests, so a sub-journey invoked mid-pipeline looks reordered there — " +
   "execution order (Collection Runner / Newman) still follows the journey " +
-  "pipeline. The Journey output cache (cacheKey / cacheTtlMs) is not " +
-  "translated to Postman — this folder re-runs on every collection run.";
+  "pipeline.";
+
+/** Appended to a cached sub-journey folder's `description`. */
+const CACHE_NOTE =
+  " Cached: a collection variable holds an expiry timestamp; while it is valid " +
+  "this folder's requests are skipped (pm.execution.skipRequest), so a shared " +
+  "sub-journey runs once per collection run. Reliable for single-request " +
+  "sub-journeys; output values are not carried into Postman variables.";
 
 // ---------------------------------------------------------------------------
 // Env proxy — env("KEY") returns "{{KEY}}" during step collection
@@ -207,6 +236,54 @@ function inputsToVariables(inputs: Record<string, unknown> | undefined): Postman
   }));
 }
 
+/** Collection-variable name for a composite cache key. */
+function cacheVarName(cacheKey: string): string {
+  return "__jc_" + cacheKey.replace(/[^A-Za-z0-9]+/g, "_");
+}
+
+/**
+ * Folder-scoped scripts that translate the sub-journey output cache. The
+ * prerequest skips the folder's request while a cache window is valid; the test
+ * opens a window on the first (uncached) run. Both run once per request inside
+ * the folder, so this is reliable for single-request sub-journeys (the common
+ * auth case). The set is idempotent — re-running it for a skipped request never
+ * extends the window — so it is correct whether or not Newman runs the folder
+ * test for a skipped request.
+ *
+ * No TTL → a far-future sentinel, i.e. the entry never expires within a run.
+ */
+function cacheEvents(cacheKey: string, ttlMs: number | undefined): PostmanEvent[] {
+  const v = cacheVarName(cacheKey);
+  const expExpr = ttlMs !== undefined ? `Date.now() + ${ttlMs}` : "9999999999999";
+  const vLit = JSON.stringify(v);
+  return [
+    {
+      listen: "prerequest",
+      script: {
+        type: "text/javascript",
+        exec: [
+          `var __exp = pm.collectionVariables.get(${vLit});`,
+          `if (__exp && Date.now() < Number(__exp)) {`,
+          `  pm.execution.skipRequest();`,
+          `}`,
+        ],
+      },
+    },
+    {
+      listen: "test",
+      script: {
+        type: "text/javascript",
+        exec: [
+          `var __exp = pm.collectionVariables.get(${vLit});`,
+          `if (!(__exp && Date.now() < Number(__exp))) {`,
+          `  pm.collectionVariables.set(${vLit}, String(${expExpr}));`,
+          `}`,
+        ],
+      },
+    },
+  ];
+}
+
 async function buildItems(
   nodes: ReadonlyArray<ExportNode>,
 ): Promise<Array<PostmanItem | PostmanFolder>> {
@@ -219,10 +296,11 @@ async function buildItems(
     const folder: PostmanFolder = {
       name: node.name,
       item: await buildItems(node.nodes),
-      description: SUB_JOURNEY_NOTE,
+      description: node.cacheKey ? SUB_JOURNEY_NOTE + CACHE_NOTE : SUB_JOURNEY_NOTE,
     };
     const variables = inputsToVariables(node.inputs);
     if (variables.length > 0) folder.variable = variables;
+    if (node.cacheKey) folder.event = cacheEvents(node.cacheKey, node.cacheTtlMs);
     items.push(folder);
   }
   return items;

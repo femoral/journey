@@ -275,6 +275,185 @@ describe("export postman — collection structure", () => {
   });
 });
 
+// ── bundle (single collection) tests ──────────────────────────────────────────
+
+const SECOND_JOURNEY = `\
+import { journey, step } from "@journey/core";
+journey("orders api", () => {
+  step("list orders", { endpoint: { method: "GET", path: "/orders" } });
+});
+`;
+
+const CHECKOUT_A = `\
+import { journey, step } from "@journey/core";
+journey("checkout", () => {
+  step("a", { endpoint: { method: "GET", path: "/a" } });
+});
+`;
+
+const CHECKOUT_B = `\
+import { journey, step } from "@journey/core";
+journey("checkout", () => {
+  step("b", { endpoint: { method: "GET", path: "/b" } });
+});
+`;
+
+describe("export postman — bundle", () => {
+  it("aggregates journeys across files into one collection", async () => {
+    const root = await makeFullProject();
+    try {
+      await writeFile(join(root, "journeys", "items.journey.ts"), ITEMS_JOURNEY);
+      await writeFile(join(root, "journeys", "orders.journey.ts"), SECOND_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const col = JSON.parse(
+        await readFile(join(outDir, "journeys.postman_collection.json"), "utf8"),
+      );
+      expect(col.info.name).toBe("journeys");
+      const names = (col.item as Array<{ name: string }>).map((f) => f.name).sort();
+      expect(names).toEqual(["items api", "orders api"]);
+
+      // Environment written exactly once alongside the single collection.
+      const env = JSON.parse(await readFile(join(outDir, "test.postman_environment.json"), "utf8"));
+      expect(env.name).toBe("test");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows --out with a directory when --bundle is set", async () => {
+    const root = await makeProject();
+    try {
+      await writeFile(join(root, "journeys", "items.journey.ts"), ITEMS_JOURNEY);
+      await writeFile(join(root, "journeys", "orders.journey.ts"), SECOND_JOURNEY);
+      const outFile = join(root, "all.postman_collection.json");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        out: outFile,
+        bundle: true,
+        tags: [],
+      });
+
+      const col = JSON.parse(await readFile(outFile, "utf8"));
+      expect(col.item).toHaveLength(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("honors --name as the bundled collection name", async () => {
+    const root = await makeProject();
+    try {
+      await writeFile(join(root, "journeys", "items.journey.ts"), ITEMS_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        name: "Suite",
+      });
+
+      const col = JSON.parse(
+        await readFile(join(outDir, "journeys.postman_collection.json"), "utf8"),
+      );
+      expect(col.info.name).toBe("Suite");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("suffixes duplicate journey names across files", async () => {
+    const root = await makeProject();
+    try {
+      await writeFile(join(root, "journeys", "a.journey.ts"), CHECKOUT_A);
+      await writeFile(join(root, "journeys", "b.journey.ts"), CHECKOUT_B);
+      const outDir = join(root, "out");
+      await runExportPostman({ path: join(root, "journeys"), outDir, tags: [], bundle: true });
+
+      const col = JSON.parse(
+        await readFile(join(outDir, "journeys.postman_collection.json"), "utf8"),
+      );
+      const names = (col.item as Array<{ name: string }>).map((f) => f.name);
+      // Files discovered alphabetically: a.journey.ts → "checkout", b → "checkout (2)".
+      expect(names).toEqual(["checkout", "checkout (2)"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── sub-journey cache ─────────────────────────────────────────────────────────
+
+// Two entry journeys that both invoke the same reusable journey with the same
+// cacheKey — in a bundle they share one cache slot, so the child runs once.
+const CACHE_BUNDLE = `\
+import { journey, step, output, invokeJourney, z } from "@journey/core";
+
+const acquireToken = journey(
+  "auth.token",
+  { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
+  (input) => {
+    step("exchange", {
+      endpoint: { method: "POST", path: "/token" },
+      body: () => ({ user: input.user }),
+      after: () => output({ token: "t" }),
+    });
+  },
+);
+
+journey("first flow", () => {
+  invokeJourney(acquireToken, { name: "authenticate", inputs: { user: "alice" }, cacheKey: (i) => i.user });
+  step("step a", { endpoint: { method: "GET", path: "/a" } });
+});
+
+journey("second flow", () => {
+  invokeJourney(acquireToken, { name: "authenticate", inputs: { user: "alice" }, cacheKey: (i) => i.user });
+  step("step b", { endpoint: { method: "GET", path: "/b" } });
+});
+`;
+
+// Same shape, but no cacheKey — the child runs in every journey.
+const NOCACHE_BUNDLE = CACHE_BUNDLE.replace(/, cacheKey: \(i\) => i\.user/g, "");
+
+describe("export postman — sub-journey cache", () => {
+  it("emits folder-level skip/set scripts for a cached sub-journey", async () => {
+    const root = await makeProject();
+    try {
+      await writeFile(join(root, "journeys", "flows.journey.ts"), CACHE_BUNDLE);
+      const outDir = join(root, "out");
+      await runExportPostman({ path: join(root, "journeys"), outDir, tags: [], bundle: true });
+
+      const col = JSON.parse(
+        await readFile(join(outDir, "journeys.postman_collection.json"), "utf8"),
+      );
+      const authFolder = col.item[0].item[0];
+      expect(authFolder.name).toBe("authenticate");
+
+      const pre = authFolder.event
+        .find((e: { listen: string }) => e.listen === "prerequest")
+        .script.exec.join("\n");
+      const test = authFolder.event
+        .find((e: { listen: string }) => e.listen === "test")
+        .script.exec.join("\n");
+      expect(pre).toContain("pm.execution.skipRequest()");
+      // Composite key childName:resolvedKey → sanitized collection-variable name.
+      expect(test).toContain('"__jc_auth_token_alice"');
+      expect(test).toContain("pm.collectionVariables.set");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 // ── environment export tests ──────────────────────────────────────────────────
 
 describe("export postman — environment files", () => {
@@ -445,6 +624,87 @@ describe("Newman e2e — sub-journeys", () => {
       expect(summary.run.stats.requests.total).toBe(2);
       expect(hits.some((h) => h.method === "POST" && h.url === "/token")).toBe(true);
       expect(hits.some((h) => h.method === "POST" && h.url === "/orders")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+// ── Newman e2e — sub-journey cache ────────────────────────────────────────────
+
+describe("Newman e2e — sub-journey cache", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: Array<{ method: string; url: string }> = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      hits.push({ method: req.method ?? "", url: req.url ?? "" });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ token: "t" }));
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const addr = server.address() as { port: number };
+    baseUrl = `http://127.0.0.1:${addr.port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  const tokenHits = () => hits.filter((h) => h.method === "POST" && h.url === "/token").length;
+
+  it("runs a shared cached sub-journey once across a bundled collection", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "flows.journey.ts"), CACHE_BUNDLE);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "journeys.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // The second journey's `authenticate` folder is skipped — /token once.
+      expect(tokenHits()).toBe(1);
+      // Both parents' own steps still fire.
+      expect(hits.some((h) => h.url === "/a")).toBe(true);
+      expect(hits.some((h) => h.url === "/b")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("runs the sub-journey in every flow without a cacheKey", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "flows.journey.ts"), NOCACHE_BUNDLE);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "journeys.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      expect(tokenHits()).toBe(2);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

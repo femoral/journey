@@ -42,6 +42,33 @@ async function resolveSubInputs(
 }
 
 /**
+ * Resolve a sub-journey call's cache opts into the composite key + TTL the
+ * Postman adapter emits. Mirrors the core runtime: caching is active only when
+ * a `cacheKey` is supplied and `cache !== "off"`. The key resolves at export
+ * time (a function is called with the resolved `inputs`; under `ENV_PROXY`,
+ * `env("X")` yields the stable literal `"{{X}}"`). A throwing key degrades to
+ * no caching rather than aborting the export.
+ */
+function resolveSubCache(
+  call: SubJourneyCallDef,
+  inputs: Record<string, unknown> | undefined,
+): { cacheKey?: string; cacheTtlMs?: number } {
+  if (call.cacheKey === undefined || call.cache === "off") return {};
+  let resolvedKey: string;
+  try {
+    const rk = typeof call.cacheKey === "function" ? call.cacheKey(inputs) : call.cacheKey;
+    if (typeof rk !== "string") return {};
+    resolvedKey = rk;
+  } catch {
+    return {};
+  }
+  return {
+    cacheKey: `${call.handle.name}:${resolvedKey}`,
+    ...(call.cacheTtlMs !== undefined ? { cacheTtlMs: call.cacheTtlMs } : {}),
+  };
+}
+
+/**
  * Resolve a journey's `PipelineNode[]` into the `ExportNode` tree the postman
  * adapter renders, recursing into each sub-journey via `collectSubPipeline`.
  * A discovery failure degrades to an empty folder rather than aborting.
@@ -67,7 +94,14 @@ async function toExportNodes(
         // Child body could not be discovered — emit the folder empty.
       }
     }
-    out.push({ kind: "sub", name, ...(inputs ? { inputs } : {}), nodes: childNodes });
+    const cache = resolveSubCache(node.def, inputs);
+    out.push({
+      kind: "sub",
+      name,
+      ...(inputs ? { inputs } : {}),
+      ...cache,
+      nodes: childNodes,
+    });
   }
   return out;
 }
@@ -84,13 +118,31 @@ export interface ExportPostmanCliOptions {
   name?: string;
   env?: string;
   allEnvs?: boolean;
+  /** Aggregate every matching journey across all files into ONE collection. */
+  bundle?: boolean;
   /** Override cwd for locating journey.config.json (used by tests). */
   projectDir?: string;
 }
 
+/** Output file name for `--bundle` when no explicit `--out` is given. */
+const BUNDLE_BASENAME = "journeys.postman_collection.json";
+
 function matches(def: JourneyDef, tags: string[]): boolean {
   if (tags.length === 0) return true;
   return tags.every((t) => def.options?.tags?.includes(t) === true);
+}
+
+/**
+ * De-duplicate folder names within a bundle. Two files can each declare a
+ * journey of the same name; Postman tolerates duplicate folders but they read
+ * ambiguously, so the second and later collisions get a ` (n)` suffix.
+ */
+function uniqueFolderName(name: string, seen: Map<string, number>): string {
+  const n = seen.get(name) ?? 0;
+  seen.set(name, n + 1);
+  if (n === 0) return name;
+  console.warn(`Duplicate journey name "${name}" across files — renamed to "${name} (${n + 1})".`);
+  return `${name} (${n + 1})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +181,10 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
   }
 
   const isDir = info.isDirectory();
-  if (isDir && opts.out) {
+  if (isDir && opts.out && !opts.bundle) {
     throw new Error(
-      "--out is only valid with a single journey file. Use --out-dir for directories.",
+      "--out is only valid with a single journey file, or with --bundle. " +
+        "Use --out-dir for per-file directory output.",
     );
   }
 
@@ -160,7 +213,70 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
   let exported = 0;
   const writtenEnvs = new Set<string>();
 
+  // Environment export, deduped: --all-envs writes every environment once,
+  // --env writes the named one once, regardless of how many collections share
+  // the same output directory.
+  async function writeEnvs(envOutDir: string): Promise<void> {
+    if (!environmentsDir) return;
+    if (opts.allEnvs && !writtenEnvs.has("__all__")) {
+      writtenEnvs.add("__all__");
+      const envNames = await listEnvironments(environmentsDir);
+      for (const envName of envNames) {
+        const envFile = await exportEnvironment(environmentsDir, envName, envOutDir);
+        console.log(`Wrote Postman environment → ${envFile}`);
+      }
+    } else if (opts.env && !writtenEnvs.has(opts.env)) {
+      writtenEnvs.add(opts.env);
+      const envFile = await exportEnvironment(environmentsDir, opts.env, envOutDir);
+      console.log(`Wrote Postman environment → ${envFile}`);
+    }
+  }
+
   try {
+    if (opts.bundle) {
+      // Bundle: one collection whose top-level folders are every matching
+      // journey across every file.
+      const mergedFolders: PostmanFolder[] = [];
+      const seenNames = new Map<string, number>();
+
+      for (const file of files) {
+        const defs = await loadJourneyDefs(file);
+        const matching = defs.filter((d) => matches(d, tags));
+        if (matching.length === 0) {
+          if (tags.length > 0) console.log(`Skipped (no matching journey) → ${file}`);
+          continue;
+        }
+        for (const def of matching) {
+          const pipeline = await collectPipeline(def);
+          const nodes = await toExportNodes(pipeline, 0);
+          const folder = await buildFolder(def.name, nodes);
+          folder.name = uniqueFolderName(folder.name, seenNames);
+          mergedFolders.push(folder);
+        }
+      }
+
+      if (mergedFolders.length === 0) {
+        if (tags.length > 0) console.log(`No journeys matched tags: ${tags.join(", ")}`);
+        return 0;
+      }
+
+      const outFile = opts.out
+        ? resolve(process.cwd(), opts.out)
+        : opts.outDir
+          ? resolve(process.cwd(), opts.outDir, BUNDLE_BASENAME)
+          : resolve(process.cwd(), BUNDLE_BASENAME);
+
+      const collection = buildCollection(opts.name ?? "journeys", mergedFolders);
+      const collectionOutDir = dirname(outFile);
+      await mkdir(collectionOutDir, { recursive: true });
+      await writeFile(outFile, JSON.stringify(collection, null, 2), "utf8");
+      console.log(`Wrote Postman collection → ${outFile}`);
+      exported++;
+
+      await writeEnvs(opts.outDir ? resolve(process.cwd(), opts.outDir) : collectionOutDir);
+      return 0;
+    }
+
     for (const file of files) {
       const defs = await loadJourneyDefs(file);
       const matching = defs.filter((d) => matches(d, tags));
@@ -196,22 +312,7 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
       exported++;
 
       // Export environments (deduped across files)
-      if (environmentsDir) {
-        const envOutDir = opts.outDir ? resolve(process.cwd(), opts.outDir) : collectionOutDir;
-
-        if (opts.allEnvs && !writtenEnvs.has("__all__")) {
-          writtenEnvs.add("__all__");
-          const envNames = await listEnvironments(environmentsDir);
-          for (const envName of envNames) {
-            const envFile = await exportEnvironment(environmentsDir, envName, envOutDir);
-            console.log(`Wrote Postman environment → ${envFile}`);
-          }
-        } else if (opts.env && !writtenEnvs.has(opts.env)) {
-          writtenEnvs.add(opts.env);
-          const envFile = await exportEnvironment(environmentsDir, opts.env, envOutDir);
-          console.log(`Wrote Postman environment → ${envFile}`);
-        }
-      }
+      await writeEnvs(opts.outDir ? resolve(process.cwd(), opts.outDir) : collectionOutDir);
     }
   } finally {
     clearActiveEnvironment();

@@ -143,6 +143,7 @@ export function buildProgram(): Command {
     .option("--name <name>", "Override the collection name")
     .option("--env <name>", "Export named environment as a Postman environment file")
     .option("--all-envs", "Export all environments as Postman environment files")
+    .option("--bundle", "Aggregate every matching journey (across all files) into one collection")
     .description(
       "Export one or more journeys as a Postman Collection v2.1.0 (path may be a file or directory)",
     )
@@ -156,6 +157,7 @@ export function buildProgram(): Command {
           name?: string;
           env?: string;
           allEnvs?: boolean;
+          bundle?: boolean;
         },
       ) =>
         handle(() =>
@@ -166,6 +168,7 @@ export function buildProgram(): Command {
             ...(options.name !== undefined ? { name: options.name } : {}),
             ...(options.env !== undefined ? { env: options.env } : {}),
             ...(options.allEnvs !== undefined ? { allEnvs: options.allEnvs } : {}),
+            ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
             tags: options.tag,
           }),
         ),
