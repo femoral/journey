@@ -8,6 +8,27 @@ let __currentNodes = null;
 let __outputSlot = null;
 const __MAX_SUB_DEPTH = 8;
 
+// Sub-journey output cache — mirrors the runtime's MemorySubJourneyCache.
+// Scope is per-VU: k6 gives each VU its own JS runtime, and module-scoped state
+// persists across that VU's iterations (there is no cross-VU mutable shared
+// state — SharedArray is read-only). So a cached value is reused across the
+// iterations of one VU; each VU warms its own copy. Set JOURNEY_CACHE=off to
+// force every iteration cold (true per-iteration cost for load measurement).
+const __subCache = {};
+const __cacheOff = __ENV.JOURNEY_CACHE === "off";
+function __cacheGet(key) {
+  const e = __subCache[key];
+  if (!e) return undefined;
+  if (e.expiresAt !== undefined && Date.now() >= e.expiresAt) {
+    delete __subCache[key];
+    return undefined;
+  }
+  return e;
+}
+function __cacheSet(key, value, ttlMs) {
+  __subCache[key] = ttlMs !== undefined ? { value: value, expiresAt: Date.now() + ttlMs } : { value: value };
+}
+
 // Minimal no-op stand-in for zod. Reusable journeys declare \`inputs\` / \`outputs\`
 // schemas via \`z\`, but k6 has no zod runtime and the schemas are not enforced
 // in exported scripts — every access or call returns the same chainable proxy.
@@ -17,8 +38,8 @@ const z = new Proxy(function () {}, {
   construct() { return z; },
 });
 
-// note: sub-journey cacheKey / cacheTtlMs / cache opts are NOT translated to
-// k6 — every VU iteration re-runs the child journey. See the export-k6 docs.
+// Sub-journey cacheKey / cacheTtlMs / cache opts ARE honored — see __runSub
+// and the per-VU note on __subCache above.
 function journey(name, optsOrBody, maybeBody) {
   const body = typeof optsOrBody === "function" ? optsOrBody : maybeBody;
   const opts = typeof optsOrBody === "function" ? null : optsOrBody;
@@ -153,6 +174,8 @@ function __executeStep(current, journeyName) {
 }
 
 // Inline a sub-journey node under a k6 group() named after the child journey.
+// On a cache hit the child's requests are skipped entirely and the stored
+// output is replayed; the parent's assert/after still run either way.
 function __runSub(node, depth) {
   if (depth >= __MAX_SUB_DEPTH) {
     throw new Error("invokeJourney: sub-journey nesting exceeded " + __MAX_SUB_DEPTH + " levels");
@@ -162,12 +185,32 @@ function __runSub(node, depth) {
   const label = opts.name || handle.name;
   let input = opts.inputs;
   if (typeof input === "function") input = input();
-  const childNodes = __collectNodes(handle.body, input);
+
+  // Cache active only when a cacheKey is supplied and not disabled — mirrors
+  // the core runtime. Composite key is childName:resolvedKey.
+  let resolvedKey;
+  if (opts.cacheKey !== undefined) {
+    resolvedKey = typeof opts.cacheKey === "function" ? opts.cacheKey(input) : opts.cacheKey;
+  }
+  const cacheKeyStr =
+    !__cacheOff && resolvedKey !== undefined && opts.cache !== "off"
+      ? handle.name + ":" + resolvedKey
+      : undefined;
+
   const prevSlot = __outputSlot;
   const slot = { value: undefined };
   __outputSlot = slot;
   try {
-    group(label, () => { __runNodes(childNodes, handle.name, depth + 1); });
+    let hit = false;
+    if (cacheKeyStr !== undefined) {
+      const entry = __cacheGet(cacheKeyStr);
+      if (entry !== undefined) { slot.value = entry.value; hit = true; }
+    }
+    if (!hit) {
+      const childNodes = __collectNodes(handle.body, input);
+      group(label, () => { __runNodes(childNodes, handle.name, depth + 1); });
+      if (cacheKeyStr !== undefined) __cacheSet(cacheKeyStr, slot.value, opts.cacheTtlMs);
+    }
   } finally {
     __outputSlot = prevSlot;
   }

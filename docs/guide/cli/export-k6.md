@@ -125,11 +125,25 @@ Nesting works to 8 levels.
 `output(value)` in a child step's `after` flows to the call's `after(out)` /
 `assert(out)` hooks, exactly as it does in a normal run.
 
-The output cache does **not** translate. `cacheKey`, `cacheTtlMs`, and `cache`
-on an `invokeJourney` call are ignored — every VU iteration re-runs the child
-journey in full. This is deliberate: k6 measures the real per-iteration cost,
-and a hot cache would understate it. The emitted shim carries a comment noting
-the divergence.
+The [output cache](../writing-journeys/sub-journeys#the-output-cache) **is**
+honored, in memory, mirroring `journey run`. A call with a `cacheKey` (and
+`cache` not `"off"`) is looked up by the composite key `childName:resolvedKey`;
+a hit replays the stored output and **skips the child's requests entirely**, so
+its endpoints aren't hammered every iteration. `cacheTtlMs` sets the expiry
+(absent → no expiry). The parent's `assert(out)` / `after(out)` still run on a
+hit, with the cached value.
+
+The cache scope is **per-VU**: k6 gives each VU its own JS runtime and there is
+no cross-VU mutable shared state ([`SharedArray`](https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/)
+is read-only), so a cached value is reused across one VU's iterations and each
+VU warms its own copy. This matches how sub-journeys are typically used — as
+fixture helpers (acquire a token, seed data) that set up the real test surface
+rather than being the thing under load. To measure true cold per-iteration cost
+instead, force every iteration to re-run the child:
+
+```sh
+JOURNEY_CACHE=off k6 run my.journey.k6.js
+```
 
 Reusable journeys declare `inputs` / `outputs` schemas with `z`, but k6 has no
 zod runtime, so the schemas are replaced by a no-op stub — child inputs and
