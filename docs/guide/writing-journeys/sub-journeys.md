@@ -232,7 +232,7 @@ A failing assert / `after` / network error inside the child throws out of the su
 
 - **GUI** — the sub-journey is a collapsible timeline row; expand it to see the child's steps with their own pass/fail badges. A cache hit carries a badge.
 - **`journey export k6`** — child steps are inlined under a k6 `group()` named after the call. The cache is honored in memory, per-VU; a hit skips the child's requests. `JOURNEY_CACHE=off` forces every iteration cold. See [export k6](../cli/export-k6#sub-journeys).
-- **`journey export postman`** — the call becomes a nested folder; inputs become folder-scoped variables. A `cacheKey`'d call skips its request via a collection-variable expiry (reliable for single-request sub-journeys; output values aren't carried). See [export postman](../cli/export-postman#sub-journeys).
+- **`journey export postman`** — the call becomes a nested folder; inputs become folder-scoped variables. A `cacheKey`'d call skips its request via a collection-variable expiry (reliable for single-request sub-journeys). The child's `output(value)` isn't carried by default, but the experimental `--thread-state` flag threads it (and step-to-step state) through a collection variable. See [export postman](../cli/export-postman#sub-journeys).
 
 ## Reference
 

@@ -1,4 +1,5 @@
 import type { StepDef } from "@journey/core";
+import { journeyResetEvent, stepPrerequest, stepTest } from "./stateThread.js";
 
 // ---------------------------------------------------------------------------
 // Postman Collection v2.1.0 types
@@ -32,6 +33,8 @@ export interface PostmanRequest {
 export interface PostmanItem {
   name: string;
   request: PostmanRequest;
+  /** Request-scoped pre-request / test scripts (used by state threading). */
+  event?: PostmanEvent[];
 }
 
 /** Folder-scoped variable — sub-journey inputs are serialized as these. */
@@ -114,6 +117,13 @@ export type ExportNode =
       cacheKey?: string;
       /** Per-call TTL in ms; absent → cache for the whole collection run. */
       cacheTtlMs?: number;
+      /**
+       * The call's `after(out)` / `assert(out)` hooks. Under `--thread-state`
+       * they run on the sub-folder's terminal request, consuming the child's
+       * `output(...)`.
+       */
+      after?: (out: unknown) => void | Promise<void>;
+      assert?: (out: unknown) => void | Promise<void>;
     };
 
 /** Note attached to every sub-journey folder's `description`. */
@@ -205,8 +215,14 @@ function buildPostmanUrl(
 // Item builders
 // ---------------------------------------------------------------------------
 
-async function buildRequestItem(s: StepDef): Promise<PostmanItem> {
-  const params = await tryResolve(s.options.params);
+async function buildRequestItem(s: StepDef, threadState = false): Promise<PostmanItem> {
+  // Under state threading a dynamic (function) `params` is resolved at runtime
+  // via pm.variables, so leave its path slots as `{{key}}` placeholders here
+  // rather than baking the export-time value.
+  const params =
+    threadState && typeof s.options.params === "function"
+      ? undefined
+      : await tryResolve(s.options.params);
   const query = await tryResolve(s.options.query);
   const headers = await tryResolve(s.options.headers);
   const body = await tryResolve(s.options.body);
@@ -296,18 +312,54 @@ function cacheEvents(cacheKey: string, ttlMs: number | undefined): PostmanEvent[
   ];
 }
 
+interface BuildOpts {
+  threadState: boolean;
+}
+
+const SCRIPT = (exec: string[]): PostmanScript => ({ type: "text/javascript", exec });
+
+/**
+ * @param parentHooks  Under `--thread-state`, the enclosing sub-journey calls'
+ *   `assert`/`after` hooks, attached to the terminal request of the sub-tree so
+ *   they run against the child's `output(...)`. Inner-to-outer order.
+ */
 async function buildItems(
   nodes: ReadonlyArray<ExportNode>,
+  opts: BuildOpts,
+  parentHooks: ReadonlyArray<(out: unknown) => unknown> = [],
 ): Promise<Array<PostmanItem | PostmanFolder>> {
   const items: Array<PostmanItem | PostmanFolder> = [];
-  for (const node of nodes) {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]!;
+    const isLast = i === nodes.length - 1;
+    // Parent hooks bubble only to the terminal request of the whole sub-tree.
+    const hooksHere = isLast ? parentHooks : [];
+
     if (node.kind === "step") {
-      items.push(await buildRequestItem(node.def));
+      const item = await buildRequestItem(node.def, opts.threadState);
+      if (opts.threadState) {
+        const events: PostmanEvent[] = [];
+        const pre = stepPrerequest(node.def);
+        const test = stepTest(node.def, hooksHere);
+        if (pre) events.push({ listen: "prerequest", script: SCRIPT(pre) });
+        if (test) events.push({ listen: "test", script: SCRIPT(test) });
+        if (events.length > 0) item.event = events;
+      }
+      items.push(item);
       continue;
     }
+
+    // Sub-journey folder. Its own assert/after attach to its terminal child,
+    // followed by any hooks bubbling from an enclosing sub when this folder is
+    // itself the terminal node.
+    const ownHooks = opts.threadState
+      ? ([node.assert, node.after].filter(Boolean) as Array<(out: unknown) => unknown>)
+      : [];
+    const childHooks = [...ownHooks, ...hooksHere];
+
     const folder: PostmanFolder = {
       name: node.name,
-      item: await buildItems(node.nodes),
+      item: await buildItems(node.nodes, opts, childHooks),
       description: node.cacheKey ? SUB_JOURNEY_NOTE + CACHE_NOTE : SUB_JOURNEY_NOTE,
     };
     const variables = inputsToVariables(node.inputs);
@@ -322,12 +374,28 @@ async function buildItems(
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Options for {@link buildFolder}. */
+export interface BuildFolderOpts {
+  /**
+   * Experimental: thread journey closure-state through a collection variable so
+   * sub-journey outputs and step-to-step state reach later requests. Emits
+   * per-request pre-request/test scripts and a folder-level carrier reset.
+   */
+  threadState?: boolean;
+}
+
 /** Build the top-level Postman folder for a journey from its resolved tree. */
 export async function buildFolder(
   name: string,
   nodes: ReadonlyArray<ExportNode>,
+  opts: BuildFolderOpts = {},
 ): Promise<PostmanFolder> {
-  return { name, item: await buildItems(nodes) };
+  const threadState = opts.threadState ?? false;
+  const folder: PostmanFolder = { name, item: await buildItems(nodes, { threadState }) };
+  if (threadState) {
+    folder.event = [{ listen: "prerequest", script: SCRIPT(journeyResetEvent(name)) }];
+  }
+  return folder;
 }
 
 export function buildCollection(name: string, folders: PostmanFolder[]): PostmanCollection {

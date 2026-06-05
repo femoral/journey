@@ -12,21 +12,23 @@ Export one `.journey.ts` file or every `.journey.ts` in a directory into [Postma
 
 ```sh
 journey export postman <path> [--out <file>] [--out-dir <dir>] [--tag <tag>...] \
-                               [--name <name>] [--env <name>] [--all-envs] [--bundle]
+                               [--name <name>] [--env <name>] [--all-envs] [--bundle] \
+                               [--thread-state]
 ```
 
 ## Arguments and flags
 
-| Argument / flag    | Type   | Default                                                     | Required | Purpose                                                                                       |
-| ------------------ | ------ | ----------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `<path>`           | path   | —                                                           | Yes      | A `.journey.ts` file or a directory of them.                                                  |
-| `--out <path>`     | path   | `<journey basename>.postman_collection.json` next to source | No       | Output file path. Single-file mode only.                                                      |
-| `--out-dir <path>` | path   | next to each source                                         | No       | Directory-mode output dir; emitted files are `<basename>.postman_collection.json`.            |
-| `--tag <tag>`      | string | —                                                           | No       | Repeatable. Skip files whose journeys do not all carry every listed tag (AND across repeats). |
-| `--name <name>`    | string | journey file basename                                       | No       | Override the collection's `info.name`.                                                        |
-| `--env <name>`     | string | —                                                           | No       | Also export `environments/<name>.json` as a Postman environment file.                         |
-| `--all-envs`       | flag   | off                                                         | No       | Export every configured environment as a Postman environment file.                            |
-| `--bundle`         | flag   | off                                                         | No       | Aggregate every matching journey across all files into **one** collection (see below).        |
+| Argument / flag    | Type   | Default                                                     | Required | Purpose                                                                                                                      |
+| ------------------ | ------ | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `<path>`           | path   | —                                                           | Yes      | A `.journey.ts` file or a directory of them.                                                                                 |
+| `--out <path>`     | path   | `<journey basename>.postman_collection.json` next to source | No       | Output file path. Single-file mode only.                                                                                     |
+| `--out-dir <path>` | path   | next to each source                                         | No       | Directory-mode output dir; emitted files are `<basename>.postman_collection.json`.                                           |
+| `--tag <tag>`      | string | —                                                           | No       | Repeatable. Skip files whose journeys do not all carry every listed tag (AND across repeats).                                |
+| `--name <name>`    | string | journey file basename                                       | No       | Override the collection's `info.name`.                                                                                       |
+| `--env <name>`     | string | —                                                           | No       | Also export `environments/<name>.json` as a Postman environment file.                                                        |
+| `--all-envs`       | flag   | off                                                         | No       | Export every configured environment as a Postman environment file.                                                           |
+| `--bundle`         | flag   | off                                                         | No       | Aggregate every matching journey across all files into **one** collection (see below).                                       |
+| `--thread-state`   | flag   | off                                                         | No       | **Experimental.** Thread journey state through collection variables so sub-journey outputs reach later requests (see below). |
 
 ## Behaviour
 
@@ -69,7 +71,7 @@ Postman's sidebar lists folders **above** sibling requests, so a sub-journey inv
 A sub-journey call that opts into the [output cache](../writing-journeys/sub-journeys#the-output-cache) (sets a `cacheKey`, with `cache` not `"off"`) gets folder-level pre-request / test scripts that translate the cache to a **collection variable**. The pre-request skips the folder's request while the variable's expiry timestamp is still valid (`pm.execution.skipRequest()`); the test opens the window on the first run. The variable name derives from the composite key `<childJourneyName>:<resolvedKey>`, so the **same** reusable journey invoked from several places shares one slot — combined with [`--bundle`](#bundling-all-journeys-into-one-collection), a shared auth sub-journey runs **once** per collection run. `cacheTtlMs` becomes the expiry; with no TTL the entry lasts the whole run.
 
 ::: warning Scope and limits
-Postman runs folder scripts **per request in the folder**, not once for the folder, so the skip is reliable for **single-request** sub-journeys (the common auth-token case). And Postman has no closure return values, so a child's `output(value)` is still **not** carried into Postman variables — the cache here skips redundant HTTP calls, it does not thread the child's output into later requests. Pass data via `{{variable}}` references for now. Requires Newman ≥ 6 / Postman ≥ 10.12 for `pm.execution.skipRequest()`.
+Postman runs folder scripts **per request in the folder**, not once for the folder, so the skip is reliable for **single-request** sub-journeys (the common auth-token case). By default a child's `output(value)` is not carried into Postman variables — the cache here skips redundant HTTP calls, it does not thread the child's output into later requests. To carry output and step-to-step state, add [`--thread-state`](#state-threading-experimental). Requires Newman ≥ 6 / Postman ≥ 10.12 for `pm.execution.skipRequest()`.
 :::
 
 ## Bundling all journeys into one collection
@@ -84,6 +86,30 @@ journey export postman ./journeys --bundle --out-dir ./postman --all-envs
 - Duplicate journey names across files are de-duplicated with a ` (n)` suffix (`checkout`, `checkout (2)`).
 - Environment files (`--env` / `--all-envs`) are written once, beside the bundled collection.
 - This is where the [sub-journey cache](#cache) pays off most: a shared reusable journey (auth, fixture setup) invoked from many entry journeys runs once for the whole run.
+
+## State threading (experimental)
+
+Journey passes state between steps through **closure variables** (`token = out.token`; later `headers: () => ({ Authorization: \`Bearer ${token}\` })`). Postman is templating-only, so by default those closures are evaluated **once at export time** with empty state and dynamic values bake to placeholders — the collection is a structural skeleton, not end-to-end runnable.
+
+`--thread-state` makes it runnable. The exporter recovers each closure's source and re-runs it inside Postman scripts against a JSON carrier held in the collection variable `__journey_state`:
+
+- A folder-level pre-request resets the carrier when execution enters a new journey.
+- Each request's **pre-request** runs the step's dynamic `headers` (applied via `pm.request.headers.upsert`) and `params` (applied via `pm.variables`, so the `{{id}}` path slots resolve).
+- Each request's **test** runs `assert` then `after` against the response and writes results back to the carrier; a sub-journey child's `output(value)` flows to the call's `after(out)` on the sub-folder's terminal request.
+
+Reads resolve through `with (__journey_state) { … }`; `after` write-targets are pre-seeded as carrier keys so assignments persist.
+
+```sh
+journey export postman ./journeys --bundle --thread-state --all-envs
+```
+
+::: warning Experimental — known limits
+
+- Only **JSON-serialisable** state survives the carrier (functions, `Date`, `undefined` are lost).
+- Closures that reference module-level imports (helpers, the generated `endpoints`) won't resolve — those steps fall back to their baked values.
+- **`body` and dynamic `query`** are not threaded yet (static bodies and `env()`-based values still export fine); async closures are unsupported.
+- Off by default; the baked skeleton remains the default export.
+  :::
 
 ## Output
 

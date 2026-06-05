@@ -100,6 +100,8 @@ async function toExportNodes(
       name,
       ...(inputs ? { inputs } : {}),
       ...cache,
+      ...(node.def.after ? { after: node.def.after } : {}),
+      ...(node.def.assert ? { assert: node.def.assert } : {}),
       nodes: childNodes,
     });
   }
@@ -120,6 +122,8 @@ export interface ExportPostmanCliOptions {
   allEnvs?: boolean;
   /** Aggregate every matching journey across all files into ONE collection. */
   bundle?: boolean;
+  /** Experimental: thread journey closure-state through collection variables. */
+  threadState?: boolean;
   /** Override cwd for locating journey.config.json (used by tests). */
   projectDir?: string;
 }
@@ -249,7 +253,9 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
         for (const def of matching) {
           const pipeline = await collectPipeline(def);
           const nodes = await toExportNodes(pipeline, 0);
-          const folder = await buildFolder(def.name, nodes);
+          const folder = await buildFolder(def.name, nodes, {
+            ...(opts.threadState !== undefined ? { threadState: opts.threadState } : {}),
+          });
           folder.name = uniqueFolderName(folder.name, seenNames);
           mergedFolders.push(folder);
         }
@@ -293,7 +299,11 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
       for (const def of matching) {
         const pipeline = await collectPipeline(def);
         const nodes = await toExportNodes(pipeline, 0);
-        folders.push(await buildFolder(def.name, nodes));
+        folders.push(
+          await buildFolder(def.name, nodes, {
+            ...(opts.threadState !== undefined ? { threadState: opts.threadState } : {}),
+          }),
+        );
       }
 
       const collection = buildCollection(collectionName, folders);

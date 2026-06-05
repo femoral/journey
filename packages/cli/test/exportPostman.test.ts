@@ -662,6 +662,106 @@ describe("Newman e2e — sub-journeys", () => {
   }, 30_000);
 });
 
+// ── Newman e2e — state threading (--thread-state) ─────────────────────────────
+
+// A reusable login whose output token must reach later requests, plus an id
+// created mid-flow that feeds a later path param.
+const THREAD_JOURNEY = `\
+import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+
+const login = journey(
+  "auth",
+  { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
+  (input) => {
+    step("token", {
+      endpoint: { method: "POST", path: "/token" },
+      body: () => ({ user: input.user }),
+      after: (res) => output({ token: res.body.token }),
+    });
+  },
+);
+
+journey("flow", () => {
+  let token = "";
+  let id = 0;
+  invokeJourney(login, { name: "auth", inputs: { user: "alice" }, after: (out) => { token = out.token; } });
+  step("create", {
+    endpoint: { method: "POST", path: "/items" },
+    headers: () => ({ Authorization: \`Bearer \${token}\` }),
+    body: { name: "x" },
+    after: (res) => { id = res.body.id; },
+  });
+  step("get", {
+    endpoint: { method: "GET", path: "/items/{id}" },
+    params: () => ({ id }),
+    headers: () => ({ Authorization: \`Bearer \${token}\` }),
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+describe("Newman e2e — state threading", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: Array<{ method: string; url: string; auth: string | null }> = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const auth = (req.headers["authorization"] as string) ?? null;
+      hits.push({ method: req.method ?? "", url: req.url ?? "", auth });
+      const json = (code: number, body: unknown) => {
+        res.writeHead(code, { "content-type": "application/json" });
+        res.end(JSON.stringify(body));
+      };
+      if (req.method === "POST" && req.url === "/token") return json(200, { token: "tok-xyz" });
+      const authed = auth === "Bearer tok-xyz";
+      if (req.method === "POST" && req.url === "/items")
+        return authed ? json(201, { id: 7 }) : json(401, {});
+      if (req.method === "GET" && req.url === "/items/7")
+        return authed ? json(200, { id: 7 }) : json(401, {});
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it("threads a sub-journey token and a created id into later requests", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "flow.journey.ts"), THREAD_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "flow.journey.ts"),
+        outDir,
+        tags: [],
+        threadState: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "flow.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // Token from the sub-journey output reached both later requests' headers.
+      const create = hits.find((h) => h.url === "/items" && h.method === "POST");
+      expect(create?.auth).toBe("Bearer tok-xyz");
+      // The created id (7) threaded into the GET path param, and carried auth.
+      const get = hits.find((h) => h.url === "/items/7");
+      expect(get).toBeDefined();
+      expect(get?.auth).toBe("Bearer tok-xyz");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 // ── Newman e2e — sub-journey cache ────────────────────────────────────────────
 
 describe("Newman e2e — sub-journey cache", () => {
