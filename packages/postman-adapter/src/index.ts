@@ -161,6 +161,18 @@ async function tryResolve<T>(v: T | (() => T | Promise<T>) | undefined): Promise
 // URL building
 // ---------------------------------------------------------------------------
 
+/**
+ * A value that did not resolve to something meaningful at export time. `env()`
+ * is a `{{KEY}}` placeholder string during export, so a journey that coerces it
+ * — e.g. `Number(env("LIMIT"))` — yields `NaN`. We can't recover the original
+ * `{{KEY}}` once it has been through `Number()`, so such values are treated as
+ * unresolved: dropped from the query string, left as a `{{name}}` placeholder
+ * for a path param, rather than emitted as the literal `"NaN"` / `"null"`.
+ */
+function isUnresolved(v: unknown): boolean {
+  return v == null || (typeof v === "number" && Number.isNaN(v));
+}
+
 function buildPostmanUrl(
   path: string,
   baseUrl: string,
@@ -169,14 +181,14 @@ function buildPostmanUrl(
 ): PostmanUrl {
   const substituted = path.replace(/\{([^}]+)\}/g, (_, key: string) => {
     const val = params?.[key];
-    return val != null ? encodeURIComponent(String(val)) : `{{${key}}}`;
+    return isUnresolved(val) ? `{{${key}}}` : encodeURIComponent(String(val));
   });
 
   const raw = baseUrl + substituted;
   const segments = substituted.replace(/^\//, "").split("/").filter(Boolean);
 
   const queryItems = Object.entries(query ?? {})
-    .filter(([, v]) => v !== undefined)
+    .filter(([, v]) => !isUnresolved(v))
     .map(([key, value]) => ({ key, value: String(value) }));
 
   return {

@@ -255,6 +255,38 @@ describe("export postman — collection structure", () => {
     }
   });
 
+  it("drops NaN query/param values instead of emitting literal NaN", async () => {
+    // `env()` is a {{KEY}} placeholder at export time, so `Number(env("X"))`
+    // is NaN. The exporter must not bake `limit=NaN` / `/items/NaN`.
+    const NUM_ENV_JOURNEY = `\
+import { env, journey, step } from "@journey/core";
+journey("num env", () => {
+  step("list", {
+    endpoint: { method: "GET", path: "/items/{id}" },
+    params: () => ({ id: Number(env("MISSING_ID")) }),
+    query: () => ({ status: "available", limit: Number(env("PET_LIST_LIMIT")) }),
+  });
+});
+`;
+    const root = await makeProject();
+    try {
+      await writeFile(join(root, "journeys", "num.journey.ts"), NUM_ENV_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({ path: join(root, "journeys", "num.journey.ts"), outDir, tags: [] });
+
+      const col = JSON.parse(await readFile(join(outDir, "num.postman_collection.json"), "utf8"));
+      const req = col.item[0].item[0].request;
+      expect(req.url.raw).not.toContain("NaN");
+      // NaN path param falls back to a {{id}} placeholder.
+      expect(req.url.raw).toContain("/items/{{id}}");
+      // NaN query value is dropped; the resolvable one survives.
+      const keys = (req.url.query as Array<{ key: string }>).map((q) => q.key);
+      expect(keys).toEqual(["status"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("uses --name to override collection name", async () => {
     const root = await makeProject();
     try {

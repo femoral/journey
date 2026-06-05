@@ -48,6 +48,10 @@ With `--bundle`, steps 3–4 fold into a single collection instead — see [Bund
 | path params `/{id}`            | resolved when static, else left as `{{id}}`                  |
 | an `environments/<name>.json`  | a `*.postman_environment.json` file (`--env` / `--all-envs`) |
 
+::: tip Use `env()` raw in query/params
+At export time `env("KEY")` is the placeholder string `"{{KEY}}"`, so **coercing** it — e.g. `Number(env("LIMIT"))` — produces `NaN` (the original `{{KEY}}` can't be recovered after the cast). Such unresolved values are dropped from the query string and fall back to a `{{name}}` placeholder for path params, rather than emitting a literal `NaN`. To carry an env value into a request, reference it raw (`query: () => ({ limit: env("LIMIT") })`) so it exports as `{{LIMIT}}`.
+:::
+
 ## Sub-journeys
 
 Each `invokeJourney(handle, { … })` site becomes a **nested Postman folder**, named after the call (its `name` override, falling back to the child journey's name). The folder holds the child journey's requests; sub-journeys nested inside it recurse as further folders, to 8 levels.

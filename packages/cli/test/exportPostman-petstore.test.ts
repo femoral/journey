@@ -150,7 +150,11 @@ describe("petstore — export structure", () => {
     expect(step.request.url.raw).toContain("/pet/findByStatus");
     const queryKeys = step.request.url.query.map((q) => q.key);
     expect(queryKeys).toContain("status");
-    expect(queryKeys).toContain("limit");
+    // `limit: Number(env("PET_LIST_LIMIT"))` resolves to NaN at export time
+    // (env() is a {{KEY}} placeholder), so the exporter drops it rather than
+    // emitting `limit=NaN`. The URL must not carry a literal NaN.
+    expect(queryKeys).not.toContain("limit");
+    expect(step.request.url.raw).not.toContain("NaN");
   });
 
   // ── env-assertion ───────────────────────────────────────────────────────────
