@@ -441,14 +441,20 @@ substitution, header merge, auto `Content-Type`) → `fetch` (with abort timer i
 
 ## 5. `export k6`, `export postman`, `serve`
 
-- **`journey export k6 [file] [--tag <tag>] [-o <out>]`** — transpiles a `.journey.ts` into a k6
-  load script. `assert()` becomes a k6 `check()`. A journey's `options.k6` block (`{ vus, duration, ... }`)
-  is baked into the script's `export const options`; `--tag` filters which journeys are emitted.
-  A sub-journey (`invokeJourney`) is inlined under a k6 `group()` named after the child; cache opts
-  are ignored (every VU iteration re-runs the child). Provided by `@journey/k6-adapter`.
-- **`journey export postman [-o <dir>]`** — serializes loaded journeys into a Postman Collection
-  v2.1.0 JSON plus environment files. A sub-journey becomes a nested folder, with the call's inputs
-  as folder-scoped variables; cache opts are ignored. Provided by `@journey/postman-adapter`.
+- **`journey export k6 [file] [--tag <tag>] [--out <file>] [--out-dir <dir>]`** — transpiles a
+  `.journey.ts` into a k6 load script. `assert()` becomes a k6 `check()`. A journey's `options.k6`
+  block (`{ vus, duration, ... }`) is baked into the script's `export const options`; `--tag` filters
+  which journeys are emitted. A sub-journey (`invokeJourney`) is inlined under a k6 `group()` named
+  after the child; a `cacheKey`'d call is honored **in memory, per-VU** — a hit skips the child's
+  requests, and `JOURNEY_CACHE=off` forces every iteration cold. Provided by `@journey/k6-adapter`.
+- **`journey export postman [--out <file>] [--out-dir <dir>] [--bundle] [--thread-state]`** — serializes
+  loaded journeys into a Postman Collection v2.1.0 JSON plus environment files. A sub-journey becomes a
+  nested folder, with the call's inputs as folder-scoped variables; a `cacheKey`'d call skips its request
+  via a collection-variable expiry (the window opens on the child's terminal request, so a multi-request
+  child skips as a whole). `--bundle` aggregates every matching journey across all files into one
+  collection (one folder per journey); the experimental `--thread-state` re-runs each closure inside
+  Postman scripts against a `__journey_state` collection variable so sub-journey outputs and step-to-step
+  state reach later requests. Provided by `@journey/postman-adapter`.
 - **`journey serve [--project <dir>] [--port <n>]`** — runs the local HTTP backend (SSE-based) that
   the Journey desktop/web GUI talks to. The GUI adds things the CLI doesn't: a Spec diff page (spec
   drift without `tsc`), Run history browser, and "Run up to step N" on the Journeys page.

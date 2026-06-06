@@ -4,6 +4,7 @@ description: Export a .journey.ts file into a Postman Collection v2.1.0.
 sources:
   - packages/cli/src/commands/exportPostman.ts
   - packages/postman-adapter/src/index.ts
+  - packages/postman-adapter/src/stateThread.ts
 ---
 
 # `journey export postman <path>`

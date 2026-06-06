@@ -4,6 +4,7 @@ description: Transpile a .journey.ts file into a standalone k6 script.
 sources:
   - packages/cli/src/commands/exportK6.ts
   - packages/k6-adapter/src/index.ts
+  - packages/k6-adapter/src/shim.ts
 ---
 
 # `journey export k6 <path>`
