@@ -6,6 +6,7 @@ import {
   journeyResetEvent,
   stepPrerequest,
   stepTest,
+  subInputSeed,
   type CacheStore,
 } from "./stateThread.js";
 
@@ -115,6 +116,15 @@ export type ExportNode =
       name: string;
       /** Resolved call inputs, written as folder-scoped Postman variables. */
       inputs?: Record<string, unknown>;
+      /**
+       * Under `--thread-state`, a sub-journey call with **dynamic** `inputs`
+       * (`() => ({ … })`) carries the closure source plus the child body's
+       * parameter name. The folder pre-request re-runs the closure against the
+       * carrier and seeds the result under `inputParam` so the child's own
+       * closures resolve `input.*`. Absent for static / `env()` inputs.
+       */
+      inputsSrc?: string;
+      inputParam?: string;
       /** The child journey's own pipeline, already resolved. */
       nodes: ExportNode[];
       /**
@@ -145,8 +155,10 @@ const SUB_JOURNEY_NOTE =
 const CACHE_NOTE =
   " Cached: a collection variable holds an expiry timestamp; while it is valid " +
   "this folder's requests are skipped (pm.execution.skipRequest), so a shared " +
-  "sub-journey runs once per collection run. Reliable for single-request " +
-  "sub-journeys; output values are not carried into Postman variables.";
+  "sub-journey runs once per collection run. The window opens on the child's " +
+  "terminal request, so a multi-request child runs fully on the cold pass and " +
+  "skips as a whole on a hit. Without --thread-state the child's output() is " +
+  "not carried into Postman variables; with it, a hit still delivers the output.";
 
 // ---------------------------------------------------------------------------
 // Env proxy — env("KEY") returns "{{KEY}}" during step collection
@@ -337,7 +349,15 @@ async function buildItems(
     // storing the output before the child set it). The folder pre-request only
     // checks the window: threaded restores the output + runs hooks, plain skips.
     let childStore = storeHere;
-    let cacheEvent: PostmanEvent[] | undefined;
+    // Folder pre-request exec, assembled in run order: seed the child's dynamic
+    // inputs first (it saves the carrier), then the cache logic (which re-reads
+    // the carrier, so it observes the seeded inputs).
+    const folderPre: string[] = [];
+
+    if (opts.threadState && node.inputParam && node.inputsSrc) {
+      folderPre.push(...subInputSeed(node.inputParam, node.inputsSrc));
+    }
+
     if (node.cacheKey) {
       const safe = node.cacheKey.replace(/[^A-Za-z0-9]+/g, "_");
       const store: CacheStore = {
@@ -347,14 +367,9 @@ async function buildItems(
           node.cacheTtlMs !== undefined ? `Date.now() + ${node.cacheTtlMs}` : "9999999999999",
       };
       childStore = store;
-      cacheEvent = [
-        {
-          listen: "prerequest",
-          script: SCRIPT(
-            opts.threadState ? cacheHitPrerequest(store, ownHooks) : cacheSkipPrerequest(store),
-          ),
-        },
-      ];
+      folderPre.push(
+        ...(opts.threadState ? cacheHitPrerequest(store, ownHooks) : cacheSkipPrerequest(store)),
+      );
     }
 
     const folder: PostmanFolder = {
@@ -364,7 +379,7 @@ async function buildItems(
     };
     const variables = inputsToVariables(node.inputs);
     if (variables.length > 0) folder.variable = variables;
-    if (cacheEvent) folder.event = cacheEvent;
+    if (folderPre.length > 0) folder.event = [{ listen: "prerequest", script: SCRIPT(folderPre) }];
     items.push(folder);
   }
   return items;

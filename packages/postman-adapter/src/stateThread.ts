@@ -21,7 +21,8 @@
  * imports (helpers, `endpoints`) won't resolve; async closures are unsupported.
  *
  * Covers dynamic headers, path params, query and body (reads) and `after`
- * (writes), plus sub-journey `output()` → parent `after`. Static values keep
+ * (writes), a sub-journey call's dynamic `inputs` (parent state → the child's
+ * `input.*`), and sub-journey `output()` → parent `after`. Static values keep
  * their baked behaviour.
  */
 
@@ -139,6 +140,27 @@ function runLazy(src: string): string {
 /** True when a step option is a function (dynamic) rather than a baked value. */
 function isFn(v: unknown): v is (...a: unknown[]) => unknown {
   return typeof v === "function";
+}
+
+/**
+ * Folder pre-request that threads a sub-journey call's **dynamic** `inputs`
+ * across the input boundary. The call's `inputs: () => ({ token, … })` closure
+ * reads parent-scope state; we re-run it against the carrier and seed the
+ * result under the child body's parameter name (`input`), so the child's own
+ * closures — `headers: () => ({ Authorization: \`Bearer ${input.token}\` })` —
+ * resolve `input.*` through their `with(__s)`. Saves first, so a following
+ * cache-hit script (which re-reads the carrier) observes the seeded inputs.
+ *
+ * Only emitted for function-valued `inputs`: a static / `env()`-placeholder
+ * input bakes to resolvable `{{KEY}}` folder data and needs no threading.
+ */
+export function subInputSeed(paramName: string, inputsSrc: string): string[] {
+  return [
+    ...PRELUDE,
+    `var __in = ${runLazy(inputsSrc)};`,
+    `if (__in && typeof __in === "object") __s[${JSON.stringify(paramName)}] = __in;`,
+    `__save();`,
+  ];
 }
 
 /**

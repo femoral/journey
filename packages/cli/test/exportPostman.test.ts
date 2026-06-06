@@ -766,6 +766,112 @@ describe("Newman e2e — state threading", () => {
   }, 30_000);
 });
 
+// ── Newman e2e — sub-journey input threading (--thread-state) ──────────────────
+
+// A token minted by one sub-journey is passed into a SECOND sub-journey via a
+// DYNAMIC `inputs: () => ({ token })`, and the child uses `input.token` in a
+// header. Without input-boundary threading the child sees an empty token → 401
+// (regression: github #107).
+const INPUT_THREAD_JOURNEY = `\
+import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+
+const login = journey(
+  "auth",
+  { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
+  (input) => {
+    step("token", {
+      endpoint: { method: "POST", path: "/token" },
+      body: () => ({ user: input.user }),
+      after: (res) => output({ token: res.body.token }),
+    });
+  },
+);
+
+const seed = journey(
+  "seed",
+  { reusable: true, inputs: z.object({ token: z.string() }), outputs: z.object({ id: z.number() }) },
+  (input) => {
+    step("create", {
+      endpoint: { method: "POST", path: "/items" },
+      headers: () => ({ Authorization: \`Bearer \${input.token}\` }),
+      after: (res) => output({ id: res.body.id }),
+    });
+  },
+);
+
+journey("flow", () => {
+  let token = "";
+  let id = 0;
+  invokeJourney(login, { name: "auth", inputs: { user: "alice" }, after: (out) => { token = out.token; } });
+  invokeJourney(seed, { name: "seed", inputs: () => ({ token }), after: (out) => { id = out.id; } });
+  step("get", {
+    endpoint: { method: "GET", path: "/items/{id}" },
+    params: () => ({ id }),
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+describe("Newman e2e — sub-journey input threading", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: Array<{ method: string; url: string; auth: string | null }> = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const auth = (req.headers["authorization"] as string) ?? null;
+      hits.push({ method: req.method ?? "", url: req.url ?? "", auth });
+      const json = (code: number, body: unknown) => {
+        res.writeHead(code, { "content-type": "application/json" });
+        res.end(JSON.stringify(body));
+      };
+      if (req.method === "POST" && req.url === "/token") return json(200, { token: "tok-xyz" });
+      const authed = auth === "Bearer tok-xyz";
+      if (req.method === "POST" && req.url === "/items")
+        return authed ? json(201, { id: 7 }) : json(401, {});
+      if (req.method === "GET" && req.url === "/items/7") return json(200, { id: 7 });
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it("threads a token through a sub-journey's dynamic inputs into the child's header", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "flow.journey.ts"), INPUT_THREAD_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "flow.journey.ts"),
+        outDir,
+        tags: [],
+        threadState: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "flow.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // The token reached the SECOND sub-journey's child header via its dynamic
+      // input — the create succeeded (would be 401 with an empty token).
+      const create = hits.find((h) => h.url === "/items" && h.method === "POST");
+      expect(create?.auth).toBe("Bearer tok-xyz");
+      // The created id then threaded into the later GET path param.
+      expect(hits.some((h) => h.url === "/items/7")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 // ── Newman e2e — multi-request sub-journey cache ──────────────────────────────
 
 // A reusable fixture with TWO requests, cached and invoked from two journeys.

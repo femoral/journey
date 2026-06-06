@@ -27,6 +27,38 @@ import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 /** Matches the runtime's `MAX_SUB_JOURNEY_DEPTH` — stops runaway recursion. */
 const MAX_SUB_DEPTH = 8;
 
+/**
+ * The first parameter name of a function source, when it is a plain identifier
+ * (`(input) => …`, `async function (input) {…}`, `body(input) {…}`). Returns
+ * undefined for destructured / defaulted / absent params, which can't be seeded
+ * under a single carrier key.
+ */
+function firstIdentParam(src: string): string | undefined {
+  const s = src.trim();
+  const bare = /^(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(s);
+  if (bare) return bare[1];
+  const paren = /^(?:async\s+)?(?:function\b[^(]*)?\(([^)]*)\)/.exec(s);
+  if (!paren) return undefined;
+  const first = paren[1]!.split(",")[0]!.trim();
+  return /^[A-Za-z_$][\w$]*$/.test(first) ? first : undefined;
+}
+
+/**
+ * For `--thread-state`: when a call's `inputs` is a closure reading parent
+ * state (`() => ({ token, … })`), carry its source plus the child body's
+ * parameter name so the adapter can re-run it at runtime and seed `input.*`
+ * for the child's own closures. Static / `env()` inputs already bake to
+ * resolvable folder data, so they need no threading.
+ */
+function buildInputThread(
+  call: SubJourneyCallDef,
+): { inputsSrc: string; inputParam: string } | undefined {
+  if (typeof call.inputs !== "function") return undefined;
+  const inputParam = firstIdentParam(call.handle.__def.body.toString());
+  if (!inputParam) return undefined;
+  return { inputsSrc: call.inputs.toString(), inputParam };
+}
+
 /** Resolve a sub-journey call's `inputs` to a plain object, best-effort. */
 async function resolveSubInputs(
   call: SubJourneyCallDef,
@@ -95,10 +127,12 @@ async function toExportNodes(
       }
     }
     const cache = resolveSubCache(node.def, inputs);
+    const inputThread = buildInputThread(node.def);
     out.push({
       kind: "sub",
       name,
       ...(inputs ? { inputs } : {}),
+      ...(inputThread ?? {}),
       ...cache,
       ...(node.def.after ? { after: node.def.after } : {}),
       ...(node.def.assert ? { assert: node.def.assert } : {}),

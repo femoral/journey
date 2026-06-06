@@ -95,6 +95,7 @@ Journey passes state between steps through **closure variables** (`token = out.t
 - A folder-level pre-request resets the carrier when execution enters a new journey.
 - Each request's **pre-request** runs the step's dynamic `headers` (via `pm.request.headers.upsert`), `params` (via `pm.variables`, so `{{id}}` path slots resolve), `query` (via `pm.variables` named `__q_<key>`, filling baked `?k={{__q_k}}` slots) and `body` (via `__journey_body`, filling the baked raw `{{__journey_body}}`).
 - Each request's **test** runs `assert` then `after` against the response and writes results back to the carrier; a sub-journey child's `output(value)` flows to the call's `after(out)` on the sub-folder's terminal request.
+- A sub-journey invoked with **dynamic inputs** (`inputs: () => ({ token })` reading parent state) gets a folder pre-request that re-runs the inputs closure against the carrier and seeds the result under the child body's parameter name, so the child's own closures resolve `input.*`. This is how a token minted by one sub-journey reaches a **second** sub-journey's requests.
 - A `cacheKey`'d sub-journey folds into the carrier: a cache hit restores the stored output and runs the call's hooks, so a skipped login still delivers its token.
 
 Reads resolve through `with (__journey_state) { … }`; `after` write-targets are pre-seeded as carrier keys so assignments persist.
@@ -107,6 +108,7 @@ journey export postman ./journeys --bundle --thread-state --all-envs
 
 - Only **JSON-serialisable** state survives the carrier (functions, `Date`, `undefined` are lost).
 - Closures that reference module-level imports (helpers, the generated `endpoints`) won't resolve — those steps fall back to their baked values.
+- Dynamic sub-journey **inputs** thread only when the child body takes a plain `input` parameter. A body that destructures (`({ token }) => …`) or defaults it can't be seeded under one carrier key, so it falls back to baked inputs.
 - Async closures are unsupported (Postman pre-request scripts run synchronously).
 - Off by default; the baked skeleton remains the default export.
   :::
