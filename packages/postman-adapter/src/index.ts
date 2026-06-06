@@ -1,5 +1,13 @@
 import type { StepDef } from "@journey/core";
-import { journeyResetEvent, stepPrerequest, stepTest } from "./stateThread.js";
+import {
+  cacheExpirySet,
+  cacheHitPrerequest,
+  cacheSkipPrerequest,
+  journeyResetEvent,
+  stepPrerequest,
+  stepTest,
+  type CacheStore,
+} from "./stateThread.js";
 
 // ---------------------------------------------------------------------------
 // Postman Collection v2.1.0 types
@@ -216,16 +224,24 @@ function buildPostmanUrl(
 // ---------------------------------------------------------------------------
 
 async function buildRequestItem(s: StepDef, threadState = false): Promise<PostmanItem> {
-  // Under state threading a dynamic (function) `params` is resolved at runtime
-  // via pm.variables, so leave its path slots as `{{key}}` placeholders here
-  // rather than baking the export-time value.
+  // Under state threading a dynamic (function) option is recomputed at runtime
+  // by the pre-request script, so bake a placeholder the script fills rather
+  // than the export-time value: path slots stay `{{key}}`, query values become
+  // `{{__q_<key>}}` (keys discovered from the export-time run), and a dynamic
+  // body becomes the raw placeholder `{{__journey_body}}`.
   const params =
     threadState && typeof s.options.params === "function"
       ? undefined
       : await tryResolve(s.options.params);
-  const query = await tryResolve(s.options.query);
+  let query = await tryResolve(s.options.query);
+  if (threadState && typeof s.options.query === "function" && query && typeof query === "object") {
+    query = Object.fromEntries(Object.keys(query).map((k) => [k, `{{__q_${k}}}`]));
+  }
   const headers = await tryResolve(s.options.headers);
-  const body = await tryResolve(s.options.body);
+  const body =
+    threadState && typeof s.options.body === "function"
+      ? "{{__journey_body}}"
+      : await tryResolve(s.options.body);
 
   const baseUrl = (s.options.endpoint as { baseUrl?: string }).baseUrl ?? "{{BASE_URL}}";
   const url = buildPostmanUrl(s.options.endpoint.path, baseUrl, params, query);
@@ -264,54 +280,6 @@ function inputsToVariables(inputs: Record<string, unknown> | undefined): Postman
   }));
 }
 
-/** Collection-variable name for a composite cache key. */
-function cacheVarName(cacheKey: string): string {
-  return "__jc_" + cacheKey.replace(/[^A-Za-z0-9]+/g, "_");
-}
-
-/**
- * Folder-scoped scripts that translate the sub-journey output cache. The
- * prerequest skips the folder's request while a cache window is valid; the test
- * opens a window on the first (uncached) run. Both run once per request inside
- * the folder, so this is reliable for single-request sub-journeys (the common
- * auth case). The set is idempotent — re-running it for a skipped request never
- * extends the window — so it is correct whether or not Newman runs the folder
- * test for a skipped request.
- *
- * No TTL → a far-future sentinel, i.e. the entry never expires within a run.
- */
-function cacheEvents(cacheKey: string, ttlMs: number | undefined): PostmanEvent[] {
-  const v = cacheVarName(cacheKey);
-  const expExpr = ttlMs !== undefined ? `Date.now() + ${ttlMs}` : "9999999999999";
-  const vLit = JSON.stringify(v);
-  return [
-    {
-      listen: "prerequest",
-      script: {
-        type: "text/javascript",
-        exec: [
-          `var __exp = pm.collectionVariables.get(${vLit});`,
-          `if (__exp && Date.now() < Number(__exp)) {`,
-          `  pm.execution.skipRequest();`,
-          `}`,
-        ],
-      },
-    },
-    {
-      listen: "test",
-      script: {
-        type: "text/javascript",
-        exec: [
-          `var __exp = pm.collectionVariables.get(${vLit});`,
-          `if (!(__exp && Date.now() < Number(__exp))) {`,
-          `  pm.collectionVariables.set(${vLit}, String(${expExpr}));`,
-          `}`,
-        ],
-      },
-    },
-  ];
-}
-
 interface BuildOpts {
   threadState: boolean;
 }
@@ -327,23 +295,29 @@ async function buildItems(
   nodes: ReadonlyArray<ExportNode>,
   opts: BuildOpts,
   parentHooks: ReadonlyArray<(out: unknown) => unknown> = [],
+  cacheStore?: CacheStore,
 ): Promise<Array<PostmanItem | PostmanFolder>> {
   const items: Array<PostmanItem | PostmanFolder> = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]!;
     const isLast = i === nodes.length - 1;
-    // Parent hooks bubble only to the terminal request of the whole sub-tree.
+    // Parent hooks and the cache store bubble only to the terminal request.
     const hooksHere = isLast ? parentHooks : [];
+    const storeHere = isLast ? cacheStore : undefined;
 
     if (node.kind === "step") {
       const item = await buildRequestItem(node.def, opts.threadState);
       if (opts.threadState) {
         const events: PostmanEvent[] = [];
         const pre = stepPrerequest(node.def);
-        const test = stepTest(node.def, hooksHere);
+        const test = stepTest(node.def, hooksHere, storeHere);
         if (pre) events.push({ listen: "prerequest", script: SCRIPT(pre) });
         if (test) events.push({ listen: "test", script: SCRIPT(test) });
         if (events.length > 0) item.event = events;
+      } else if (storeHere) {
+        // Non-threaded terminal request of a cached sub — open the cache window
+        // here (not in a folder test) so a multi-request child runs fully cold.
+        item.event = [{ listen: "test", script: SCRIPT(cacheExpirySet(storeHere)) }];
       }
       items.push(item);
       continue;
@@ -357,14 +331,40 @@ async function buildItems(
       : [];
     const childHooks = [...ownHooks, ...hooksHere];
 
+    // A cached sub opens its window on its terminal request's test (Newman runs
+    // folder tests before request tests, and a folder test would open it
+    // mid-folder — over-skipping a multi-request child and, when threaded,
+    // storing the output before the child set it). The folder pre-request only
+    // checks the window: threaded restores the output + runs hooks, plain skips.
+    let childStore = storeHere;
+    let cacheEvent: PostmanEvent[] | undefined;
+    if (node.cacheKey) {
+      const safe = node.cacheKey.replace(/[^A-Za-z0-9]+/g, "_");
+      const store: CacheStore = {
+        jcVar: `__jc_${safe}`,
+        jcvVar: `__jcv_${safe}`,
+        expExpr:
+          node.cacheTtlMs !== undefined ? `Date.now() + ${node.cacheTtlMs}` : "9999999999999",
+      };
+      childStore = store;
+      cacheEvent = [
+        {
+          listen: "prerequest",
+          script: SCRIPT(
+            opts.threadState ? cacheHitPrerequest(store, ownHooks) : cacheSkipPrerequest(store),
+          ),
+        },
+      ];
+    }
+
     const folder: PostmanFolder = {
       name: node.name,
-      item: await buildItems(node.nodes, opts, childHooks),
+      item: await buildItems(node.nodes, opts, childHooks, childStore),
       description: node.cacheKey ? SUB_JOURNEY_NOTE + CACHE_NOTE : SUB_JOURNEY_NOTE,
     };
     const variables = inputsToVariables(node.inputs);
     if (variables.length > 0) folder.variable = variables;
-    if (node.cacheKey) folder.event = cacheEvents(node.cacheKey, node.cacheTtlMs);
+    if (cacheEvent) folder.event = cacheEvent;
     items.push(folder);
   }
   return items;

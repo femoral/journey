@@ -20,9 +20,9 @@
  * only JSON-serialisable state survives; closures referencing module-level
  * imports (helpers, `endpoints`) won't resolve; async closures are unsupported.
  *
- * Scope of this increment: headers + path params (reads) and `after` (writes)
- * plus sub-journey `output()` → parent `after`. Body and query threading are
- * tracked follow-ups; static values keep their baked behaviour.
+ * Covers dynamic headers, path params, query and body (reads) and `after`
+ * (writes), plus sub-journey `output()` → parent `after`. Static values keep
+ * their baked behaviour.
  */
 
 import type { StepDef } from "@journey/core";
@@ -142,14 +142,17 @@ function isFn(v: unknown): v is (...a: unknown[]) => unknown {
 }
 
 /**
- * Pre-request script for a step: apply dynamic headers (upsert) and dynamic
- * path params (as `pm.variables`, so the baked `{{key}}` placeholders resolve).
+ * Pre-request script for a step. Dynamic options are recomputed against the
+ * carrier and applied to the outgoing request:
+ *   - `headers` → `pm.request.headers.upsert`
+ *   - `params`  → `pm.variables` (the baked `{{key}}` path slots resolve)
+ *   - `query`   → `pm.variables` named `__q_<key>` (baked `?k={{__q_k}}` resolve)
+ *   - `body`    → `pm.variables.__journey_body` (baked raw `{{__journey_body}}`)
  * Returns the exec lines, or null when the step has nothing dynamic to thread.
  */
 export function stepPrerequest(step: StepDef): string[] | null {
   const lines: string[] = [];
-  const headers = step.options.headers;
-  const params = step.options.params;
+  const { headers, params, query, body } = step.options;
 
   if (isFn(headers)) {
     lines.push(
@@ -161,6 +164,18 @@ export function stepPrerequest(step: StepDef): string[] | null {
     lines.push(
       `var __p = ${runLazy(params.toString())};`,
       `if (__p) Object.keys(__p).forEach(function(k){ pm.variables.set(k, String(__p[k])); });`,
+    );
+  }
+  if (isFn(query)) {
+    lines.push(
+      `var __q = ${runLazy(query.toString())};`,
+      `if (__q) Object.keys(__q).forEach(function(k){ if (__q[k] !== undefined) pm.variables.set("__q_" + k, String(__q[k])); });`,
+    );
+  }
+  if (isFn(body)) {
+    lines.push(
+      `var __b = ${runLazy(body.toString())};`,
+      `pm.variables.set("__journey_body", __b === undefined ? "" : (typeof __b === "string" ? __b : JSON.stringify(__b)));`,
     );
   }
   if (lines.length === 0) return null;
@@ -191,10 +206,11 @@ function runHook(src: string, resExpr: string): string[] {
 export function stepTest(
   step: StepDef,
   parentHooks: ReadonlyArray<(out: unknown) => unknown> = [],
+  cacheStore?: CacheStore,
 ): string[] | null {
   const assert = step.options.assert;
   const after = step.options.after;
-  if (!isFn(assert) && !isFn(after) && parentHooks.length === 0) return null;
+  if (!isFn(assert) && !isFn(after) && parentHooks.length === 0 && !cacheStore) return null;
 
   const lines: string[] = [
     ...PRELUDE,
@@ -208,7 +224,84 @@ export function stepTest(
   // it. Inner-to-outer order (the immediate parent's hooks first).
   for (const hook of parentHooks) lines.push(...runHook(hook.toString(), "__s.__out"));
   lines.push(`__save();`);
+  // Cache miss-path store: runs last, so it sees the child's `output(...)`.
+  if (cacheStore) lines.push(...cacheStoreLines(cacheStore));
   return lines;
+}
+
+function hookLines(srcs: ReadonlyArray<string>, outExpr: string): string[] {
+  const lines: string[] = [];
+  for (const src of srcs) lines.push(...runHook(src, outExpr));
+  return lines;
+}
+
+/** Names + expiry expression that wire a threaded sub-journey's cache. */
+export interface CacheStore {
+  jcVar: string;
+  jcvVar: string;
+  expExpr: string;
+}
+
+/**
+ * Folder pre-request for a `cacheKey`'d sub-journey **under state threading** —
+ * folds the cache skip into the carrier so a hit still delivers the child's
+ * output. On a hit it restores the stored output into `__journey_state.__out`,
+ * runs the call's hooks against it (so e.g. a token still reaches later steps),
+ * saves, then skips the request. The miss-path store (expiry + value) lives in
+ * the terminal child's request test — see {@link stepTest}'s `cacheStore` — so
+ * it observes the child's `output(...)` (Newman runs folder tests *before*
+ * request tests, so a folder test would store the value too early).
+ */
+export function cacheHitPrerequest(
+  store: CacheStore,
+  hooks: ReadonlyArray<(out: unknown) => unknown>,
+): string[] {
+  const hookSrcs = hooks.map((h) => h.toString());
+  return [
+    ...PRELUDE,
+    ...TEST_SHIMS,
+    `var __exp = pm.collectionVariables.get(${JSON.stringify(store.jcVar)});`,
+    `if (__exp && Date.now() < Number(__exp)) {`,
+    `  var __v = pm.collectionVariables.get(${JSON.stringify(store.jcvVar)});`,
+    `  if (__v) { try { __s.__out = JSON.parse(__v); } catch (e) {} }`,
+    ...hookLines(hookSrcs, "__s.__out").map((l) => "  " + l),
+    `  __save();`,
+    `  pm.execution.skipRequest();`,
+    `}`,
+  ];
+}
+
+/**
+ * Folder pre-request that skips a cached sub-journey's request while the cache
+ * window is valid — the plain (non-threaded) cache. The window is opened by
+ * {@link cacheExpirySet} on the sub's **terminal** request, so on the cold run
+ * every request in a multi-request child still executes (a folder-level set
+ * would open the window mid-folder and over-skip the remaining requests).
+ */
+export function cacheSkipPrerequest(store: CacheStore): string[] {
+  return [
+    `var __exp = pm.collectionVariables.get(${JSON.stringify(store.jcVar)});`,
+    `if (__exp && Date.now() < Number(__exp)) { pm.execution.skipRequest(); }`,
+  ];
+}
+
+/** Open the cache window — appended to a cached sub's terminal request test. */
+export function cacheExpirySet(store: CacheStore): string[] {
+  return [
+    `var __exp = pm.collectionVariables.get(${JSON.stringify(store.jcVar)});`,
+    `if (!(__exp && Date.now() < Number(__exp))) { pm.collectionVariables.set(${JSON.stringify(store.jcVar)}, String(${store.expExpr})); }`,
+  ];
+}
+
+/** The miss-path store appended to a cached sub's terminal request test. */
+function cacheStoreLines(store: CacheStore): string[] {
+  return [
+    `var __exp = pm.collectionVariables.get(${JSON.stringify(store.jcVar)});`,
+    `if (!(__exp && Date.now() < Number(__exp))) {`,
+    `  pm.collectionVariables.set(${JSON.stringify(store.jcVar)}, String(${store.expExpr}));`,
+    `  if (__s.__out !== undefined) pm.collectionVariables.set(${JSON.stringify(store.jcvVar)}, JSON.stringify(__s.__out));`,
+    `}`,
+  ];
 }
 
 /**

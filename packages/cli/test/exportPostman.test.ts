@@ -457,7 +457,7 @@ journey("second flow", () => {
 const NOCACHE_BUNDLE = CACHE_BUNDLE.replace(/, cacheKey: \(i\) => i\.user/g, "");
 
 describe("export postman — sub-journey cache", () => {
-  it("emits folder-level skip/set scripts for a cached sub-journey", async () => {
+  it("emits a folder skip + terminal-request window-open for a cached sub-journey", async () => {
     const root = await makeProject();
     try {
       await writeFile(join(root, "journeys", "flows.journey.ts"), CACHE_BUNDLE);
@@ -470,16 +470,20 @@ describe("export postman — sub-journey cache", () => {
       const authFolder = col.item[0].item[0];
       expect(authFolder.name).toBe("authenticate");
 
+      // The folder pre-request checks the window and skips while it is valid.
       const pre = authFolder.event
         .find((e: { listen: string }) => e.listen === "prerequest")
         .script.exec.join("\n");
-      const test = authFolder.event
+      expect(pre).toContain("pm.execution.skipRequest()");
+
+      // The window is opened on the sub's terminal request test (not a folder
+      // test), so a multi-request child runs fully on the cold pass.
+      const childTest = authFolder.item[0].event
         .find((e: { listen: string }) => e.listen === "test")
         .script.exec.join("\n");
-      expect(pre).toContain("pm.execution.skipRequest()");
       // Composite key childName:resolvedKey → sanitized collection-variable name.
-      expect(test).toContain('"__jc_auth_token_alice"');
-      expect(test).toContain("pm.collectionVariables.set");
+      expect(childTest).toContain('"__jc_auth_token_alice"');
+      expect(childTest).toContain("pm.collectionVariables.set");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -756,6 +760,278 @@ describe("Newman e2e — state threading", () => {
       const get = hits.find((h) => h.url === "/items/7");
       expect(get).toBeDefined();
       expect(get?.auth).toBe("Bearer tok-xyz");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+// ── Newman e2e — multi-request sub-journey cache ──────────────────────────────
+
+// A reusable fixture with TWO requests, cached and invoked from two journeys.
+// The cold pass must run BOTH child requests (the old folder-test set opened the
+// window mid-folder and skipped the second); the cache hit skips both.
+const MULTI_REQ_BUNDLE = `\
+import { journey, step, invokeJourney, z } from "@journey/core";
+
+const seed = journey("fixtures.seed", { reusable: true }, () => {
+  step("a", { endpoint: { method: "POST", path: "/a" } });
+  step("b", { endpoint: { method: "POST", path: "/b" } });
+});
+
+journey("one", () => {
+  invokeJourney(seed, { name: "seed", cacheKey: "k" });
+  step("done", { endpoint: { method: "GET", path: "/done" } });
+});
+
+journey("two", () => {
+  invokeJourney(seed, { name: "seed", cacheKey: "k" });
+  step("done", { endpoint: { method: "GET", path: "/done" } });
+});
+`;
+
+describe("Newman e2e — multi-request sub-journey cache", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: string[] = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      hits.push(req.url ?? "");
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("{}");
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it("runs a multi-request cached child fully cold, then skips all of it on a hit", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "mr.journey.ts"), MULTI_REQ_BUNDLE);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "journeys.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // Cold pass ran BOTH child requests (no mid-folder over-skip)…
+      expect(hits.filter((u) => u === "/a")).toHaveLength(1);
+      expect(hits.filter((u) => u === "/b")).toHaveLength(1);
+      // …the second journey hit the cache and skipped both; its own step ran.
+      expect(hits.filter((u) => u === "/done")).toHaveLength(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+// ── Newman e2e — body & query threading ───────────────────────────────────────
+
+// A created id + kind feed a later dynamic request body and a dynamic query.
+const BODY_QUERY_JOURNEY = `\
+import { journey, step, expect } from "@journey/core";
+
+journey("body and query", () => {
+  let id = 0;
+  let kind = "";
+  step("create", {
+    endpoint: { method: "POST", path: "/things" },
+    body: { name: "x" },
+    after: (res) => { id = res.body.id; kind = res.body.kind; },
+  });
+  step("note", {
+    endpoint: { method: "POST", path: "/things/{id}/notes" },
+    params: () => ({ id }),
+    body: () => ({ text: \`note for \${id}\` }),
+    assert(res) { expect(res.status).toBe(201); },
+  });
+  step("list", {
+    endpoint: { method: "GET", path: "/things" },
+    query: () => ({ kind }),
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+describe("Newman e2e — body & query threading", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: Array<{ method: string; url: string; body: string }> = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        hits.push({ method: req.method ?? "", url: req.url ?? "", body: raw });
+        const json = (code: number, body: unknown) => {
+          res.writeHead(code, { "content-type": "application/json" });
+          res.end(JSON.stringify(body));
+        };
+        if (req.method === "POST" && req.url === "/things")
+          return json(201, { id: 9, kind: "gadget" });
+        if (req.method === "POST" && req.url === "/things/9/notes") {
+          const ok = (() => {
+            try {
+              return String(JSON.parse(raw).text).includes("9");
+            } catch {
+              return false;
+            }
+          })();
+          return json(ok ? 201 : 400, { ok });
+        }
+        if (req.method === "GET" && req.url === "/things?kind=gadget") return json(200, []);
+        res.writeHead(404);
+        res.end();
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it("threads a created id into a later body and a captured value into a query", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "bq.journey.ts"), BODY_QUERY_JOURNEY);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "bq.journey.ts"),
+        outDir,
+        tags: [],
+        threadState: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "bq.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // Dynamic body carried the created id (9) into POST /things/9/notes.
+      const note = hits.find((h) => h.url === "/things/9/notes");
+      expect(note).toBeDefined();
+      expect(JSON.parse(note!.body).text).toBe("note for 9");
+      // Dynamic query carried the captured kind into GET /things?kind=gadget.
+      expect(hits.some((h) => h.url === "/things?kind=gadget")).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
+// ── Newman e2e — cache + threading fold (--thread-state) ──────────────────────
+
+// Two journeys share a cacheKey'd auth sub-journey AND consume its token. The
+// second journey hits the cache (login skipped) — the token must still thread.
+const CACHE_THREAD_BUNDLE = `\
+import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+
+const acquireToken = journey(
+  "auth.token",
+  { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
+  (input) => {
+    step("exchange", {
+      endpoint: { method: "POST", path: "/token" },
+      body: () => ({ user: input.user }),
+      after: (res) => output({ token: res.body.token }),
+    });
+  },
+);
+
+journey("first", () => {
+  let token = "";
+  invokeJourney(acquireToken, { name: "authenticate", inputs: { user: "alice" }, cacheKey: (i) => i.user, after: (out) => { token = out.token; } });
+  step("read one", {
+    endpoint: { method: "GET", path: "/protected" },
+    headers: () => ({ Authorization: \`Bearer \${token}\` }),
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+
+journey("second", () => {
+  let token = "";
+  invokeJourney(acquireToken, { name: "authenticate", inputs: { user: "alice" }, cacheKey: (i) => i.user, after: (out) => { token = out.token; } });
+  step("read two", {
+    endpoint: { method: "GET", path: "/protected" },
+    headers: () => ({ Authorization: \`Bearer \${token}\` }),
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+describe("Newman e2e — cache + threading fold", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+  let hits: Array<{ method: string; url: string; auth: string | null }> = [];
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const auth = (req.headers["authorization"] as string) ?? null;
+      hits.push({ method: req.method ?? "", url: req.url ?? "", auth });
+      if (req.method === "POST" && req.url === "/token") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ token: "tok-9" }));
+      } else if (req.url === "/protected") {
+        res.writeHead(auth === "Bearer tok-9" ? 200 : 401, { "content-type": "application/json" });
+        res.end(JSON.stringify({}));
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  it("a cache hit still threads the child's output to later requests", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    hits = [];
+    try {
+      await writeFile(join(root, "journeys", "ct.journey.ts"), CACHE_THREAD_BUNDLE);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys"),
+        outDir,
+        tags: [],
+        bundle: true,
+        threadState: true,
+        env: "test",
+        projectDir: root,
+      });
+
+      const summary = await runNewman(
+        join(outDir, "journeys.postman_collection.json"),
+        join(outDir, "test.postman_environment.json"),
+      );
+
+      expect(summary.run.failures).toHaveLength(0);
+      // Login ran once (second journey hit the cache and skipped it)…
+      expect(hits.filter((h) => h.url === "/token").length).toBe(1);
+      // …yet BOTH protected reads carried the threaded token.
+      const protectedHits = hits.filter((h) => h.url === "/protected");
+      expect(protectedHits).toHaveLength(2);
+      expect(protectedHits.every((h) => h.auth === "Bearer tok-9")).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
