@@ -158,6 +158,8 @@ export interface ExportPostmanCliOptions {
   bundle?: boolean;
   /** Experimental: thread journey closure-state through collection variables. */
   threadState?: boolean;
+  /** With `threadState`: emit non-enforcing assertions (legacy swallow-all). */
+  lenient?: boolean;
   /** Override cwd for locating journey.config.json (used by tests). */
   projectDir?: string;
 }
@@ -289,6 +291,7 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
           const nodes = await toExportNodes(pipeline, 0);
           const folder = await buildFolder(def.name, nodes, {
             ...(opts.threadState !== undefined ? { threadState: opts.threadState } : {}),
+            ...(opts.lenient !== undefined ? { lenient: opts.lenient } : {}),
           });
           folder.name = uniqueFolderName(folder.name, seenNames);
           mergedFolders.push(folder);
@@ -306,7 +309,9 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
           ? resolve(process.cwd(), opts.outDir, BUNDLE_BASENAME)
           : resolve(process.cwd(), BUNDLE_BASENAME);
 
-      const collection = buildCollection(opts.name ?? "journeys", mergedFolders);
+      const collection = buildCollection(opts.name ?? "journeys", mergedFolders, {
+        reset: opts.threadState ?? false,
+      });
       const collectionOutDir = dirname(outFile);
       await mkdir(collectionOutDir, { recursive: true });
       await writeFile(outFile, JSON.stringify(collection, null, 2), "utf8");
@@ -336,11 +341,14 @@ export async function runExportPostman(opts: ExportPostmanCliOptions): Promise<n
         folders.push(
           await buildFolder(def.name, nodes, {
             ...(opts.threadState !== undefined ? { threadState: opts.threadState } : {}),
+            ...(opts.lenient !== undefined ? { lenient: opts.lenient } : {}),
           }),
         );
       }
 
-      const collection = buildCollection(collectionName, folders);
+      const collection = buildCollection(collectionName, folders, {
+        reset: opts.threadState ?? false,
+      });
       const json = JSON.stringify(collection, null, 2);
 
       const outFile = opts.out

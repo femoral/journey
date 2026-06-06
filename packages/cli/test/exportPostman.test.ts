@@ -1224,3 +1224,188 @@ describe("Newman e2e — sub-journey cache", () => {
     }
   }, 30_000);
 });
+
+// ── Newman e2e — strict assertions (--thread-state) ───────────────────────────
+//
+// Under --thread-state a journey's `assert(res)` / a sub-journey call's
+// `assert(out)` are now ENFORCED: each `expect()` is its own `pm.test`, so a
+// genuine failure reds the run and is counted. A threading artifact (an
+// unresolved free identifier in the closure) still bubbles to the swallow and
+// stays green. `--lenient` restores the legacy non-enforcing skeleton.
+
+// A step assert that expects 200 against an endpoint that returns 401.
+const STRICT_FAIL_JOURNEY = `\
+import { journey, step, expect } from "@journey/core";
+journey("strict fail", () => {
+  step("guarded", {
+    endpoint: { method: "GET", path: "/unauthorized" },
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+// A step assert that passes — proves a passing assertion is COUNTED.
+const STRICT_PASS_JOURNEY = `\
+import { journey, step, expect } from "@journey/core";
+journey("strict pass", () => {
+  step("ok", {
+    endpoint: { method: "GET", path: "/ok" },
+    assert(res) { expect(res.status).toBe(200); },
+  });
+});
+`;
+
+// A sub-journey call whose assert(out) fails on the child's output.
+const SUB_FAIL_JOURNEY = `\
+import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+const login = journey(
+  "auth",
+  { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
+  (input) => {
+    step("token", {
+      endpoint: { method: "POST", path: "/token" },
+      body: () => ({ user: input.user }),
+      after: (res) => output({ token: res.body.token }),
+    });
+  },
+);
+journey("sub fail", () => {
+  invokeJourney(login, {
+    name: "authenticate",
+    inputs: { user: "alice" },
+    assert: (out) => { expect(out.token).toBe("WRONG"); },
+  });
+});
+`;
+
+// An assert whose closure references an unresolved free identifier — the
+// archetypal threading artifact. Must stay green (swallowed), not red.
+const ARTIFACT_JOURNEY = `\
+import { journey, step, expect } from "@journey/core";
+journey("artifact", () => {
+  step("ok", {
+    endpoint: { method: "GET", path: "/ok" },
+    assert(res) { expect(res.status).toBe(unresolvedHelper()); },
+  });
+});
+`;
+
+describe("Newman e2e — strict assertions", () => {
+  let server: ReturnType<typeof createServer>;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const json = (code: number, body: unknown) => {
+        res.writeHead(code, { "content-type": "application/json" });
+        res.end(JSON.stringify(body));
+      };
+      if (req.method === "POST" && req.url === "/token") return json(200, { token: "tok-xyz" });
+      if (req.method === "GET" && req.url === "/ok") return json(200, { value: 1 });
+      if (req.method === "GET" && req.url === "/unauthorized") return json(401, {});
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  async function exportAndRun(
+    fixture: string,
+    collection: string,
+    extra: { lenient?: boolean } = {},
+  ): Promise<newman.NewmanRunSummary> {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    try {
+      await writeFile(join(root, "journeys", "flow.journey.ts"), fixture);
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "flow.journey.ts"),
+        outDir,
+        tags: [],
+        threadState: true,
+        ...extra,
+        env: "test",
+        projectDir: root,
+      });
+      return await runNewman(
+        join(outDir, `${collection}.postman_collection.json`),
+        join(outDir, "test.postman_environment.json"),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  it("reds the run when a step assert fails (regression #108)", async () => {
+    const summary = await exportAndRun(STRICT_FAIL_JOURNEY, "flow");
+    expect(summary.run.failures.length).toBeGreaterThan(0);
+    expect(summary.run.stats.assertions.failed).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("reds the run when a sub-journey assert(out) fails", async () => {
+    const summary = await exportAndRun(SUB_FAIL_JOURNEY, "flow");
+    expect(summary.run.failures.length).toBeGreaterThan(0);
+    expect(summary.run.stats.assertions.failed).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("stays green on a threading artifact (unresolved identifier)", async () => {
+    const summary = await exportAndRun(ARTIFACT_JOURNEY, "flow");
+    expect(summary.run.failures).toHaveLength(0);
+  }, 30_000);
+
+  it("counts a passing assertion", async () => {
+    const summary = await exportAndRun(STRICT_PASS_JOURNEY, "flow");
+    expect(summary.run.failures).toHaveLength(0);
+    expect(summary.run.stats.assertions.total).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("--lenient restores the legacy swallow (failing assert stays green, uncounted)", async () => {
+    const summary = await exportAndRun(STRICT_FAIL_JOURNEY, "flow", { lenient: true });
+    expect(summary.run.failures).toHaveLength(0);
+    expect(summary.run.stats.assertions.total).toBe(0);
+  }, 30_000);
+
+  it("prepends a folder-wrapped reset under --thread-state; keeps the root all-folders", async () => {
+    const root = await makeFullProject({ BASE_URL: baseUrl });
+    try {
+      await writeFile(join(root, "journeys", "flow.journey.ts"), STRICT_PASS_JOURNEY);
+
+      const outDir = join(root, "out");
+      await runExportPostman({
+        path: join(root, "journeys", "flow.journey.ts"),
+        outDir,
+        tags: [],
+        threadState: true,
+        env: "test",
+        projectDir: root,
+      });
+      const col = JSON.parse(await readFile(join(outDir, "flow.postman_collection.json"), "utf8"));
+      // GUI-safe: every root item is a folder (Postman's app won't render a root
+      // that mixes a bare request with folders).
+      expect(col.item.every((i: { item?: unknown[] }) => Array.isArray(i.item))).toBe(true);
+      expect(col.item[0].name).toBe("Journey: reset state (auto)");
+      const exec = col.item[0].item[0].event[0].script.exec.join("\n");
+      expect(exec).toContain("skipRequest");
+      expect(exec).toContain("__jc_");
+
+      // Without --thread-state there is no reset folder.
+      const outDir2 = join(root, "out2");
+      await runExportPostman({
+        path: join(root, "journeys", "flow.journey.ts"),
+        outDir: outDir2,
+        tags: [],
+        env: "test",
+        projectDir: root,
+      });
+      const col2 = JSON.parse(
+        await readFile(join(outDir2, "flow.postman_collection.json"), "utf8"),
+      );
+      expect(col2.item[0].name).not.toBe("Journey: reset state (auto)");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

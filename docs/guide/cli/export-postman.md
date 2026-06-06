@@ -19,17 +19,18 @@ journey export postman <path> [--out <file>] [--out-dir <dir>] [--tag <tag>...] 
 
 ## Arguments and flags
 
-| Argument / flag    | Type   | Default                                                     | Required | Purpose                                                                                                                      |
-| ------------------ | ------ | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `<path>`           | path   | —                                                           | Yes      | A `.journey.ts` file or a directory of them.                                                                                 |
-| `--out <path>`     | path   | `<journey basename>.postman_collection.json` next to source | No       | Output file path. Single-file mode only.                                                                                     |
-| `--out-dir <path>` | path   | next to each source                                         | No       | Directory-mode output dir; emitted files are `<basename>.postman_collection.json`.                                           |
-| `--tag <tag>`      | string | —                                                           | No       | Repeatable. Skip files whose journeys do not all carry every listed tag (AND across repeats).                                |
-| `--name <name>`    | string | journey file basename                                       | No       | Override the collection's `info.name`.                                                                                       |
-| `--env <name>`     | string | —                                                           | No       | Also export `environments/<name>.json` as a Postman environment file.                                                        |
-| `--all-envs`       | flag   | off                                                         | No       | Export every configured environment as a Postman environment file.                                                           |
-| `--bundle`         | flag   | off                                                         | No       | Aggregate every matching journey across all files into **one** collection (see below).                                       |
-| `--thread-state`   | flag   | off                                                         | No       | **Experimental.** Thread journey state through collection variables so sub-journey outputs reach later requests (see below). |
+| Argument / flag    | Type   | Default                                                     | Required | Purpose                                                                                                                                                                              |
+| ------------------ | ------ | ----------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<path>`           | path   | —                                                           | Yes      | A `.journey.ts` file or a directory of them.                                                                                                                                         |
+| `--out <path>`     | path   | `<journey basename>.postman_collection.json` next to source | No       | Output file path. Single-file mode only.                                                                                                                                             |
+| `--out-dir <path>` | path   | next to each source                                         | No       | Directory-mode output dir; emitted files are `<basename>.postman_collection.json`.                                                                                                   |
+| `--tag <tag>`      | string | —                                                           | No       | Repeatable. Skip files whose journeys do not all carry every listed tag (AND across repeats).                                                                                        |
+| `--name <name>`    | string | journey file basename                                       | No       | Override the collection's `info.name`.                                                                                                                                               |
+| `--env <name>`     | string | —                                                           | No       | Also export `environments/<name>.json` as a Postman environment file.                                                                                                                |
+| `--all-envs`       | flag   | off                                                         | No       | Export every configured environment as a Postman environment file.                                                                                                                   |
+| `--bundle`         | flag   | off                                                         | No       | Aggregate every matching journey across all files into **one** collection (see below).                                                                                               |
+| `--thread-state`   | flag   | off                                                         | No       | **Experimental.** Thread journey state through collection variables so sub-journey outputs reach later requests (see below).                                                         |
+| `--lenient`        | flag   | off                                                         | No       | With `--thread-state`: emit non-enforcing assertions (legacy swallow-all). A failing `expect()` stays a console line instead of a red `pm.test`. No effect without `--thread-state`. |
 
 ## Behaviour
 
@@ -94,11 +95,21 @@ Journey passes state between steps through **closure variables** (`token = out.t
 
 - A folder-level pre-request resets the carrier when execution enters a new journey.
 - Each request's **pre-request** runs the step's dynamic `headers` (via `pm.request.headers.upsert`), `params` (via `pm.variables`, so `{{id}}` path slots resolve), `query` (via `pm.variables` named `__q_<key>`, filling baked `?k={{__q_k}}` slots) and `body` (via `__journey_body`, filling the baked raw `{{__journey_body}}`).
-- Each request's **test** runs `assert` then `after` against the response and writes results back to the carrier; a sub-journey child's `output(value)` flows to the call's `after(out)` on the sub-folder's terminal request.
+- Each request's **test** runs `assert` then `after` against the response and writes results back to the carrier; a sub-journey child's `output(value)` flows to the call's `after(out)` on the sub-folder's terminal request. Assertions are **enforced** — see below.
 - A sub-journey invoked with **dynamic inputs** (`inputs: () => ({ token })` reading parent state) gets a folder pre-request that re-runs the inputs closure against the carrier and seeds the result under the child body's parameter name, so the child's own closures resolve `input.*`. This is how a token minted by one sub-journey reaches a **second** sub-journey's requests.
 - A `cacheKey`'d sub-journey folds into the carrier: a cache hit restores the stored output and runs the call's hooks, so a skipped login still delivers its token.
 
 Reads resolve through `with (__journey_state) { … }`; `after` write-targets are pre-seeded as carrier keys so assignments persist.
+
+### Assertion enforcement
+
+Under `--thread-state` every `expect()` in an `assert(res)` (or a sub-journey call's `assert(out)`) becomes its **own `pm.test`**, named `<step> · assert <n>`. A genuine failure reds the run, counts in Newman's assertion tally, and exits non-zero — so the collection gates CI the way an acceptance suite would, instead of staying green on a silent mismatch.
+
+This is strict **by default**. The leniency that keeps the skeleton from going red on threading artifacts is preserved structurally: a closure that throws _outside_ a matcher — an unresolved free variable (`ReferenceError`) or an arg-eval `TypeError` such as `expect(res.body.x.y)` where `res.body.x` is undefined — is swallowed, because only the `pm.expect(...)` call inside each matcher runs in the enforcing `pm.test`. Consequences:
+
+- Use **`expect()` matchers** for enforced assertions. A bare `throw` / `throw new AssertionError(...)` inside an `assert` is _not_ enforced (it's indistinguishable from an unresolved-import artifact).
+- Assertions do **not short-circuit**: after a failed `expect`, the rest of the hook keeps running (a second failing `expect` reds a second assertion). This mirrors the structural skeleton, where `after` always runs.
+- `--lenient` restores the legacy non-enforcing behaviour — bare `pm.expect`, every failure swallowed to a console line, assertion tally `0`.
 
 ```sh
 journey export postman ./journeys --bundle --thread-state --all-envs
@@ -138,3 +149,7 @@ newman run my.postman_collection.json -e local.postman_environment.json
 ```
 
 Requests reference `{{BASE_URL}}` and any `env()` keys as Postman variables — supply them through the exported environment file (or Postman's environment UI).
+
+::: tip Re-running in the Postman app
+Postman **persists collection variables across Runner executions** — Newman starts each run clean. Without help, a second app run would observe the previous run's open cache windows and threaded carrier, so cached sub-journeys would skip their requests (and their side effects) and threaded asserts would gate on stale state. To keep parity with Newman, a `--thread-state` export prepends a **`Journey: reset state (auto)`** folder holding one skipped request that clears the carrier and every cache slot at the start of a run. It sends nothing (`pm.execution.skipRequest()`); you'll see it as the first folder. (It's a folder, not a bare root request, because the Postman app won't render a collection whose root mixes a request with folders.) (Caching a **side-effectful** sub — one that creates a fixture — is still a smell: it is correct on a cold run but means the create is skipped on a cache hit. Reserve `cacheKey` for idempotent work like auth.)
+:::

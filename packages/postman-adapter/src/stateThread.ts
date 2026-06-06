@@ -119,18 +119,53 @@ const PRELUDE = [
   `function env(k){ var v = pm.variables.get(k); return v === undefined ? pm.collectionVariables.get(k) : v; }`,
 ];
 
-// `expect`/`output` shims for test scripts (assert uses expect; a sub-journey
-// child's `after` calls output()).
-const TEST_SHIMS = [
-  `function expect(v){ return {`,
-  `  toBe:function(e){ pm.expect(v).to.eql(e); },`,
-  `  toEqual:function(e){ pm.expect(v).to.eql(e); },`,
-  `  toBeDefined:function(){ pm.expect(v).to.not.be.undefined; },`,
-  `  toContain:function(e){ pm.expect(v).to.include(e); },`,
-  `  toMatch:function(e){ pm.expect(String(v)).to.match(typeof e === "string" ? new RegExp(e) : e); },`,
-  `}; }`,
-  `function output(v){ __s.__out = v; }`,
-];
+/**
+ * `expect`/`output` shims for test scripts (assert uses expect; a sub-journey
+ * child's `after` calls output()).
+ *
+ * Two modes:
+ *   - **strict** (default): each matcher wraps its `pm.expect` in its own
+ *     `pm.test(...)`. A genuine assertion failure throws *inside* that `pm.test`
+ *     callback → Newman records it red and counts it. A threading artifact
+ *     (unresolved import / arg-eval `TypeError`) is thrown *outside* any
+ *     matcher's `pm.test` — during raw closure code or while evaluating the
+ *     `expect(...)`/matcher arguments — so it bubbles to `runHook`'s outer
+ *     try/catch and is swallowed. The `pm.test` boundary is the
+ *     genuine-vs-artifact discriminator, so no error tagging is needed.
+ *   - **lenient** (`--lenient`): bare `pm.expect`, no `pm.test`. The outer
+ *     try/catch swallows everything — the legacy non-enforcing skeleton.
+ *
+ * Strict labels read `<__base> · assert <n>` where `__base` is set per-script by
+ * the caller (the step / sub-journey name); the chai message carries the value
+ * detail. Assertions do not short-circuit: a failed `expect` is recorded and the
+ * hook keeps running (matches the legacy behaviour where `after` always ran).
+ */
+function testShims(strict: boolean): string[] {
+  if (!strict) {
+    return [
+      `function expect(v){ return {`,
+      `  toBe:function(e){ pm.expect(v).to.eql(e); },`,
+      `  toEqual:function(e){ pm.expect(v).to.eql(e); },`,
+      `  toBeDefined:function(){ pm.expect(v).to.not.be.undefined; },`,
+      `  toContain:function(e){ pm.expect(v).to.include(e); },`,
+      `  toMatch:function(e){ pm.expect(String(v)).to.match(typeof e === "string" ? new RegExp(e) : e); },`,
+      `}; }`,
+      `function output(v){ __s.__out = v; }`,
+    ];
+  }
+  return [
+    `var __ai = 0;`,
+    `function __label(){ return (typeof __base !== "undefined" ? __base : "assertion") + " · assert " + (++__ai); }`,
+    `function expect(v){ return {`,
+    `  toBe:function(e){ pm.test(__label(), function(){ pm.expect(v).to.eql(e); }); },`,
+    `  toEqual:function(e){ pm.test(__label(), function(){ pm.expect(v).to.eql(e); }); },`,
+    `  toBeDefined:function(){ pm.test(__label(), function(){ pm.expect(v).to.not.be.undefined; }); },`,
+    `  toContain:function(e){ pm.test(__label(), function(){ pm.expect(v).to.include(e); }); },`,
+    `  toMatch:function(e){ pm.test(__label(), function(){ pm.expect(String(v)).to.match(typeof e === "string" ? new RegExp(e) : e); }); },`,
+    `}; }`,
+    `function output(v){ __s.__out = v; }`,
+  ];
+}
 
 /** Run a zero-arg lazy closure under `with(__s)` and return its value (or {}). */
 function runLazy(src: string): string {
@@ -229,6 +264,7 @@ export function stepTest(
   step: StepDef,
   parentHooks: ReadonlyArray<(out: unknown) => unknown> = [],
   cacheStore?: CacheStore,
+  strict = true,
 ): string[] | null {
   const assert = step.options.assert;
   const after = step.options.after;
@@ -236,7 +272,8 @@ export function stepTest(
 
   const lines: string[] = [
     ...PRELUDE,
-    ...TEST_SHIMS,
+    `var __base = ${JSON.stringify(step.name)};`,
+    ...testShims(strict),
     `var res = { status: pm.response.code, headers: pm.response.headers && pm.response.headers.toObject ? pm.response.headers.toObject() : {}, body: (function(){ try { return pm.response.json(); } catch (e) { return pm.response.text(); } })() };`,
   ];
   if (isFn(assert)) lines.push(...runHook(assert.toString(), "res"));
@@ -277,11 +314,13 @@ export interface CacheStore {
 export function cacheHitPrerequest(
   store: CacheStore,
   hooks: ReadonlyArray<(out: unknown) => unknown>,
+  strict = true,
 ): string[] {
   const hookSrcs = hooks.map((h) => h.toString());
   return [
     ...PRELUDE,
-    ...TEST_SHIMS,
+    `var __base = "sub-journey";`,
+    ...testShims(strict),
     `var __exp = pm.collectionVariables.get(${JSON.stringify(store.jcVar)});`,
     `if (__exp && Date.now() < Number(__exp)) {`,
     `  var __v = pm.collectionVariables.get(${JSON.stringify(store.jcvVar)});`,
@@ -338,5 +377,28 @@ export function journeyResetEvent(journeyName: string): string[] {
   return [
     `var __s = JSON.parse(pm.collectionVariables.get(${v}) || "{}");`,
     `if (__s.__journey !== ${n}) { pm.collectionVariables.set(${v}, JSON.stringify({ __journey: ${n} })); }`,
+  ];
+}
+
+/**
+ * Pre-request for the skipped **reset** item at the head of the collection.
+ * Postman persists collection variables across Runner executions, so a re-run
+ * would observe the *previous* run's open cache windows and threaded carrier:
+ * cached sub-journeys would skip their requests (and their side effects), and
+ * threaded asserts would gate on stale state — turning a clean cold run red.
+ * (Newman starts each run with empty variables, so it never sees this.) Clearing
+ * the carrier and every cache slot here makes each GUI run start cold, matching
+ * Newman. The request itself never sends — `pm.execution.skipRequest()` drops it
+ * (Newman ≥ 6 / Postman ≥ 10.12, the same floor the cache already requires).
+ */
+export function collectionResetScript(): string[] {
+  return [
+    `var __all = pm.collectionVariables.toObject ? pm.collectionVariables.toObject() : {};`,
+    `Object.keys(__all).forEach(function(k){`,
+    `  if (k === ${JSON.stringify(STATE_VAR)} || k.indexOf("__jc_") === 0 || k.indexOf("__jcv_") === 0) {`,
+    `    pm.collectionVariables.unset(k);`,
+    `  }`,
+    `});`,
+    `if (pm.execution && pm.execution.skipRequest) pm.execution.skipRequest();`,
   ];
 }

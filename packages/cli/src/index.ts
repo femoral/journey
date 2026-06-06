@@ -148,6 +148,10 @@ export function buildProgram(): Command {
       "--thread-state",
       "Experimental: thread journey state through collection variables so sub-journey outputs reach later requests",
     )
+    .option(
+      "--lenient",
+      "With --thread-state: emit non-enforcing assertions (legacy swallow-all; a failing expect() stays a console line, not a red pm.test)",
+    )
     .description(
       "Export one or more journeys as a Postman Collection v2.1.0 (path may be a file or directory)",
     )
@@ -163,6 +167,7 @@ export function buildProgram(): Command {
           allEnvs?: boolean;
           bundle?: boolean;
           threadState?: boolean;
+          lenient?: boolean;
         },
       ) =>
         handle(() =>
@@ -175,6 +180,7 @@ export function buildProgram(): Command {
             ...(options.allEnvs !== undefined ? { allEnvs: options.allEnvs } : {}),
             ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
             ...(options.threadState !== undefined ? { threadState: options.threadState } : {}),
+            ...(options.lenient !== undefined ? { lenient: options.lenient } : {}),
             tags: options.tag,
           }),
         ),

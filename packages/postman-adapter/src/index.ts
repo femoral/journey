@@ -3,6 +3,7 @@ import {
   cacheExpirySet,
   cacheHitPrerequest,
   cacheSkipPrerequest,
+  collectionResetScript,
   journeyResetEvent,
   stepPrerequest,
   stepTest,
@@ -294,6 +295,8 @@ function inputsToVariables(inputs: Record<string, unknown> | undefined): Postman
 
 interface BuildOpts {
   threadState: boolean;
+  /** Enforce `expect()` failures as red `pm.test`s (default). False = legacy swallow. */
+  strict: boolean;
 }
 
 const SCRIPT = (exec: string[]): PostmanScript => ({ type: "text/javascript", exec });
@@ -322,7 +325,7 @@ async function buildItems(
       if (opts.threadState) {
         const events: PostmanEvent[] = [];
         const pre = stepPrerequest(node.def);
-        const test = stepTest(node.def, hooksHere, storeHere);
+        const test = stepTest(node.def, hooksHere, storeHere, opts.strict);
         if (pre) events.push({ listen: "prerequest", script: SCRIPT(pre) });
         if (test) events.push({ listen: "test", script: SCRIPT(test) });
         if (events.length > 0) item.event = events;
@@ -368,7 +371,9 @@ async function buildItems(
       };
       childStore = store;
       folderPre.push(
-        ...(opts.threadState ? cacheHitPrerequest(store, ownHooks) : cacheSkipPrerequest(store)),
+        ...(opts.threadState
+          ? cacheHitPrerequest(store, ownHooks, opts.strict)
+          : cacheSkipPrerequest(store)),
       );
     }
 
@@ -397,6 +402,12 @@ export interface BuildFolderOpts {
    * per-request pre-request/test scripts and a folder-level carrier reset.
    */
   threadState?: boolean;
+  /**
+   * With `threadState`: emit non-enforcing assertions (legacy swallow-all) so a
+   * failing `expect()` stays a console line instead of a red `pm.test`. Off by
+   * default — threaded assertions enforce. No effect without `threadState`.
+   */
+  lenient?: boolean;
 }
 
 /** Build the top-level Postman folder for a journey from its resolved tree. */
@@ -406,20 +417,66 @@ export async function buildFolder(
   opts: BuildFolderOpts = {},
 ): Promise<PostmanFolder> {
   const threadState = opts.threadState ?? false;
-  const folder: PostmanFolder = { name, item: await buildItems(nodes, { threadState }) };
+  const strict = threadState && !opts.lenient;
+  const folder: PostmanFolder = { name, item: await buildItems(nodes, { threadState, strict }) };
   if (threadState) {
     folder.event = [{ listen: "prerequest", script: SCRIPT(journeyResetEvent(name)) }];
   }
   return folder;
 }
 
-export function buildCollection(name: string, folders: PostmanFolder[]): PostmanCollection {
+/** Options for {@link buildCollection}. */
+export interface BuildCollectionOpts {
+  /**
+   * Prepend a skipped reset request that clears the threaded carrier + cache
+   * slots at the start of a run, so a Postman Runner re-run starts cold (Postman
+   * persists collection variables across runs; Newman does not). Set when
+   * exporting with `--thread-state`.
+   */
+  reset?: boolean;
+}
+
+/**
+ * The reset, as a **folder** at the head of the collection holding one skipped
+ * request — see {@link collectionResetScript}. Wrapped in a folder (rather than a
+ * bare top-level request) because the Postman app's sidebar fails to render a
+ * collection whose root mixes a request item with folders; Newman tolerates it,
+ * the desktop app shows the collection as empty. Depth-first execution still runs
+ * this folder's request first.
+ */
+function resetFolder(): PostmanFolder {
+  return {
+    name: "Journey: reset state (auto)",
+    item: [
+      {
+        name: "reset",
+        event: [{ listen: "prerequest", script: SCRIPT(collectionResetScript()) }],
+        request: {
+          method: "GET",
+          header: [],
+          url: {
+            raw: "https://journey.invalid/reset",
+            host: ["journey", "invalid"],
+            path: ["reset"],
+            query: [],
+          },
+        },
+      },
+    ],
+  };
+}
+
+export function buildCollection(
+  name: string,
+  folders: PostmanFolder[],
+  opts: BuildCollectionOpts = {},
+): PostmanCollection {
   return {
     info: {
       name,
       schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     },
-    item: folders,
+    item: opts.reset ? [resetFolder(), ...folders] : [...folders],
   };
 }
 
