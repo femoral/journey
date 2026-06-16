@@ -48,10 +48,10 @@ The two modes have disjoint options — `inputs` / `outputs` are reusable-only, 
 
 ### Defining the reusable journey
 
-The body takes one argument — the validated input. `z` is re-exported from `@journey/core` (a Journey project carries no dependencies, so `import { z } from "zod"` would not resolve).
+The body takes one argument — the validated input. `z` is re-exported from `@usejourney/core` (a Journey project carries no dependencies, so `import { z } from "zod"` would not resolve).
 
 ```ts
-import { env, expect, journey, output, step, z } from "@journey/core";
+import { env, expect, journey, output, step, z } from "@usejourney/core";
 
 export const acquireToken = journey(
   "auth.acquire-token",
@@ -83,7 +83,7 @@ export const acquireToken = journey(
 `invokeJourney(handle, opts)` registers the call as a pipeline node, alongside `step()` calls:
 
 ```ts
-import { env, invokeJourney, journey, step } from "@journey/core";
+import { env, invokeJourney, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 import { acquireToken } from "./helpers/auth.js";
 
@@ -129,7 +129,7 @@ A **setup** sub-journey creates a fixture and `output()`s its id; parents invoke
 ```ts
 // journeys/helpers/fixtures.ts
 import { endpoints } from "../../generated/endpoints.js";
-import { expect, journey, output, step, z } from "@journey/core";
+import { expect, journey, output, step, z } from "@usejourney/core";
 
 export const seedPet = journey(
   "fixtures.seed-pet",

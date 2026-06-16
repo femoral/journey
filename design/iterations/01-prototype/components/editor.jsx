@@ -306,7 +306,7 @@ function HookEditor({ title, code }) {
 }
 
 function SourceView() {
-  const source = `import { journey, step } from '@journey/core';
+  const source = `import { journey, step } from '@usejourney/core';
 import { endpoints } from '@/generated/endpoints';
 
 export default journey('checkout-happy-path', { tags: ['smoke', 'payments'] }, async (ctx) => {
@@ -505,7 +505,7 @@ function FilePreview({ path }) {
   const isGenerated = path.startsWith('generated/');
   const isJson = path.endsWith('.json') || path.endsWith('.yaml');
   const snippets = {
-    'journeys/checkout-happy-path.journey.ts': `import { journey, step } from '@journey/core';
+    'journeys/checkout-happy-path.journey.ts': `import { journey, step } from '@usejourney/core';
 import { endpoints } from '@/generated/endpoints';
 
 export default journey('checkout-happy-path', {

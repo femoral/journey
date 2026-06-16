@@ -25,7 +25,7 @@ describe("exportToK6 — static output", () => {
       await mkdir(join(tmp, "generated"));
       await writeFile(
         join(tmp, "generated", "endpoints.ts"),
-        `import type { EndpointRef } from "@journey/core";
+        `import type { EndpointRef } from "@usejourney/core";
 export const endpoints = {
   listPets: { method: "GET", path: "/pets", operationId: "listPets" } as unknown as EndpointRef<unknown>,
 } as const;
@@ -34,7 +34,7 @@ export const endpoints = {
       const journey = join(tmp, "list-pets.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, expect } from "@journey/core";
+        `import { journey, step, expect } from "@usejourney/core";
 import { endpoints } from "./generated/endpoints.js";
 
 journey("list pets", () => {
@@ -53,7 +53,7 @@ journey("list pets", () => {
       const src = await readFile(result.outFile, "utf8");
       expect(src).toContain('import http from "k6/http"');
       expect(src).toContain('import { check, group } from "k6"');
-      expect(src).not.toContain("@journey/core");
+      expect(src).not.toContain("@usejourney/core");
       expect(src).toContain("const endpoints = {");
       expect(src).toContain("listPets:");
       expect(src).toContain('journey("list pets"');
@@ -76,7 +76,7 @@ journey("list pets", () => {
       const journey = join(tmp, "load.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step } from "@journey/core";
+        `import { journey, step } from "@usejourney/core";
 journey("load", () => {
   step("ping", { endpoint: { method: "GET", path: "/ping" } });
 });
@@ -101,7 +101,7 @@ journey("load", () => {
       const journey = join(tmp, "plain.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step } from "@journey/core";
+        `import { journey, step } from "@usejourney/core";
 journey("plain", () => {
   step("ping", { endpoint: { method: "GET", path: "/ping" } });
 });
@@ -122,7 +122,7 @@ journey("plain", () => {
       await mkdir(dirname(journey), { recursive: true });
       await writeFile(
         journey,
-        `import { journey, step } from "@journey/core";
+        `import { journey, step } from "@usejourney/core";
 journey("p", () => { step("s", { endpoint: { method: "GET", path: "/" } }); });
 `,
       );
@@ -142,7 +142,7 @@ describe("exportToK6 — sub-journeys", () => {
       const journey = join(tmp, "with-sub.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, invokeJourney, output, z } from "@journey/core";
+        `import { journey, step, invokeJourney, output, z } from "@usejourney/core";
 
 const warmUp = journey(
   "warm up",
@@ -170,7 +170,7 @@ journey("with sub", () => {
       // do the inlining at runtime.
       expect(src).toContain("invokeJourney(warmUp,");
       expect(src).toContain("reusable: true");
-      expect(src).not.toContain("@journey/core");
+      expect(src).not.toContain("@usejourney/core");
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -182,7 +182,7 @@ journey("with sub", () => {
       await mkdir(join(tmp, "helpers"));
       await writeFile(
         join(tmp, "helpers", "auth.ts"),
-        `import { journey, step, output, z } from "@journey/core";
+        `import { journey, step, output, z } from "@usejourney/core";
 export const acquireToken = journey(
   "auth.acquire-token",
   { reusable: true, outputs: z.object({ token: z.string() }) },
@@ -198,7 +198,7 @@ export const acquireToken = journey(
       const journey = join(tmp, "checkout.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, invokeJourney } from "@journey/core";
+        `import { journey, step, invokeJourney } from "@usejourney/core";
 import { acquireToken } from "./helpers/auth.js";
 
 journey("checkout", () => {
@@ -214,12 +214,12 @@ journey("checkout", () => {
       const result = await exportToK6({ journeyFile: journey });
       const src = await readFile(result.outFile, "utf8");
       // The helper body is inlined as a plain `const` (its `export` rewritten,
-      // its `@journey/core` import stripped). The TS→JS transpile pass strips
+      // its `@usejourney/core` import stripped). The TS→JS transpile pass strips
       // the `// ----- inlined from -----` marker comment, so assert on the
       // surviving declaration rather than the cosmetic marker.
       expect(src).toContain("const acquireToken =");
       expect(src).not.toContain("export const acquireToken");
-      expect(src).not.toContain("@journey/core");
+      expect(src).not.toContain("@usejourney/core");
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -259,7 +259,7 @@ describeIfK6("exportToK6 — live k6 run", () => {
       const journey = join(tmp, "list-pets.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, expect } from "@journey/core";
+        `import { journey, step, expect } from "@usejourney/core";
 
 journey("list pets", () => {
   step("fetch", {
@@ -310,7 +310,7 @@ journey("list pets", () => {
       await mkdir(join(tmp, "generated"));
       await writeFile(
         join(tmp, "generated", "endpoints.ts"),
-        `import type { EndpointRef } from "@journey/core";
+        `import type { EndpointRef } from "@usejourney/core";
 type JsonResponse = unknown;
 export const endpoints = {
   listPets: { method: "GET", path: "/pets", operationId: "listPets" } as unknown as EndpointRef<JsonResponse>,
@@ -320,7 +320,7 @@ export const endpoints = {
       const journey = join(tmp, "typed.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, expect } from "@journey/core";
+        `import { journey, step, expect } from "@usejourney/core";
 import { endpoints } from "./generated/endpoints.js";
 
 journey("typed pets", () => {
@@ -365,7 +365,7 @@ journey("typed pets", () => {
       const journey = join(tmp, "checkout.journey.ts");
       await writeFile(
         journey,
-        `import { journey, step, expect, invokeJourney, output, z } from "@journey/core";
+        `import { journey, step, expect, invokeJourney, output, z } from "@usejourney/core";
 
 const warmUp = journey(
   "warm up",

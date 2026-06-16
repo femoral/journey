@@ -30,10 +30,10 @@ journey init <dir> --spec <path> [--force]
 3. Copies the spec to `<dir>/<basename of --spec>`.
 4. Writes an initial `journey.config.json` referencing the copied spec.
 5. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
-6. Writes a minimal `package.json` (`"name"`, `"private": true`, `"type": "module"`). No dependencies, no install step — the CLI ships `@journey/core` and the runner plants a `node_modules/@journey/core` symlink the first time a journey runs.
+6. Writes a minimal `package.json` (`"name"`, `"private": true`, `"type": "module"`). No dependencies, no install step — the CLI ships `@usejourney/core` and the runner plants a `node_modules/@usejourney/core` symlink the first time a journey runs.
 7. Runs code generation once, producing `generated/endpoints.ts` and `generated/models.ts`.
 
-After init, you can immediately run `journey run` — there is no `pnpm install` step. The CLI satisfies the `@journey/core` import via a symlink it creates under the project's `node_modules/` on first run.
+After init, you can immediately run `journey run` — there is no `pnpm install` step. The CLI satisfies the `@usejourney/core` import via a symlink it creates under the project's `node_modules/` on first run.
 
 ## Output
 

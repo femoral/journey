@@ -26,7 +26,7 @@
  * their baked behaviour.
  */
 
-import type { StepDef } from "@journey/core";
+import type { StepDef } from "@usejourney/core";
 
 export const STATE_VAR = "__journey_state";
 

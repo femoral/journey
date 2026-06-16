@@ -81,7 +81,7 @@ describe("codegen", () => {
     expect(models).toContain("Pet");
 
     const endpoints = await readFile(result.endpointsPath, "utf8");
-    expect(endpoints).toContain('import type { EndpointRef } from "@journey/core"');
+    expect(endpoints).toContain('import type { EndpointRef } from "@usejourney/core"');
     expect(endpoints).toContain("listPets:");
     expect(endpoints).toContain('method: "GET", path: "/pets"');
     expect(endpoints).toContain("createPet:");

@@ -141,7 +141,7 @@ describe("JsonPretty", () => {
 
 describe("TsHighlight", () => {
   it("preserves the entire input text", () => {
-    const src = "import { journey } from '@journey/core'";
+    const src = "import { journey } from '@usejourney/core'";
     const { container } = render(() => <TsHighlight text={src} />);
     expect(container.textContent).toBe(src);
   });

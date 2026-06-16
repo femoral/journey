@@ -10,7 +10,7 @@ Regenerate the OpenAPI-derived TypeScript artefacts for a Journey project. The u
 1. **Resolve the project path.** Use `$ARGUMENTS` if provided; otherwise default to `examples/petstore`. Confirm it contains `journey.config.json` and `openapi.yaml` — if not, stop and tell the user.
 2. **Build the CLI** so the regen uses the current source:
    ```sh
-   pnpm --filter @journey/cli build
+   pnpm --filter @usejourney/cli build
    ```
 3. **Run codegen**:
    ```sh

@@ -53,7 +53,7 @@ Surfaces:
 - **k6 adapter** — exports a `.journey.ts` to a runnable k6 load test
 - **Mock server** lives next to the example project for offline dev
 
-A single runtime core (`@journey/core`) drives all surfaces — the CLI,
+A single runtime core (`@usejourney/core`) drives all surfaces — the CLI,
 the GUI's "Run" button, and exported k6 scripts share one execution
 path. No logic forks.
 

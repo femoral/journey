@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@journey/core": "workspace:*"
+    "@usejourney/core": "workspace:*"
   }
 }

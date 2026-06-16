@@ -59,4 +59,4 @@ Sorted list of environment names (no `.json` suffix). Returns `[]` if the direct
 
 ## State model
 
-There is exactly one active environment at a time, kept in a module-level singleton (keyed with `Symbol.for("@journey/core::env-state")` so multiple copies of `@journey/core` share it). Tests that embed the runtime should `clearActiveEnvironment()` between cases to avoid leakage.
+There is exactly one active environment at a time, kept in a module-level singleton (keyed with `Symbol.for("@usejourney/core::env-state")` so multiple copies of `@usejourney/core` share it). Tests that embed the runtime should `clearActiveEnvironment()` between cases to avoid leakage.

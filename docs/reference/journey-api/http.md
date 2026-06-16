@@ -105,7 +105,7 @@ Standalone URL resolver — throws `No base URL configured` if neither the endpo
 Typical flow when embedding:
 
 ```ts
-import { buildRequest, execute, type HttpContext } from "@journey/core";
+import { buildRequest, execute, type HttpContext } from "@usejourney/core";
 
 const ctx: HttpContext = { baseUrl: "https://api.example.com" };
 const req = buildRequest({ endpoint, params: { id: 1 }, body: { name: "x" } }, ctx);

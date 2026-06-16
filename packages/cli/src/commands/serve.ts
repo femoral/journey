@@ -1,4 +1,4 @@
-import type { CacheMode } from "@journey/core";
+import type { CacheMode } from "@usejourney/core";
 import { startServer } from "../server/server.js";
 import { enableInsecureTls } from "./run.js";
 
@@ -26,7 +26,7 @@ export async function runServe(opts: ServeOptions): Promise<number> {
     ...(opts.cacheTtlMs !== undefined ? { cacheTtlMs: opts.cacheTtlMs } : {}),
   });
   console.log(`Journey API listening at ${srv.url}`);
-  console.log(`For the GUI, run: pnpm --filter @journey/gui dev`);
+  console.log(`For the GUI, run: pnpm --filter @usejourney/gui dev`);
 
   await new Promise<void>((resolve) => {
     const handler = () => {

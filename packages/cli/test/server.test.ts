@@ -182,7 +182,7 @@ paths:
 
   it("reads, writes, and deletes journey source files", async () => {
     const file = "demo.journey.ts";
-    const source = `import { journey } from "@journey/core";\njourney("x", () => {});\n`;
+    const source = `import { journey } from "@usejourney/core";\njourney("x", () => {});\n`;
 
     const put = await fetch(`${srv.url}/api/journeys/${file}`, {
       method: "PUT",
@@ -219,7 +219,7 @@ paths:
     // actually takes effect (EndpointRefs read baseUrl from ctx).
     await writeFile(
       join(projectDir, "journeys", "smoke.journey.ts"),
-      `import { journey, step } from "@journey/core";
+      `import { journey, step } from "@usejourney/core";
 journey("smoke", () => {
   step("one", { endpoint: { method: "GET", path: "/a", baseUrl: "http://127.0.0.1:${targetPort}" } });
   step("two", { endpoint: { method: "GET", path: "/b", baseUrl: "http://127.0.0.1:${targetPort}" } });
@@ -292,7 +292,7 @@ journey("smoke", () => {
 
   it("runs a journey using invokeJourney + zod re-export through the runner", async () => {
     // Proves a journey project (zero deps of its own) can reach `z`,
-    // `invokeJourney`, and `output` via the `@journey/core` symlink — the
+    // `invokeJourney`, and `output` via the `@usejourney/core` symlink — the
     // sub-journey surface from #87 resolves end-to-end through the CLI runner.
     const { createServer } = await import("node:http");
     const target = createServer((req, res) => {
@@ -310,7 +310,7 @@ journey("smoke", () => {
 
     await writeFile(
       join(projectDir, "journeys", "subjourney.journey.ts"),
-      `import { journey, step, invokeJourney, output, z } from "@journey/core";
+      `import { journey, step, invokeJourney, output, z } from "@usejourney/core";
 
 const acquireToken = journey(
   "auth.acquire-token",
@@ -382,7 +382,7 @@ journey("with-sub", () => {
 
     await writeFile(
       join(projectDir, "journeys", "grouped.journey.ts"),
-      `import { journey, step, invokeJourney, output, z } from "@journey/core";
+      `import { journey, step, invokeJourney, output, z } from "@usejourney/core";
 
 const auth = journey(
   "auth.sub",
@@ -479,7 +479,7 @@ journey("grouped", () => {
   it("GET /api/journeys/:file/plan resolves the nested plan tree without running", async () => {
     await writeFile(
       join(projectDir, "journeys", "planned.journey.ts"),
-      `import { journey, step, invokeJourney } from "@journey/core";
+      `import { journey, step, invokeJourney } from "@usejourney/core";
 
 const child = journey("child.sub", { reusable: true }, () => {
   step("inner", { endpoint: { method: "GET", path: "/x", baseUrl: "http://127.0.0.1:1" } });
@@ -526,7 +526,7 @@ journey("planned", () => {
 
     await writeFile(
       join(projectDir, "journeys", "abortable.journey.ts"),
-      `import { journey, step } from "@journey/core";
+      `import { journey, step } from "@usejourney/core";
 journey("slow", () => {
   step("hang", { endpoint: { method: "GET", path: "/slow", baseUrl: "http://127.0.0.1:${targetPort}" } });
 });
@@ -618,7 +618,7 @@ journey("slow", () => {
     // Fixture: spec has getPet + listPets, generated/endpoints.ts has getPet +
     // deletePet. So listPets is added-in-spec, deletePet is removed-from-spec.
     const generatedEndpoints = `// AUTO-GENERATED
-import type { EndpointRef } from "@journey/core";
+import type { EndpointRef } from "@usejourney/core";
 export const endpoints = {
   getPet: { method: "GET", path: "/pets/{id}", operationId: "getPet" } as unknown as EndpointRef<unknown>,
   deletePet: { method: "DELETE", path: "/pets/{id}", operationId: "deletePet" } as unknown as EndpointRef<unknown>,

@@ -1,4 +1,4 @@
-import { env, expect, invokeJourney, journey, step } from "@journey/core";
+import { env, expect, invokeJourney, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 import { establishSession } from "./helpers/session.js";
 

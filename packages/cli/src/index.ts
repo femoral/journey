@@ -1,6 +1,6 @@
 import { resolve as resolvePath } from "node:path";
 import { Command } from "commander";
-import type { CacheMode } from "@journey/core";
+import type { CacheMode } from "@usejourney/core";
 import { runEnvList } from "./commands/envList.js";
 import { runExportK6 } from "./commands/exportK6.js";
 import { runExportPostman } from "./commands/exportPostman.js";

@@ -1,4 +1,4 @@
-import { AssertionError, env, expect, journey, step } from "@journey/core";
+import { AssertionError, env, expect, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 journey("k6 smoke tag", { tags: ["smoke"], k6: { vus: 5, duration: "10s" } }, () => {

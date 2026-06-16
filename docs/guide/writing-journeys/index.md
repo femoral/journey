@@ -13,7 +13,7 @@ A **journey** is a `.journey.ts` file that describes a sequence of HTTP steps. E
 ## Anatomy of a `.journey.ts` file
 
 ```ts
-import { journey, step, env, expect } from "@journey/core";
+import { journey, step, env, expect } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 journey("multi-step crud", () => {

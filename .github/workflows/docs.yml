@@ -35,9 +35,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify SOURCES.md is up to date
-        run: pnpm --filter @journey/docs run sources:check
+        run: pnpm --filter @usejourney/docs run sources:check
       - name: Build docs site
-        run: pnpm --filter @journey/docs run docs:build
+        run: pnpm --filter @usejourney/docs run docs:build
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
         with:

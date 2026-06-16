@@ -77,7 +77,7 @@ The CLI calls this after every run with `keep = config.runHistoryKeepCount`. Fai
 ## Example — archive runs older than a week
 
 ```ts
-import { listRuns, readRun, pruneRuns } from "@journey/core";
+import { listRuns, readRun, pruneRuns } from "@usejourney/core";
 import { writeFile } from "node:fs/promises";
 
 const cacheDir = ".journey/cache";

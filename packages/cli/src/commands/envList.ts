@@ -1,4 +1,4 @@
-import { listEnvironments, loadConfig, resolveConfigPaths } from "@journey/core";
+import { listEnvironments, loadConfig, resolveConfigPaths } from "@usejourney/core";
 
 export async function runEnvList(projectDir: string): Promise<void> {
   const loaded = await loadConfig(projectDir);

@@ -31,7 +31,7 @@ import {
 } from "../ui";
 import { AddStepDialog, renameStep } from "./AddStepDialog";
 
-const SKELETON = (name: string) => `import { journey, step, expect } from "@journey/core";
+const SKELETON = (name: string) => `import { journey, step, expect } from "@usejourney/core";
 
 journey(${JSON.stringify(name)}, () => {
   step("first step", {

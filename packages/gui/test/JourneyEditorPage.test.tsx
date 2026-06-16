@@ -5,7 +5,7 @@ import { JourneyEditorPage, parseSteps, reorderSource } from "../src/pages/Journ
 const listResp = { journeysDir: "/tmp", files: ["auth.journey.ts"] };
 const sourceResp = {
   file: "auth.journey.ts",
-  source: `import { journey, step } from "@journey/core";
+  source: `import { journey, step } from "@usejourney/core";
 
 journey("auth flow", () => {
   step("login", {

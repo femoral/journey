@@ -14,7 +14,7 @@ import {
   type JourneyResult,
   type LoadedConfig,
   type SubJourneyCache,
-} from "@journey/core";
+} from "@usejourney/core";
 import { enableInsecureTls } from "../commands/run.js";
 import { patchConsole } from "./consolePatch.js";
 import { importJourneyFiles } from "../util/loadJourneyFile.js";

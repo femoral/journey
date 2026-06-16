@@ -83,7 +83,7 @@ export async function runPostScript(
   const log = (...args: unknown[]) => {
     logs.push({ level: "info", text: fmt(args) });
   };
-  // Minimal `expect` shim — mirrors the @journey/core assertion used in step
+  // Minimal `expect` shim — mirrors the @usejourney/core assertion used in step
   // assert hooks. Throws with a readable message so the caller surfaces it.
   const expect = <T>(actual: T) => ({
     toBe(expected: T) {

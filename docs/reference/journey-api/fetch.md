@@ -1,6 +1,6 @@
 ---
 title: Fetch
-description: Instrumented fetch from @journey/core — drop-in globalThis.fetch replacement that routes through the active run's logger.
+description: Instrumented fetch from @usejourney/core — drop-in globalThis.fetch replacement that routes through the active run's logger.
 sources:
   - packages/core/src/fetch.ts
   - packages/core/src/runtime.ts
@@ -20,7 +20,7 @@ Helper code that performs HTTP from inside a step's `before`-style work, `header
 - Run records (`.journey/cache/runs/*.run.json`) only record requests made through that pipeline.
 - The GUI's per-step request panel only fills from logger events.
 
-Switching to `import { fetch } from "@journey/core"` makes those calls show up everywhere, attributed to the surrounding step.
+Switching to `import { fetch } from "@usejourney/core"` makes those calls show up everywhere, attributed to the surrounding step.
 
 ## Signature
 
@@ -36,7 +36,7 @@ The signature mirrors `globalThis.fetch` exactly. The return value is the **orig
 ## Behaviour
 
 ```ts
-import { fetch } from "@journey/core";
+import { fetch } from "@usejourney/core";
 ```
 
 Inside any step hook:
@@ -54,7 +54,7 @@ Outside a run context the function short-circuits to `globalThis.fetch(input, in
 ## Example
 
 ```ts
-import { fetch, journey, step, env } from "@journey/core";
+import { fetch, journey, step, env } from "@usejourney/core";
 
 function registerAuthStep(setToken: (t: string) => void) {
   step("auth", {

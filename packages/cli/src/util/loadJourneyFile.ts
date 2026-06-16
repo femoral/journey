@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { clearRegistry, getRegisteredJourneys, type JourneyDef } from "@journey/core";
+import { clearRegistry, getRegisteredJourneys, type JourneyDef } from "@usejourney/core";
 import { tsImport } from "tsx/esm/api";
 
 /**

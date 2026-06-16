@@ -2,13 +2,13 @@
 name: journey-api-testing
 description: >-
   Scaffold, structure, write, run, and debug API end-to-end test projects built with Journey — the
-  local-first `@journey/cli` / `@journey/core` tool that generates typed, multi-step API tests from
+  local-first `@usejourney/cli` / `@usejourney/core` tool that generates typed, multi-step API tests from
   an OpenAPI/Swagger spec. Use this whenever the user wants to: create a Journey project from an
   OpenAPI/Swagger spec (`journey init`), understand a Journey project's directory layout, write or
   edit `.journey.ts` files / multi-step API flows, run journeys with the `journey run` CLI,
   regenerate typed endpoints after a spec change (`journey generate`), or troubleshoot a failing
   journey or a `journey:` CLI error. Trigger even if the user only mentions a `.journey.ts` file,
-  the `journey` CLI binary, `@journey/core`, the generated `endpoints.ts` / `models.ts` files, or
+  the `journey` CLI binary, `@usejourney/core`, the generated `endpoints.ts` / `models.ts` files, or
   "Journey" API testing — don't wait for them to name the tool explicitly.
 ---
 
@@ -43,7 +43,7 @@ Three facts explain almost everything:
 
 ```sh
 # install the CLI (binary name: `journey`) — needs Node 20+
-pnpm add -D @journey/cli      # or: npm i -D @journey/cli   /   pnpm add -g @journey/cli
+pnpm add -D @usejourney/cli      # or: npm i -D @usejourney/cli   /   pnpm add -g @usejourney/cli
 
 # scaffold
 journey init my-api --spec ./openapi.yaml          # add --force to init into a non-empty dir
@@ -57,10 +57,10 @@ journey init my-api --spec ./openapi.yaml          # add --force to init into a 
    overwrite the copy if the source spec moves).
 4. Writes a minimal `journey.config.json`.
 5. Writes `.gitignore` (ignores `.journey/cache/` and `node_modules/`).
-6. Writes a minimal `package.json` (`"type": "module"`, `"private": true`) — **no dependencies, no install step**. The CLI bundles `@journey/core` and plants a `node_modules/@journey/core` symlink the first time a journey runs.
+6. Writes a minimal `package.json` (`"type": "module"`, `"private": true`) — **no dependencies, no install step**. The CLI bundles `@usejourney/core` and plants a `node_modules/@usejourney/core` symlink the first time a journey runs.
 7. Runs code generation once → `generated/endpoints.ts` + `generated/models.ts`.
 
-After init you'll see `Initialized Journey project at /abs/path (N operations).` — `journey run` works immediately, there is **no per-project `pnpm install` / `npm install`** (the CLI satisfies the `@journey/core` import via the symlink it plants on first run). If `N` is `0`, an extra warning prints — your `generated/endpoints.ts` is empty and you'll only be able to use descriptor endpoints. A `swagger.json` / `swagger.yaml` works the same way; "Swagger" and "OpenAPI" are the same input here as long as it's OpenAPI 3.x or Swagger 2.x.
+After init you'll see `Initialized Journey project at /abs/path (N operations).` — `journey run` works immediately, there is **no per-project `pnpm install` / `npm install`** (the CLI satisfies the `@usejourney/core` import via the symlink it plants on first run). If `N` is `0`, an extra warning prints — your `generated/endpoints.ts` is empty and you'll only be able to use descriptor endpoints. A `swagger.json` / `swagger.yaml` works the same way; "Swagger" and "OpenAPI" are the same input here as long as it's OpenAPI 3.x or Swagger 2.x.
 
 ### Make it runnable: set `baseUrl`
 
@@ -124,7 +124,7 @@ my-api/
 A journey is a `.journey.ts` file in `journeys/`. Canonical shape:
 
 ```ts
-import { journey, step, env, expect } from "@journey/core";
+import { journey, step, env, expect } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js"; // note the .js extension — it's an ESM import
 
 journey("pet CRUD flow", () => {

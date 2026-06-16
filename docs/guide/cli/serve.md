@@ -41,7 +41,7 @@ Exposes REST endpoints for project metadata, journeys, runs, run replay, environ
 
 ```
 Journey API listening at http://127.0.0.1:5181
-For the GUI, run: pnpm --filter @journey/gui dev
+For the GUI, run: pnpm --filter @usejourney/gui dev
 ```
 
 On shutdown:
@@ -63,7 +63,7 @@ Shutting down…
 
 ```sh
 journey serve --project my-api --port 5181 &
-pnpm --filter @journey/gui dev
+pnpm --filter @usejourney/gui dev
 ```
 
 Or use the convenience script in the monorepo root, which starts a mock server + the CLI's `serve` + the GUI dev server concurrently:

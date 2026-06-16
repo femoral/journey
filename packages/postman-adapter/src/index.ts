@@ -1,4 +1,4 @@
-import type { StepDef } from "@journey/core";
+import type { StepDef } from "@usejourney/core";
 import {
   cacheExpirySet,
   cacheHitPrerequest,
@@ -107,7 +107,7 @@ export interface PostmanEnvironment {
 /**
  * The shape `buildFolder` walks. The CLI resolves a journey's `PipelineNode[]`
  * into this tree — recursing into each sub-journey via `collectSubPipeline` —
- * so the adapter stays free of a runtime dependency on `@journey/core`.
+ * so the adapter stays free of a runtime dependency on `@usejourney/core`.
  */
 export type ExportNode =
   | { kind: "step"; def: StepDef }

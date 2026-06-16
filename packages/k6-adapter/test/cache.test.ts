@@ -85,7 +85,7 @@ const count = (reqs: Captured[], suffix: string): number =>
 // A reusable sub-journey (`POST /seed`) cached by a static key, plus a parent
 // that consumes its output and then hits `GET /use`.
 const CACHED = `\
-import { journey, step, invokeJourney, output, z } from "@journey/core";
+import { journey, step, invokeJourney, output, z } from "@usejourney/core";
 
 const seed = journey("seed", { reusable: true, outputs: z.object({ id: z.number() }) }, () => {
   step("create", {
@@ -108,7 +108,7 @@ journey("uses cache", () => {
 `;
 
 const CACHED_TTL = `\
-import { journey, step, invokeJourney, output, z } from "@journey/core";
+import { journey, step, invokeJourney, output, z } from "@usejourney/core";
 
 const seed = journey("seed", { reusable: true, outputs: z.object({ id: z.number() }) }, () => {
   step("create", { endpoint: { method: "POST", path: "/seed" }, after: (res) => output({ id: res.body.id }) });

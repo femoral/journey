@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
-import { loadConfig, resolveConfigPaths } from "@journey/core";
-import { generate } from "@journey/codegen";
+import { loadConfig, resolveConfigPaths } from "@usejourney/core";
+import { generate } from "@usejourney/codegen";
 
 export async function runGenerate(projectDir: string): Promise<void> {
   const loaded = await loadConfig(projectDir);

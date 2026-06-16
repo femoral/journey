@@ -1,4 +1,4 @@
-import { env, expect, journey, output, step, z } from "@journey/core";
+import { env, expect, journey, output, step, z } from "@usejourney/core";
 
 /**
  * Reusable sub-journey: exchanges credentials for a bearer token at the IDP
@@ -8,7 +8,7 @@ import { env, expect, journey, output, step, z } from "@journey/core";
  * This replaces the copy-pasted "login via IDP" step that otherwise lives
  * verbatim at the top of every journey that needs auth.
  *
- * Note `z` is imported from `@journey/core` — a Journey project carries no
+ * Note `z` is imported from `@usejourney/core` — a Journey project carries no
  * dependencies of its own, so `import { z } from "zod"` would not resolve.
  */
 export const acquireToken = journey(

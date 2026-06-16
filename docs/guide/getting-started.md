@@ -21,13 +21,13 @@ Journey projects live as plain directories in your repo — no lockfile in the c
 
 ```sh
 # inside a repo
-pnpm add -D @journey/cli
+pnpm add -D @usejourney/cli
 
 # or globally
-pnpm add -g @journey/cli
+pnpm add -g @usejourney/cli
 ```
 
-The CLI is published as `@journey/cli` and exposes a single binary, `journey`.
+The CLI is published as `@usejourney/cli` and exposes a single binary, `journey`.
 
 ## Scaffold a project
 
@@ -94,7 +94,7 @@ It only rewrites `generated/endpoints.ts` and `generated/models.ts`. Your `journ
 Create `journeys/hello.journey.ts`:
 
 ```ts
-import { journey, step, expect } from "@journey/core";
+import { journey, step, expect } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 journey("hello", () => {

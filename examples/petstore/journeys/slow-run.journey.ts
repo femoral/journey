@@ -1,4 +1,4 @@
-import { expect, journey, step } from "@journey/core";
+import { expect, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 /**

@@ -153,7 +153,7 @@ interface ChildOutputSlot {
   written: boolean;
 }
 
-// Shared across module instances — tsx can load `@journey/core` more than once
+// Shared across module instances — tsx can load `@usejourney/core` more than once
 // (once from the runner, once through the journey file's imports), and we need
 // both copies to point at the same registry/collector.
 interface SharedState {
@@ -174,7 +174,7 @@ interface SharedState {
    */
   childOutputs: ChildOutputSlot[];
 }
-const STATE_KEY = Symbol.for("@journey/core::runtime-state");
+const STATE_KEY = Symbol.for("@usejourney/core::runtime-state");
 const globals = globalThis as unknown as { [STATE_KEY]?: SharedState };
 const state: SharedState =
   globals[STATE_KEY] ??
@@ -888,7 +888,7 @@ export async function runJourney(
   const results: StepResult[] = [];
 
   // Expose the active ctx so helpers can call into the run's logger (e.g.
-  // `import { fetch } from "@journey/core"` inside an `after` hook). Restored
+  // `import { fetch } from "@usejourney/core"` inside an `after` hook). Restored
   // in finally so nested or sequential journeys don't see a stale ctx.
   const prevCtx = state.currentCtx;
   state.currentCtx = ctx;

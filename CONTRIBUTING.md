@@ -35,12 +35,12 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ## Codegen — one-way
 
-`@journey/codegen` writes only into `<project>/generated/`. It never touches `journeys/`, `environments/`, or `journey.config.json`. Don't hand-edit `generated/endpoints.ts` or `generated/models.ts`.
+`@usejourney/codegen` writes only into `<project>/generated/`. It never touches `journeys/`, `environments/`, or `journey.config.json`. Don't hand-edit `generated/endpoints.ts` or `generated/models.ts`.
 
 To regenerate the petstore example:
 
 ```sh
-pnpm --filter @journey/cli build
+pnpm --filter @usejourney/cli build
 node packages/cli/dist/index.js generate --project examples/petstore
 ```
 
@@ -54,7 +54,7 @@ Use `nix-shell` (preferred — see [`shell.nix`](shell.nix) for the full pin) or
 - pnpm 9.12.0 (`packageManager` field is authoritative)
 - Rust toolchain (Tauri 2)
 - webkit2gtk 4.1 + GTK3 (Linux/WSLg)
-- k6 (for `@journey/k6-adapter` integration testing)
+- k6 (for `@usejourney/k6-adapter` integration testing)
 - Playwright browsers (auto-pinned via `PLAYWRIGHT_BROWSERS_PATH` in the Nix shell)
 
 **WSLg / HiDPI tuning** — Tauri's WebView doesn't read Windows DPI from WSLg. `shell.nix` sets `GDK_BACKEND=x11`, `GDK_SCALE=2`, `GDK_DPI_SCALE=1` by default (good for HiDPI). For 1080p, run `GDK_SCALE=1 pnpm dev:tauri` or override the env in your shell. Without the X11 backend, GTK ignores `GDK_SCALE` on Wayland and you get blurry text.
@@ -62,17 +62,17 @@ Use `nix-shell` (preferred — see [`shell.nix`](shell.nix) for the full pin) or
 ## Test prerequisites
 
 - **Vitest** runs in every package via `pnpm -r test`. No external services needed.
-- **Playwright e2e** (`pnpm --filter @journey/gui test:e2e`) needs a live stack: petstore mock + cli serve + gui vite. Easiest path is `pnpm dev:web` in another shell, then run the Playwright suite against it.
+- **Playwright e2e** (`pnpm --filter @usejourney/gui test:e2e`) needs a live stack: petstore mock + cli serve + gui vite. Easiest path is `pnpm dev:web` in another shell, then run the Playwright suite against it.
 - **k6** is available in the dev shell; the adapter doesn't auto-run k6 in CI, so verify exports manually with `k6 run --vus=1 --iterations=1 <generated.k6.js>`.
 
 ## Docs maintenance
 
-`docs/SOURCES.md` is auto-generated from doc-comments in `packages/*/src/` by `scripts/gen-doc-sources.ts`. CI gates it via `pnpm --filter @journey/docs sources:check`.
+`docs/SOURCES.md` is auto-generated from doc-comments in `packages/*/src/` by `scripts/gen-doc-sources.ts`. CI gates it via `pnpm --filter @usejourney/docs sources:check`.
 
 After changing public exports in any package, run:
 
 ```sh
-pnpm --filter @journey/docs sources:gen
+pnpm --filter @usejourney/docs sources:gen
 ```
 
 …and stage the resulting `docs/SOURCES.md` in the same commit. The `/verify` slash command includes `sources:check` so you'll catch drift locally before pushing.
@@ -83,7 +83,7 @@ For prose docs under `docs/guide/` and `docs/reference/`, update them when you c
 
 The `journey-api-testing` skill at [`skills/journey-api-testing/`](skills/journey-api-testing/) is the agent-facing companion to `docs/`. Any change to:
 
-- Runtime APIs exported from `@journey/core` (`journey()`, `step()`, `expect()`, `env()`, logger, history)
+- Runtime APIs exported from `@usejourney/core` (`journey()`, `step()`, `expect()`, `env()`, logger, history)
 - CLI commands or flags (`run`, `serve`, `init`, `generate`, `export …`)
 - Codegen output shape (`generated/endpoints.ts`, `generated/models.ts`)
 - `journey.config.json` schema

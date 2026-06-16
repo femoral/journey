@@ -1,7 +1,17 @@
 {
-  "name": "@journey/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@usejourney/cli",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/femoral/journey.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/femoral/journey#readme",
+  "bugs": "https://github.com/femoral/journey/issues",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "journey": "./dist/index.js"
@@ -15,10 +25,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@journey/codegen": "workspace:^",
-    "@journey/core": "workspace:*",
-    "@journey/k6-adapter": "workspace:^",
-    "@journey/postman-adapter": "workspace:^",
+    "@usejourney/codegen": "workspace:^",
+    "@usejourney/core": "workspace:*",
+    "@usejourney/k6-adapter": "workspace:^",
+    "@usejourney/postman-adapter": "workspace:^",
     "commander": "^12.1.0",
     "tsx": "^4.21.0",
     "undici": "^8.3.0"

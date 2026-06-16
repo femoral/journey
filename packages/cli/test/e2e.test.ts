@@ -58,7 +58,7 @@ describe("CLI e2e", () => {
       const journeyFile = join(projectDir, "journeys", "list-pets.journey.ts");
       await writeFile(
         journeyFile,
-        `import { journey, step, expect, env } from "@journey/core";
+        `import { journey, step, expect, env } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 journey("list pets", () => {

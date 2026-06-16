@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "description": "Local-first API testing & orchestration tool",
+  "license": "MIT",
+  "author": "femoral <me@femoral.dev>",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20"
@@ -15,8 +17,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "dev:ensure": "node scripts/ensure-petstore-dev.mjs",
     "dev:reset": "node scripts/ensure-petstore-dev.mjs --force",
-    "dev:web": "pnpm dev:ensure && pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,gui -c blue,green,cyan,magenta --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @journey/gui dev\"",
-    "dev:tauri": "pnpm dev:ensure && pnpm --filter @journey/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,vite,tauri -c blue,green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @journey/gui dev\" \"pnpm --filter @journey/gui tauri:dev\""
+    "dev:web": "pnpm dev:ensure && pnpm --filter @usejourney/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,gui -c blue,green,cyan,magenta --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @usejourney/gui dev\"",
+    "dev:tauri": "pnpm dev:ensure && pnpm --filter @usejourney/cli build && AUTH_SECRET=journey-shared-dev-secret concurrently -n auth,mock,api,vite,tauri -c blue,green,cyan,magenta,yellow --kill-others --handle-input \"node examples/petstore.dev/auth-server.mjs\" \"node examples/petstore.dev/server.mjs\" \"node packages/cli/dist/index.js serve --project examples/petstore.dev --port 5181\" \"pnpm --filter @usejourney/gui dev\" \"pnpm --filter @usejourney/gui tauri:dev\""
   },
   "devDependencies": {
     "@types/node": "^22.7.5",

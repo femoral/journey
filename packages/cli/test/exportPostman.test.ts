@@ -39,7 +39,7 @@ async function makeFullProject(envValues: Record<string, string> = {}): Promise<
 // ── journey fixtures ──────────────────────────────────────────────────────────
 
 const ITEMS_JOURNEY = `\
-import { journey, step } from "@journey/core";
+import { journey, step } from "@usejourney/core";
 journey("items api", () => {
   step("list items", { endpoint: { method: "GET", path: "/items" } });
   step("create item", { endpoint: { method: "POST", path: "/items" }, body: { name: "test" } });
@@ -47,7 +47,7 @@ journey("items api", () => {
 `;
 
 const ENV_JOURNEY = `\
-import { env, journey, step } from "@journey/core";
+import { env, journey, step } from "@usejourney/core";
 journey("env test", () => {
   step("fetch", {
     endpoint: { method: "GET", path: "/data" },
@@ -57,7 +57,7 @@ journey("env test", () => {
 `;
 
 const TAGGED_JOURNEY = `\
-import { journey, step } from "@journey/core";
+import { journey, step } from "@usejourney/core";
 journey("tagged", { tags: ["smoke"] }, () => {
   step("p", { endpoint: { method: "GET", path: "/" } });
 });
@@ -68,7 +68,7 @@ journey("untagged", () => {
 
 // A reusable journey + an entry journey that invokes it as a pipeline node.
 const SUB_JOURNEY = `\
-import { journey, step, output, invokeJourney, z } from "@journey/core";
+import { journey, step, output, invokeJourney, z } from "@usejourney/core";
 
 const acquireToken = journey(
   "auth.token",
@@ -259,7 +259,7 @@ describe("export postman — collection structure", () => {
     // `env()` is a {{KEY}} placeholder at export time, so `Number(env("X"))`
     // is NaN. The exporter must not bake `limit=NaN` / `/items/NaN`.
     const NUM_ENV_JOURNEY = `\
-import { env, journey, step } from "@journey/core";
+import { env, journey, step } from "@usejourney/core";
 journey("num env", () => {
   step("list", {
     endpoint: { method: "GET", path: "/items/{id}" },
@@ -310,21 +310,21 @@ journey("num env", () => {
 // ── bundle (single collection) tests ──────────────────────────────────────────
 
 const SECOND_JOURNEY = `\
-import { journey, step } from "@journey/core";
+import { journey, step } from "@usejourney/core";
 journey("orders api", () => {
   step("list orders", { endpoint: { method: "GET", path: "/orders" } });
 });
 `;
 
 const CHECKOUT_A = `\
-import { journey, step } from "@journey/core";
+import { journey, step } from "@usejourney/core";
 journey("checkout", () => {
   step("a", { endpoint: { method: "GET", path: "/a" } });
 });
 `;
 
 const CHECKOUT_B = `\
-import { journey, step } from "@journey/core";
+import { journey, step } from "@usejourney/core";
 journey("checkout", () => {
   step("b", { endpoint: { method: "GET", path: "/b" } });
 });
@@ -428,7 +428,7 @@ describe("export postman — bundle", () => {
 // Two entry journeys that both invoke the same reusable journey with the same
 // cacheKey — in a bundle they share one cache slot, so the child runs once.
 const CACHE_BUNDLE = `\
-import { journey, step, output, invokeJourney, z } from "@journey/core";
+import { journey, step, output, invokeJourney, z } from "@usejourney/core";
 
 const acquireToken = journey(
   "auth.token",
@@ -671,7 +671,7 @@ describe("Newman e2e — sub-journeys", () => {
 // A reusable login whose output token must reach later requests, plus an id
 // created mid-flow that feeds a later path param.
 const THREAD_JOURNEY = `\
-import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+import { journey, step, output, invokeJourney, expect, z } from "@usejourney/core";
 
 const login = journey(
   "auth",
@@ -773,7 +773,7 @@ describe("Newman e2e — state threading", () => {
 // header. Without input-boundary threading the child sees an empty token → 401
 // (regression: github #107).
 const INPUT_THREAD_JOURNEY = `\
-import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+import { journey, step, output, invokeJourney, expect, z } from "@usejourney/core";
 
 const login = journey(
   "auth",
@@ -878,7 +878,7 @@ describe("Newman e2e — sub-journey input threading", () => {
 // The cold pass must run BOTH child requests (the old folder-test set opened the
 // window mid-folder and skipped the second); the cache hit skips both.
 const MULTI_REQ_BUNDLE = `\
-import { journey, step, invokeJourney, z } from "@journey/core";
+import { journey, step, invokeJourney, z } from "@usejourney/core";
 
 const seed = journey("fixtures.seed", { reusable: true }, () => {
   step("a", { endpoint: { method: "POST", path: "/a" } });
@@ -949,7 +949,7 @@ describe("Newman e2e — multi-request sub-journey cache", () => {
 
 // A created id + kind feed a later dynamic request body and a dynamic query.
 const BODY_QUERY_JOURNEY = `\
-import { journey, step, expect } from "@journey/core";
+import { journey, step, expect } from "@usejourney/core";
 
 journey("body and query", () => {
   let id = 0;
@@ -1049,7 +1049,7 @@ describe("Newman e2e — body & query threading", () => {
 // Two journeys share a cacheKey'd auth sub-journey AND consume its token. The
 // second journey hits the cache (login skipped) — the token must still thread.
 const CACHE_THREAD_BUNDLE = `\
-import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+import { journey, step, output, invokeJourney, expect, z } from "@usejourney/core";
 
 const acquireToken = journey(
   "auth.token",
@@ -1235,7 +1235,7 @@ describe("Newman e2e — sub-journey cache", () => {
 
 // A step assert that expects 200 against an endpoint that returns 401.
 const STRICT_FAIL_JOURNEY = `\
-import { journey, step, expect } from "@journey/core";
+import { journey, step, expect } from "@usejourney/core";
 journey("strict fail", () => {
   step("guarded", {
     endpoint: { method: "GET", path: "/unauthorized" },
@@ -1246,7 +1246,7 @@ journey("strict fail", () => {
 
 // A step assert that passes — proves a passing assertion is COUNTED.
 const STRICT_PASS_JOURNEY = `\
-import { journey, step, expect } from "@journey/core";
+import { journey, step, expect } from "@usejourney/core";
 journey("strict pass", () => {
   step("ok", {
     endpoint: { method: "GET", path: "/ok" },
@@ -1257,7 +1257,7 @@ journey("strict pass", () => {
 
 // A sub-journey call whose assert(out) fails on the child's output.
 const SUB_FAIL_JOURNEY = `\
-import { journey, step, output, invokeJourney, expect, z } from "@journey/core";
+import { journey, step, output, invokeJourney, expect, z } from "@usejourney/core";
 const login = journey(
   "auth",
   { reusable: true, inputs: z.object({ user: z.string() }), outputs: z.object({ token: z.string() }) },
@@ -1281,7 +1281,7 @@ journey("sub fail", () => {
 // An assert whose closure references an unresolved free identifier — the
 // archetypal threading artifact. Must stay green (swallowed), not red.
 const ARTIFACT_JOURNEY = `\
-import { journey, step, expect } from "@journey/core";
+import { journey, step, expect } from "@usejourney/core";
 journey("artifact", () => {
   step("ok", {
     endpoint: { method: "GET", path: "/ok" },

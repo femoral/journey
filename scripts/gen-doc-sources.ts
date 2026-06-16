@@ -97,7 +97,7 @@ function renderMarkdown(entries: DocEntry[]): string {
   lines.push("# Docs ↔ sources index");
   lines.push("");
   lines.push(
-    "Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontmatter, then run `pnpm --filter @journey/docs sources:gen`.",
+    "Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontmatter, then run `pnpm --filter @usejourney/docs sources:gen`.",
   );
   lines.push("");
 
@@ -161,11 +161,13 @@ async function main(): Promise<void> {
     try {
       existing = await readFile(OUTPUT_PATH, "utf8");
     } catch {
-      console.error(`docs/SOURCES.md is missing. Run: pnpm --filter @journey/docs sources:gen`);
+      console.error(`docs/SOURCES.md is missing. Run: pnpm --filter @usejourney/docs sources:gen`);
       process.exit(1);
     }
     if (existing !== next) {
-      console.error(`docs/SOURCES.md is out of date. Run: pnpm --filter @journey/docs sources:gen`);
+      console.error(
+        `docs/SOURCES.md is out of date. Run: pnpm --filter @usejourney/docs sources:gen`,
+      );
       process.exit(1);
     }
     console.log("docs/SOURCES.md is up to date.");

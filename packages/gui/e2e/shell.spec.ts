@@ -91,7 +91,7 @@ test("GUI shell loads project overview from the API", async ({ page }) => {
   });
   const vite = spawn(
     "pnpm",
-    ["--filter", "@journey/gui", "dev", "--port", String(viteBasePort), "--strictPort"],
+    ["--filter", "@usejourney/gui", "dev", "--port", String(viteBasePort), "--strictPort"],
     {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"],

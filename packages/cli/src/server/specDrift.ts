@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { collectOperations, loadSpec, type Operation } from "@journey/codegen";
+import { collectOperations, loadSpec, type Operation } from "@usejourney/codegen";
 
 export type DriftEndpoint = {
   method: string;

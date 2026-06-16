@@ -1,4 +1,4 @@
-import type { JourneyLogger, LogEvent } from "@journey/core";
+import type { JourneyLogger, LogEvent } from "@usejourney/core";
 import { inspect } from "node:util";
 
 type ConsoleFn = (...args: unknown[]) => void;

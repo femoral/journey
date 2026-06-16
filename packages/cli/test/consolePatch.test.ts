@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { patchConsole } from "../src/server/consolePatch.js";
-import type { JourneyLogger, LogEvent } from "@journey/core";
+import type { JourneyLogger, LogEvent } from "@usejourney/core";
 
 describe("patchConsole", () => {
   let originalLog: typeof console.log;

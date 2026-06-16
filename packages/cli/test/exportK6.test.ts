@@ -14,7 +14,7 @@ async function makeProject(): Promise<string> {
 
   await writeFile(
     join(journeysDir, "smoke.journey.ts"),
-    `import { journey, step } from "@journey/core";
+    `import { journey, step } from "@usejourney/core";
 journey("smoke", { tags: ["smoke"], k6: { vus: 1, duration: "5s" } }, () => {
   step("ping", { endpoint: { method: "GET", path: "/ping" } });
 });
@@ -22,7 +22,7 @@ journey("smoke", { tags: ["smoke"], k6: { vus: 1, duration: "5s" } }, () => {
   );
   await writeFile(
     join(journeysDir, "load.journey.ts"),
-    `import { journey, step } from "@journey/core";
+    `import { journey, step } from "@usejourney/core";
 journey("load", { tags: ["load"], k6: { vus: 10, duration: "30s" } }, () => {
   step("ping", { endpoint: { method: "GET", path: "/ping" } });
 });
@@ -30,7 +30,7 @@ journey("load", { tags: ["load"], k6: { vus: 10, duration: "30s" } }, () => {
   );
   await writeFile(
     join(journeysDir, "untagged.journey.ts"),
-    `import { journey, step } from "@journey/core";
+    `import { journey, step } from "@usejourney/core";
 journey("untagged", () => {
   step("ping", { endpoint: { method: "GET", path: "/ping" } });
 });
@@ -80,7 +80,7 @@ describe("export k6 tag filter", () => {
       const journeysDir = join(root, "journeys");
       await writeFile(
         join(journeysDir, "two-k6.journey.ts"),
-        `import { journey, step } from "@journey/core";
+        `import { journey, step } from "@usejourney/core";
 journey("a", { k6: { vus: 1 } }, () => { step("p", { endpoint: { method: "GET", path: "/" } }); });
 journey("b", { k6: { vus: 2 } }, () => { step("p", { endpoint: { method: "GET", path: "/" } }); });
 `,

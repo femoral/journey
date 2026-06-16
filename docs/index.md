@@ -32,7 +32,7 @@ features:
 ## Quick glance
 
 ```ts
-import { journey, step, env, expect } from "@journey/core";
+import { journey, step, env, expect } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 
 journey("multi-step crud", () => {

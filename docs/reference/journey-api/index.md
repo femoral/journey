@@ -1,16 +1,16 @@
 ---
 title: Journey API
-description: Overview of exports from @journey/core — grouped by module.
+description: Overview of exports from @usejourney/core — grouped by module.
 sources:
   - packages/core/src/index.ts
 ---
 
 # Journey API
 
-Public API exported from `@journey/core`. All types come from the same package.
+Public API exported from `@usejourney/core`. All types come from the same package.
 
 ```ts
-import { journey, step, env, expect /*, … */ } from "@journey/core";
+import { journey, step, env, expect /*, … */ } from "@usejourney/core";
 ```
 
 ## Module map

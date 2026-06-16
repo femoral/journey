@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import type { JourneyDef } from "@journey/core";
-import { exportToK6 } from "@journey/k6-adapter";
+import type { JourneyDef } from "@usejourney/core";
+import { exportToK6 } from "@usejourney/k6-adapter";
 import { discoverJourneyFiles } from "../util/discover.js";
 import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 

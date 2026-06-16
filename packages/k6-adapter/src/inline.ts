@@ -10,12 +10,12 @@ export interface InlinedModule {
 }
 
 /**
- * Strip `import ... from "@journey/core"` lines. The shim provides those
+ * Strip `import ... from "@usejourney/core"` lines. The shim provides those
  * symbols in the emitted script's global scope.
  */
 export function stripCoreImports(source: string): string {
   return source.replace(IMPORT_RE, (match, specifier: string) => {
-    if (specifier === "@journey/core") return "";
+    if (specifier === "@usejourney/core") return "";
     return match;
   });
 }
@@ -96,7 +96,7 @@ export async function inlineRelativeImports(
       continue;
     }
     visited.add(resolved.path);
-    // Strip type imports and @journey/core imports from the inlined module too.
+    // Strip type imports and @usejourney/core imports from the inlined module too.
     const cleaned = stripCoreImports(stripTypeImports(resolved.content));
     // Recurse: inline the module's own relative imports before splicing it in.
     const recursed = await inlineRelativeImports(cleaned, resolved.path, visited);

@@ -26,7 +26,7 @@ export interface HttpContext {
   dispatcher?: unknown;
   /**
    * Optional run-scoped AbortSignal. When set, every `fetch` issued through
-   * `execute` (and through the instrumented `@journey/core` `fetch` helper)
+   * `execute` (and through the instrumented `@usejourney/core` `fetch` helper)
    * receives it, and `runJourney` stops iterating steps as soon as it fires.
    * Used by the dev server's `POST /api/runs/:id/abort` route to cancel an
    * in-flight run.

@@ -4,7 +4,7 @@
 // --force: wipe and rebuild from canonical.
 //
 // petstore.dev is excluded from pnpm-workspace.yaml so it does not pollute the
-// lockfile. To wire up the @journey/* deps the journey files import, we copy
+// lockfile. To wire up the @usejourney/* deps the journey files import, we copy
 // the canonical petstore's node_modules verbatim — pnpm's symlinks are relative
 // (e.g. ../../../packages/core) and resolve correctly from the sibling folder.
 //
@@ -26,9 +26,9 @@ if (existsSync(dest) && !force) {
   process.exit(0);
 }
 
-if (!existsSync(path.join(src, "node_modules", "@journey", "core"))) {
+if (!existsSync(path.join(src, "node_modules", "@usejourney", "core"))) {
   console.error(
-    "[ensure-petstore-dev] examples/petstore/node_modules is missing @journey/core. Run `pnpm install` at the repo root first.",
+    "[ensure-petstore-dev] examples/petstore/node_modules is missing @usejourney/core. Run `pnpm install` at the repo root first.",
   );
   process.exit(1);
 }

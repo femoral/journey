@@ -9,19 +9,19 @@ You are the architecture explorer for the `journey` monorepo. You answer questio
 
 ## What this project is
 
-`journey` is a local-first API testing/orchestration tool. A single runtime core (`@journey/core`) drives multiple surfaces (CLI and GUI), with a codegen package that turns OpenAPI specs into typed endpoint references and a k6 adapter that transpiles `.journey.ts` files into k6 scripts.
+`journey` is a local-first API testing/orchestration tool. A single runtime core (`@usejourney/core`) drives multiple surfaces (CLI and GUI), with a codegen package that turns OpenAPI specs into typed endpoint references and a k6 adapter that transpiles `.journey.ts` files into k6 scripts.
 
 For project-level conventions (commit style, workflow), see `CLAUDE.md` and `CONTRIBUTING.md`.
 
 ## Package map
 
-| Package               | Owns                                        | Key entry points                                                                                                                                         |
-| --------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@journey/core`       | Runtime API and the in-process run loop     | `packages/core/src/{runtime,http,expect,env,logger,history,config,endpoint}.ts`, `index.ts` re-exports                                                   |
-| `@journey/codegen`    | OpenAPI → `generated/{models,endpoints}.ts` | `packages/codegen/src/{parse,emit-endpoints,names,types}.ts`                                                                                             |
-| `@journey/cli`        | `commander` CLI + dev server                | `packages/cli/src/index.ts`, `commands/{init,generate,run,serve,exportK6,envList}.ts`, `server/{server,runner,runBroadcaster,specDrift,consolePatch}.ts` |
-| `@journey/gui`        | Tauri 2 + Solid + Kobalte + Tailwind app    | `packages/gui/src/{App,main}.tsx`, `shell/`, `pages/`, `ui/`, `api/`, `components/`                                                                      |
-| `@journey/k6-adapter` | `.journey.ts` → k6 script                   | `packages/k6-adapter/src/index.ts`                                                                                                                       |
+| Package                  | Owns                                        | Key entry points                                                                                                                                         |
+| ------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@usejourney/core`       | Runtime API and the in-process run loop     | `packages/core/src/{runtime,http,expect,env,logger,history,config,endpoint}.ts`, `index.ts` re-exports                                                   |
+| `@usejourney/codegen`    | OpenAPI → `generated/{models,endpoints}.ts` | `packages/codegen/src/{parse,emit-endpoints,names,types}.ts`                                                                                             |
+| `@usejourney/cli`        | `commander` CLI + dev server                | `packages/cli/src/index.ts`, `commands/{init,generate,run,serve,exportK6,envList}.ts`, `server/{server,runner,runBroadcaster,specDrift,consolePatch}.ts` |
+| `@usejourney/gui`        | Tauri 2 + Solid + Kobalte + Tailwind app    | `packages/gui/src/{App,main}.tsx`, `shell/`, `pages/`, `ui/`, `api/`, `components/`                                                                      |
+| `@usejourney/k6-adapter` | `.journey.ts` → k6 script                   | `packages/k6-adapter/src/index.ts`                                                                                                                       |
 
 Dependency edges: `cli → core, codegen, k6-adapter`; `gui → core`; everything else is a leaf.
 

@@ -2,7 +2,7 @@
 
 # Docs ↔ sources index
 
-Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontmatter, then run `pnpm --filter @journey/docs sources:gen`.
+Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontmatter, then run `pnpm --filter @usejourney/docs sources:gen`.
 
 ## By doc page
 

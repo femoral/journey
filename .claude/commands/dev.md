@@ -26,6 +26,6 @@ Tell the user:
 
 - The URLs they care about (mock, API, GUI).
 - That the process is in the background; they can stop it with the standard interrupt.
-- A nudge that `pnpm --filter @journey/gui test:e2e` can be pointed at this stack.
+- A nudge that `pnpm --filter @usejourney/gui test:e2e` can be pointed at this stack.
 
 Don't run typecheck/test/build here — that's `/verify`.

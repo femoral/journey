@@ -1,7 +1,7 @@
 # Examples
 
 Sample Journey projects checked in for local dev-testing. Each one is a
-self-contained pnpm workspace member — `@journey/core` resolves through
+self-contained pnpm workspace member — `@usejourney/core` resolves through
 `examples/<name>/node_modules/`.
 
 ## `petstore`
@@ -82,8 +82,8 @@ the sample project doubles as living coverage for the runtime.
 two halves manually:
 
 ```bash
-pnpm --filter @journey/cli build
+pnpm --filter @usejourney/cli build
 node packages/cli/dist/index.js serve --project /path/to/your/project
 # in a separate terminal
-pnpm --filter @journey/gui dev
+pnpm --filter @usejourney/gui dev
 ```

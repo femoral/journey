@@ -11,7 +11,7 @@ interface ActiveEnvState {
 interface Shared {
   active?: ActiveEnvState;
 }
-const KEY = Symbol.for("@journey/core::env-state");
+const KEY = Symbol.for("@usejourney/core::env-state");
 const globals = globalThis as unknown as { [KEY]?: Shared };
 const shared: Shared = globals[KEY] ?? (globals[KEY] = {});
 

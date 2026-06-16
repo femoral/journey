@@ -1,4 +1,4 @@
-import { env, expect, invokeJourney, journey, step } from "@journey/core";
+import { env, expect, invokeJourney, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 import { acquireToken } from "./helpers/auth.js";
 import { removePet, seedPet } from "./helpers/fixtures.js";

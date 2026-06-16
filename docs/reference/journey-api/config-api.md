@@ -69,7 +69,7 @@ Resolves each directory in the config against `projectDir`. Absolute paths pass 
 ## Example
 
 ```ts
-import { loadConfig, resolveConfigPaths } from "@journey/core";
+import { loadConfig, resolveConfigPaths } from "@usejourney/core";
 
 const loaded = await loadConfig(process.cwd());
 const paths = resolveConfigPaths(loaded);

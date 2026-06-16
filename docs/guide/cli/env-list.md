@@ -48,4 +48,4 @@ No environments found in /abs/path/environments
 
 - This command does **not** load or validate the files — it only lists them. Invalid JSON in an env file only surfaces when `journey run --env <name>` tries to use it.
 - The `*` marker tracks `defaultEnvironment` literally. If `defaultEnvironment` is set to a name that doesn't correspond to a file, the list just won't mark anything with `*`.
-- For programmatic listing, import `listEnvironments` from `@journey/core` — same behaviour, returns the string array directly.
+- For programmatic listing, import `listEnvironments` from `@usejourney/core` — same behaviour, returns the string array directly.

@@ -1,4 +1,4 @@
-import type { JourneyResult } from "@journey/core";
+import type { JourneyResult } from "@usejourney/core";
 
 export function printResults(results: JourneyResult[]): void {
   for (const r of results) {

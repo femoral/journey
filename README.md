@@ -35,7 +35,7 @@ my-api/
 Journeys are plain TypeScript — no custom expression language, no JSON templating. Step inputs, assertions, and hooks are native TS, giving you full IDE autocomplete and type safety from your generated models.
 
 ```ts
-import { journey, step, env } from "@journey/core";
+import { journey, step, env } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints";
 import type { SeedRecord } from "../generated/models";
 
@@ -171,7 +171,7 @@ Tauri 2 desktop app (also runnable as a local web app via Vite). Reads and write
 
 Reads the OpenAPI spec and outputs typed TypeScript definitions for endpoints and models into `generated/`. Regeneration is non-destructive — only touches `generated/`, never `journeys/`. Built on `openapi-typescript`.
 
-### Journey Runtime (`@journey/core`)
+### Journey Runtime (`@usejourney/core`)
 
 Framework-agnostic TypeScript library shared by CLI, GUI, and k6 adapter. Executes `.journey.ts` files via `tsx`. Provides the `journey()`, `step()`, `env()`, and `expect()` API. HTTP via native `fetch` (Node 18+).
 
@@ -208,7 +208,7 @@ Serializes loaded `JourneyDef`/`StepDef` structures into Postman Collection v2.1
 | GUI components  | Kobalte (accessible primitives)                |
 | k6 adapter      | Constrained subset → transpiled `.js` output   |
 | Postman adapter | Postman Collection v2.1.0 JSON + env files     |
-| Assertions      | Built-in `expect()` in `@journey/core`         |
+| Assertions      | Built-in `expect()` in `@usejourney/core`      |
 | Monorepo        | pnpm workspaces                                |
 | Packaging       | npm (CLI), Tauri platform installers (GUI)     |
 

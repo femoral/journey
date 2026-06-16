@@ -1,5 +1,5 @@
 import { endpoints } from "../../generated/endpoints.js";
-import { expect, journey, output, step, z } from "@journey/core";
+import { expect, journey, output, step, z } from "@usejourney/core";
 
 /**
  * Non-auth fixture sub-journeys for the pet resource — the companion to

@@ -40,22 +40,22 @@ importers:
 
   examples/petstore:
     dependencies:
-      "@journey/core":
+      "@usejourney/core":
         specifier: workspace:*
         version: link:../../packages/core
 
   packages/cli:
     dependencies:
-      "@journey/codegen":
+      "@usejourney/codegen":
         specifier: workspace:^
         version: link:../codegen
-      "@journey/core":
+      "@usejourney/core":
         specifier: workspace:*
         version: link:../core
-      "@journey/k6-adapter":
+      "@usejourney/k6-adapter":
         specifier: workspace:^
         version: link:../k6-adapter
-      "@journey/postman-adapter":
+      "@usejourney/postman-adapter":
         specifier: workspace:^
         version: link:../postman-adapter
       commander:
@@ -102,9 +102,6 @@ importers:
       "@fontsource/jetbrains-mono":
         specifier: ^5.2.8
         version: 5.2.8
-      "@journey/core":
-        specifier: workspace:*
-        version: link:../core
       "@kobalte/core":
         specifier: ^0.13.7
         version: 0.13.11(solid-js@1.9.12)
@@ -117,6 +114,9 @@ importers:
       "@thisbeyond/solid-dnd":
         specifier: ^0.7.5
         version: 0.7.5(solid-js@1.9.12)
+      "@usejourney/core":
+        specifier: workspace:*
+        version: link:../core
       solid-js:
         specifier: ^1.9.3
         version: 1.9.12
@@ -155,13 +155,13 @@ importers:
         specifier: ^0.21.5
         version: 0.21.5
     devDependencies:
-      "@journey/core":
+      "@usejourney/core":
         specifier: workspace:*
         version: link:../core
 
   packages/postman-adapter:
     devDependencies:
-      "@journey/core":
+      "@usejourney/core":
         specifier: workspace:*
         version: link:../core
 

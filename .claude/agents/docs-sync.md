@@ -18,7 +18,7 @@ You audit and refresh the agent-facing docs in this repo: `CLAUDE.md`, `CONTRIBU
 | `CONTRIBUTING.md` workflow                                              | Conventions match recent `git log` (commit style, `Closes #N`, scopes, milestone tags) and `gh issue list` labels                                                                                                                                                                                                                       |
 | `CONTRIBUTING.md` dev setup                                             | Tools and env vars match `shell.nix` (Node version, pnpm version, GDK\_\* settings)                                                                                                                                                                                                                                                     |
 | `README.md`                                                             | High-level architecture and stack still match `packages/`, `examples/petstore/`, and the GUI tech (Tauri 2 + Solid + Kobalte + Tailwind)                                                                                                                                                                                                |
-| `docs/SOURCES.md`                                                       | `pnpm --filter @journey/docs sources:check` passes                                                                                                                                                                                                                                                                                      |
+| `docs/SOURCES.md`                                                       | `pnpm --filter @usejourney/docs sources:check` passes                                                                                                                                                                                                                                                                                   |
 | `skills/journey-api-testing/SKILL.md`                                   | CLI flag tables match `journey --help` (and `packages/cli/src/index.ts`); `expect()` matcher list matches `packages/core/src/expect.ts`; `journey.config.json` field table matches the Zod schema in `packages/core/src/config.ts`; error-catalogue messages match the strings actually thrown by `packages/core/` and `packages/cli/`. |
 | `skills/journey-api-testing/references/patterns-and-troubleshooting.md` | Same config-schema and error-catalogue invariants as above.                                                                                                                                                                                                                                                                             |
 
@@ -35,7 +35,7 @@ You audit and refresh the agent-facing docs in this repo: `CLAUDE.md`, `CONTRIBU
    - **Skill — `expect()` matchers**: `packages/core/src/expect.ts` (`Expectation<T>` interface).
    - **Skill — config schema**: `packages/core/src/config.ts` (`JourneyConfigSchema`).
    - **Skill — error messages**: `grep -r '"<message-fragment>"' packages/` to confirm the string is still thrown.
-3. Run `pnpm --filter @journey/docs sources:check`. If it fails, run `pnpm --filter @journey/docs sources:gen` and inspect `git diff docs/SOURCES.md`.
+3. Run `pnpm --filter @usejourney/docs sources:check`. If it fails, run `pnpm --filter @usejourney/docs sources:gen` and inspect `git diff docs/SOURCES.md`.
 4. **Report a punch list** with `path:line — claim — actual`. One line per drift. No prose summary.
 
 ## How to fix
@@ -47,7 +47,7 @@ If the user (or parent agent) asks you to fix the drift — not just report it:
 - Don't add new sections without being asked — your job is to keep claims correct, not to expand the docs.
 - After editing, re-run the audit to confirm the punch list is empty.
 
-For `docs/SOURCES.md`, run `pnpm --filter @journey/docs sources:gen` and stage the result; don't hand-edit the file.
+For `docs/SOURCES.md`, run `pnpm --filter @usejourney/docs sources:gen` and stage the result; don't hand-edit the file.
 
 ## Invariants
 

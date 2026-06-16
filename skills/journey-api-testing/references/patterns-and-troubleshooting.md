@@ -36,7 +36,7 @@ field must be non-empty if present; relative paths are joined against the projec
 `baseUrl` (or set `BASE_URL` in an env file) before `journey run` works against a live server.
 
 Programmatic access (for test harnesses): `import { loadConfig, resolveBaseUrl, resolveConfigPaths,
-JourneyConfigSchema } from "@journey/core"`.
+JourneyConfigSchema } from "@usejourney/core"`.
 
 ---
 
@@ -213,12 +213,12 @@ auth (the most common case); the same shape covers any common-endpoint sequence 
 common-endpoint note after it.
 
 Define it once with `reusable: true` and a typed `inputs` / `outputs` schema (`z` is re-exported
-from `@journey/core` — a Journey project carries no deps, so `import { z } from "zod"` would not
+from `@usejourney/core` — a Journey project carries no deps, so `import { z } from "zod"` would not
 resolve). The body takes the validated `input`; it returns a value with `output(value)`.
 
 ```ts
 // journeys/helpers/auth.ts
-import { env, expect, journey, output, step, z } from "@journey/core";
+import { env, expect, journey, output, step, z } from "@usejourney/core";
 
 export const acquireToken = journey(
   "auth.acquire-token",
@@ -246,7 +246,7 @@ start, middle, or end of the pipeline. `inputs` is typed against the schema; `af
 the typed `output`.
 
 ```ts
-import { env, invokeJourney, journey, step } from "@journey/core";
+import { env, invokeJourney, journey, step } from "@usejourney/core";
 import { acquireToken } from "./helpers/auth.js";
 
 journey("flow A", () => {
@@ -333,11 +333,11 @@ journey and the offending child step.
 A hook sometimes makes ad-hoc HTTP calls that aren't worth a `step()` each — e.g. a chain of
 upstream hops to mint a token. Plain `globalThis.fetch` works but bypasses Journey's logger — the
 calls are invisible in the Debug Console, run history, and the GUI's per-step request panel. Import
-`fetch` from `@journey/core` instead: same signature, same return value, but routes through the
+`fetch` from `@usejourney/core` instead: same signature, same return value, but routes through the
 active run's logger so each call shows up under the surrounding step.
 
 ```ts
-import { fetch, journey, step, env } from "@journey/core";
+import { fetch, journey, step, env } from "@usejourney/core";
 
 journey("flow", () => {
   let token = "";
@@ -422,7 +422,7 @@ assert(res) {
 | `Authorization: "Bearer "` sent on every request                                                       | Forgot the arrow function — value captured at registration when `token` was `""`              | `headers: () => ({ Authorization: \`Bearer ${token}\` })`.                                                                                                    |
 | Import error: `Cannot find module '../generated/endpoints'`                                            | Wrong relative path, or codegen never ran                                                     | Path is relative to the `.journey.ts` file; import with the `.js` extension (`../generated/endpoints.js`); run `journey generate` if `generated/` is empty.   |
 | A non-string `body` was sent JSON-encoded when you wanted raw bytes                                    | Objects are auto-`JSON.stringify`-ed with `Content-Type: application/json`                    | Pass a `string` and set `Content-Type` yourself; for binary, use a descriptor endpoint and pass the raw value.                                                |
-| Helper's upstream `fetch()` calls don't appear in the Debug Console / run history                      | Raw `globalThis.fetch` bypasses Journey's logger pipeline                                     | `import { fetch } from "@journey/core"` in the helper — drop-in replacement that routes through the active run's logger. See _Observable HTTP_ in §3.         |
+| Helper's upstream `fetch()` calls don't appear in the Debug Console / run history                      | Raw `globalThis.fetch` bypasses Journey's logger pipeline                                     | `import { fetch } from "@usejourney/core"` in the helper — drop-in replacement that routes through the active run's logger. See _Observable HTTP_ in §3.      |
 | GUI step timeline rewrites itself mid-run when a helper injects an auth step                           | Stale GUI build pre-dates the `step:planned` SSE event                                        | Update to the GUI build that consumes `step:planned` (replaces the parsed idle list with the runner's resolved plan at run start).                            |
 | `invokeJourney(...) called outside a journey(...) body`                                                | `invokeJourney()` at module scope                                                             | Move it inside `journey(name, () => { ... })` — it is a pipeline node, registered like `step()`.                                                              |
 | `journey "X" declares an inputs/outputs schema but is registered as an entry`                          | A reusable journey is missing `reusable: true`, so it auto-runs instead of returning a handle | Add `reusable: true` to the options and invoke it via `invokeJourney(handle, ...)`, or drop the `inputs`/`outputs` schema.                                    |
@@ -446,7 +446,7 @@ substitution, header merge, auto `Content-Type`) → `fetch` (with abort timer i
   block (`{ vus, duration, ... }`) is baked into the script's `export const options`; `--tag` filters
   which journeys are emitted. A sub-journey (`invokeJourney`) is inlined under a k6 `group()` named
   after the child; a `cacheKey`'d call is honored **in memory, per-VU** — a hit skips the child's
-  requests, and `JOURNEY_CACHE=off` forces every iteration cold. Provided by `@journey/k6-adapter`.
+  requests, and `JOURNEY_CACHE=off` forces every iteration cold. Provided by `@usejourney/k6-adapter`.
 - **`journey export postman [--out <file>] [--out-dir <dir>] [--bundle] [--thread-state]`** — serializes
   loaded journeys into a Postman Collection v2.1.0 JSON plus environment files. A sub-journey becomes a
   nested folder, with the call's inputs as folder-scoped variables; a `cacheKey`'d call skips its request
@@ -454,7 +454,7 @@ substitution, header merge, auto `Content-Type`) → `fetch` (with abort timer i
   child skips as a whole). `--bundle` aggregates every matching journey across all files into one
   collection (one folder per journey); the experimental `--thread-state` re-runs each closure inside
   Postman scripts against a `__journey_state` collection variable so sub-journey outputs and step-to-step
-  state reach later requests. Provided by `@journey/postman-adapter`.
+  state reach later requests. Provided by `@usejourney/postman-adapter`.
 - **`journey serve [--project <dir>] [--port <n>]`** — runs the local HTTP backend (SSE-based) that
   the Journey desktop/web GUI talks to. The GUI adds things the CLI doesn't: a Spec diff page (spec
   drift without `tsc`), Run history browser, and "Run up to step N" on the Journeys page.

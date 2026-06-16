@@ -7,7 +7,7 @@ sources:
 
 # Programmatic environment setup
 
-For programmatic use — embedding Journey in an integration test suite, writing a custom runner — the helpers behind `--env` are exported from `@journey/core`:
+For programmatic use — embedding Journey in an integration test suite, writing a custom runner — the helpers behind `--env` are exported from `@usejourney/core`:
 
 ```ts
 import {
@@ -16,7 +16,7 @@ import {
   loadEnvironment,
   listEnvironments,
   env,
-} from "@journey/core";
+} from "@usejourney/core";
 ```
 
 ## `loadEnvironment(dir, name)`
@@ -83,7 +83,7 @@ import {
   loadEnvironment,
   runAllRegistered,
   setActiveEnvironment,
-} from "@journey/core";
+} from "@usejourney/core";
 import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 

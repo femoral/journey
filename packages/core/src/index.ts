@@ -82,8 +82,8 @@ export {
 
 // Re-export zod so journey files can declare `inputs` / `outputs` schemas
 // without adding a dependency. A Journey project carries no deps of its own
-// (only the planted `@journey/core` symlink), so `import { z } from "zod"`
-// in a `.journey.ts` would fail to resolve — `import { z } from "@journey/core"`
+// (only the planted `@usejourney/core` symlink), so `import { z } from "zod"`
+// in a `.journey.ts` would fail to resolve — `import { z } from "@usejourney/core"`
 // resolves through core's own node_modules instead.
 export { z } from "zod";
 export type { ZodType, ZodTypeAny, infer as ZodInfer } from "zod";

@@ -12,8 +12,8 @@ import {
   type CacheMode,
   type LoadedConfig,
   type SubJourneyCache,
-} from "@journey/core";
-import { collectOperations, generate, loadSpec, operationName } from "@journey/codegen";
+} from "@usejourney/core";
+import { collectOperations, generate, loadSpec, operationName } from "@usejourney/codegen";
 import { runJourneyFile } from "./runner.js";
 import { planJourneyFile } from "./planner.js";
 import { computeSpecDrift } from "./specDrift.js";

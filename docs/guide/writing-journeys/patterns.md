@@ -147,7 +147,7 @@ When several journey **files** need the same call sequence — an auth bootstrap
 
 ```ts
 // journeys/helpers/auth.ts
-import { env, expect, journey, output, step, z } from "@journey/core";
+import { env, expect, journey, output, step, z } from "@usejourney/core";
 
 export const acquireToken = journey(
   "auth.acquire-token",
@@ -168,7 +168,7 @@ export const acquireToken = journey(
 ```
 
 ```ts
-import { env, invokeJourney, journey, step } from "@journey/core";
+import { env, invokeJourney, journey, step } from "@usejourney/core";
 import { endpoints } from "../generated/endpoints.js";
 import { acquireToken } from "./helpers/auth.js";
 
@@ -224,10 +224,10 @@ The GUI's step timeline knows about helper-injected steps: every run starts with
 
 ## Making upstream calls from hooks visible
 
-An auth helper often needs to mint a token by calling several upstream services from inside the step's `after` hook. Plain `globalThis.fetch` works but is invisible to the Debug Console and run history because it bypasses the runtime's logger. Import `fetch` from `@journey/core` instead — same signature, same behaviour, but routes through the active run's logger when called inside any step hook:
+An auth helper often needs to mint a token by calling several upstream services from inside the step's `after` hook. Plain `globalThis.fetch` works but is invisible to the Debug Console and run history because it bypasses the runtime's logger. Import `fetch` from `@usejourney/core` instead — same signature, same behaviour, but routes through the active run's logger when called inside any step hook:
 
 ```ts
-import { fetch } from "@journey/core";
+import { fetch } from "@usejourney/core";
 
 function registerAuthStep(setToken: (t: string) => void) {
   step("auth", {
@@ -306,11 +306,11 @@ A failed step halts the rest of _its_ journey, so a first failure masks every la
 
 ### `import { z } from "zod"`
 
-A Journey project carries no dependencies, so `zod` will not resolve. `z` is re-exported from `@journey/core` — `import { z } from "@journey/core"`.
+A Journey project carries no dependencies, so `zod` will not resolve. `z` is re-exported from `@usejourney/core` — `import { z } from "@usejourney/core"`.
 
 ### `globalThis.fetch` inside a hook
 
-Raw `fetch` in an `after` / `assert` hook bypasses the runtime logger — the call is invisible in the Debug Console and run history. Import `fetch` from `@journey/core` instead — see [Making upstream calls from hooks visible](#making-upstream-calls-from-hooks-visible).
+Raw `fetch` in an `after` / `assert` hook bypasses the runtime logger — the call is invisible in the Debug Console and run history. Import `fetch` from `@usejourney/core` instead — see [Making upstream calls from hooks visible](#making-upstream-calls-from-hooks-visible).
 
 ### A step with no `assert`
 

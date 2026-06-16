@@ -25,7 +25,7 @@ describe("bin smoke", () => {
     try {
       await stat(distEntry);
     } catch {
-      await execFileP("pnpm", ["--filter", "@journey/cli", "build"], { cwd: cliDir });
+      await execFileP("pnpm", ["--filter", "@usejourney/cli", "build"], { cwd: cliDir });
     }
   }, 120000);
 

@@ -87,7 +87,12 @@ Override any of these by editing `journey.config.json` — `journey generate`, `
 ## Programmatic access
 
 ```ts
-import { loadConfig, resolveBaseUrl, resolveConfigPaths, JourneyConfigSchema } from "@journey/core";
+import {
+  loadConfig,
+  resolveBaseUrl,
+  resolveConfigPaths,
+  JourneyConfigSchema,
+} from "@usejourney/core";
 
 const loaded = await loadConfig(projectDir);
 const paths = resolveConfigPaths(loaded);

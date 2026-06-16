@@ -1,9 +1,9 @@
-// Fixture for the k6-shim ⇄ @journey/core parity test. Exercises the surfaces
+// Fixture for the k6-shim ⇄ @usejourney/core parity test. Exercises the surfaces
 // the shim re-implements: HTTP steps, function-valued `headers`/`body`/`params`/
 // `query` (lazy evaluation order matters — `token` is set by the sub-journey's
 // `after`), path-param interpolation, query-string building, an `assert` +
 // `after` hook, and one `invokeJourney` sub-journey call.
-import { journey, step, invokeJourney, output, expect, z } from "@journey/core";
+import { journey, step, invokeJourney, output, expect, z } from "@usejourney/core";
 
 let token = "";
 const counter = { n: 0 };

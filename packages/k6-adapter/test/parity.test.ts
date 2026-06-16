@@ -2,19 +2,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clearRegistry, runAllRegistered } from "@journey/core";
+import { clearRegistry, runAllRegistered } from "@usejourney/core";
 import { describe, expect, it } from "vitest";
 import { exportToK6 } from "../src/index.js";
 
 /**
  * Drift guard: the k6 adapter ships its own `shim.ts` re-implementation of the
  * runtime primitives (`journey`/`step`/`invokeJourney`/`expect`/`output`).
- * Nothing else fails if that shim drifts from `@journey/core`'s real run loop —
+ * Nothing else fails if that shim drifts from `@usejourney/core`'s real run loop —
  * a silent gap between `journey run` and `journey export k6`.
  *
  * This test runs one fixture journey two ways and asserts the observable HTTP
  * behaviour is identical:
- *   Path A — `@journey/core` `runAllRegistered` with an injected `fetchImpl`.
+ *   Path A — `@usejourney/core` `runAllRegistered` with an injected `fetchImpl`.
  *   Path B — the actual emitted k6 script, executed with stubbed k6 globals.
  *
  * It does NOT merge the two implementations (the source-inlining strategy is
@@ -51,7 +51,7 @@ function normalize(
   };
 }
 
-/** Path A — drive the fixture through the real `@journey/core` run loop. */
+/** Path A — drive the fixture through the real `@usejourney/core` run loop. */
 async function runViaCore(): Promise<CapturedRequest[]> {
   const requests: CapturedRequest[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
@@ -132,7 +132,7 @@ async function runViaK6Shim(): Promise<{ requests: CapturedRequest[]; groups: st
   return { requests, groups };
 }
 
-describe("k6 shim ⇄ @journey/core parity", () => {
+describe("k6 shim ⇄ @usejourney/core parity", () => {
   it("emits an identical HTTP request sequence through both run paths", async () => {
     const coreRequests = await runViaCore();
     const { requests: k6Requests, groups } = await runViaK6Shim();

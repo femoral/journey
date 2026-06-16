@@ -16,7 +16,7 @@ import {
   type CacheMode,
   type HttpContext,
   type JourneyResult,
-} from "@journey/core";
+} from "@usejourney/core";
 import { overallOk, printResults } from "../report.js";
 import { discoverJourneyFiles } from "../util/discover.js";
 import { importJourneyFiles } from "../util/loadJourneyFile.js";

@@ -12,7 +12,7 @@ import type {
   RunStartEvent,
   StepEndEvent,
   StepStartEvent,
-} from "@journey/core";
+} from "@usejourney/core";
 
 /**
  * Wire-format for events streamed over SSE. Each `event:` field is mapped from

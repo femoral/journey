@@ -12,7 +12,7 @@ import {
   type JourneyDef,
   type PipelineNode,
   type SubJourneyCallDef,
-} from "@journey/core";
+} from "@usejourney/core";
 import {
   ENV_PROXY,
   buildCollection,
@@ -20,7 +20,7 @@ import {
   buildFolder,
   type ExportNode,
   type PostmanFolder,
-} from "@journey/postman-adapter";
+} from "@usejourney/postman-adapter";
 import { discoverJourneyFiles } from "../util/discover.js";
 import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 

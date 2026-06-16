@@ -7,7 +7,7 @@ sources:
 
 # Assertions with `expect()`
 
-`@journey/core` ships a minimal matcher. For anything more exotic, use any assertion library you like — all that matters is that failures throw.
+`@usejourney/core` ships a minimal matcher. For anything more exotic, use any assertion library you like — all that matters is that failures throw.
 
 ```ts
 function expect<T>(value: T): Expectation<T>;

@@ -8,7 +8,7 @@ sources:
 
 # CLI
 
-The `journey` binary is published as `@journey/cli`. Every command runs against a project directory — either the current working directory, or one identified by a `journey.config.json` at the root.
+The `journey` binary is published as `@usejourney/cli`. Every command runs against a project directory — either the current working directory, or one identified by a `journey.config.json` at the root.
 
 All commands print errors as `journey: <message>` to stderr and exit with code `1` on failure.
 

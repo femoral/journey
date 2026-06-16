@@ -72,7 +72,7 @@ Values you put into the **request body** are not masked. If you `console.log(res
 Programmatic users can pass their own list of headers to mask:
 
 ```ts
-import { createConsoleLogger, maskHeaders } from "@journey/core";
+import { createConsoleLogger, maskHeaders } from "@usejourney/core";
 
 const logger = createConsoleLogger({
   mask: true, // use the default list

@@ -1,4 +1,4 @@
-import { env, expect, invokeJourney, journey, output, step, z } from "@journey/core";
+import { env, expect, invokeJourney, journey, output, step, z } from "@usejourney/core";
 import { acquireToken } from "./auth.js";
 
 /**

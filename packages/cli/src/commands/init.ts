@@ -1,6 +1,6 @@
 import { access, copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import { generate, loadSpec } from "@journey/codegen";
+import { generate, loadSpec } from "@usejourney/codegen";
 
 export interface InitOptions {
   dir: string;
@@ -63,13 +63,13 @@ export async function runInit(opts: InitOptions): Promise<void> {
   );
 
   // node_modules/ is listed defensively: the runner plants a
-  // `node_modules/@journey/core` symlink on first run so user journey files can
+  // `node_modules/@usejourney/core` symlink on first run so user journey files can
   // resolve their imports without a per-project `pnpm install`. We don't want
   // that symlink to ever land in a commit.
   await writeFile(join(projectDir, ".gitignore"), `.journey/cache/\nnode_modules/\n`, "utf8");
 
   // Minimal package.json so Node treats .ts/.js files in the project as ESM.
-  // No dependencies, no install step — the runner symlinks @journey/core
+  // No dependencies, no install step — the runner symlinks @usejourney/core
   // from the bundled CLI at runtime.
   await writeFile(
     join(projectDir, "package.json"),

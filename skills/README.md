@@ -21,9 +21,9 @@ After either install, restart Claude Code so it picks up the new skill.
 
 ## What's here
 
-| Skill                                                  | Triggers on                                                                                                     |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| [`journey-api-testing/`](journey-api-testing/SKILL.md) | Scaffolding, writing, running, and debugging `.journey.ts` projects backed by `@journey/cli` / `@journey/core`. |
+| Skill                                                  | Triggers on                                                                                                           |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| [`journey-api-testing/`](journey-api-testing/SKILL.md) | Scaffolding, writing, running, and debugging `.journey.ts` projects backed by `@usejourney/cli` / `@usejourney/core`. |
 
 ## Keeping skills in sync
 

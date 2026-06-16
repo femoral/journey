@@ -10,7 +10,7 @@ Run the full local verification suite for `journey`. This mirrors what CI runs a
 2. `pnpm -r test`
 3. `pnpm -r build`
 4. `pnpm format:check`
-5. `pnpm --filter @journey/docs sources:check`
+5. `pnpm --filter @usejourney/docs sources:check`
 
 ## How to report
 
@@ -20,10 +20,10 @@ Run the full local verification suite for `journey`. This mirrors what CI runs a
   - test failure → name the failing test and file.
   - build failure → name the package and the build tool that broke (tsup / vite).
   - format failure → suggest `pnpm format`.
-  - `sources:check` failure → suggest `pnpm --filter @journey/docs sources:gen` and stage the resulting `docs/SOURCES.md`.
+  - `sources:check` failure → suggest `pnpm --filter @usejourney/docs sources:gen` and stage the resulting `docs/SOURCES.md`.
 
 ## Notes
 
-- This does **not** run Playwright e2e (`pnpm --filter @journey/gui test:e2e`) — that needs a live stack and is too slow for a pre-commit check. Run it explicitly when changing GUI flows.
+- This does **not** run Playwright e2e (`pnpm --filter @usejourney/gui test:e2e`) — that needs a live stack and is too slow for a pre-commit check. Run it explicitly when changing GUI flows.
 - This does **not** start any dev servers — that's `/dev`.
 - This does **not** regenerate codegen output — that's `/regen`.

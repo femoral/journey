@@ -6,7 +6,7 @@ import {
   setActiveEnvironment,
   type LoadedConfig,
   type PlannedNode,
-} from "@journey/core";
+} from "@usejourney/core";
 import { loadJourneyDefs } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
