@@ -32,9 +32,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Never publish bytes that don't typecheck / test / build.
-      - run: pnpm -r typecheck
-      - run: pnpm -r test
+      # Build first: consumers resolve sibling types from each package's
+      # dist/*.d.ts, so the typecheck gate needs the libraries built.
       - name: Build publishable packages
         run: >
           pnpm
@@ -44,6 +43,10 @@ jobs:
           --filter @usejourney/k6-adapter
           --filter @usejourney/postman-adapter
           build
+
+      # Never publish bytes that don't typecheck / test.
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
 
       - name: Publish changed packages to npm
         run: |
