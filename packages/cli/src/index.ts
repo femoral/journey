@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { Command } from "commander";
 import type { CacheMode } from "@usejourney/core";
@@ -27,12 +28,19 @@ async function handle(fn: () => Promise<number | void>): Promise<never> {
   }
 }
 
+// Read at load time from the package manifest shipped alongside dist/.
+// `files: ["dist"]` still includes the root package.json in the tarball,
+// so ../package.json resolves both in source and in the published package.
+const { version } = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 export function buildProgram(): Command {
   const program = new Command();
   program
     .name("journey")
     .description("Local-first API testing & orchestration tool")
-    .version("0.0.0");
+    .version(version);
 
   program
     .command("init <dir>")
