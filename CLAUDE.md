@@ -12,17 +12,17 @@ Product overview, runnable example, and architecture diagram live in [`README.md
 
 ## Repo map
 
-| Path                 | What's there                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------- |
-| `packages/`          | Six workspace packages (see below)                                                     |
-| `examples/petstore/` | Working Journey project — OpenAPI, journeys, mock server, generated types              |
-| `docs/`              | VitePress site (`guide/`, `reference/`, auto-generated `SOURCES.md`)                   |
-| `design/`            | Design tokens (`system/README.md`) and prototype (`iterations/01-prototype/`)          |
-| `scripts/`           | `gen-doc-sources.ts` — regenerates `docs/SOURCES.md` from package source               |
-| `.github/workflows/` | `ci.yml` (typecheck/test/build), `docs.yml` (VitePress + sources check + Pages deploy) |
-| `.claude/`           | Agent scaffolding: `commands/`, `agents/`, `settings.local.json`                       |
-| `skills/`            | Vendored Claude skills (`journey-api-testing`) — installable into `~/.claude/skills/`  |
-| `shell.nix`          | Reproducible dev shell — Node 22, pnpm 9.12, Rust, k6, webkit2gtk for Tauri            |
+| Path                 | What's there                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `packages/`          | Six workspace packages (see below)                                                         |
+| `examples/petstore/` | Working Journey project — OpenAPI, journeys, mock server, generated types                  |
+| `docs/`              | VitePress site (`guide/`, `reference/`, auto-generated `SOURCES.md`)                       |
+| `design/`            | Design tokens (`system/README.md`) and prototype (`iterations/01-prototype/`)              |
+| `scripts/`           | `gen-doc-sources.ts` — regenerates `docs/SOURCES.md` from package source                   |
+| `.github/workflows/` | `publish.yml` — sole workflow: gate (typecheck/test/build) + npm publish on push to `main` |
+| `.claude/`           | Agent scaffolding: `commands/`, `agents/`, `settings.local.json`                           |
+| `skills/`            | Vendored Claude skills (`journey-api-testing`) — installable into `~/.claude/skills/`      |
+| `shell.nix`          | Reproducible dev shell — Node 22, pnpm 9.12, Rust, k6, webkit2gtk for Tauri                |
 
 ## Packages
 
@@ -48,8 +48,9 @@ pnpm dev:web                           # mock (5180) + cli serve (5181) + gui vi
 pnpm dev:tauri                         # same as dev:web + cargo tauri dev
 pnpm dev:reset                         # rebuild examples/petstore.dev/ scratch from canonical petstore
 pnpm --filter @usejourney/gui test:e2e    # Playwright (needs a running petstore stack)
-pnpm --filter @usejourney/docs sources:check  # CI gate — fails if SOURCES.md is stale
+pnpm --filter @usejourney/docs sources:check  # fails if SOURCES.md is stale (run before docs edits)
 pnpm --filter @usejourney/docs sources:gen    # refresh SOURCES.md
+pnpm version:set 0.1.1                  # lockstep-bump the 5 publishable packages
 ```
 
 Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `/verify` (typecheck + test + build + format + sources check). See `.claude/commands/`.
@@ -61,6 +62,16 @@ Slash commands: `/dev` (start dev stack), `/regen` (run codegen on a project), `
 - **Run `pnpm format` before committing.** CI doesn't enforce formatting on its own, but uncommitted prettier drift accumulates across files and bloats unrelated diffs. Either format-then-stage your own changes, or stage explicitly so drift in untouched files doesn't ride along.
 - **Co-author footer** on Claude-authored commits: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 - **Issue labels in use**: `area:core|cli|codegen|gui|k6`, `type:feat|chore`, `bug`.
+
+## Versioning & releases
+
+SemVer `MAJOR.MINOR.PATCH`, **lockstep** across the five publishable packages (`core`, `codegen`, `cli`, `k6-adapter`, `postman-adapter`). The private packages (`gui`, root `journey`, `docs`) are never published and carry no release meaning. Move every publishable package together with `pnpm version:set <version>` (`scripts/set-version.mjs`) — never hand-edit one `package.json` out of step.
+
+- **PATCH** — bumped on a push to `main` that ships a publishable change. A push with no version-worthy change (tooling, docs, a no-op) may land bump-less; `publish.yml` skips any package whose version is already on npm, so a bump-less push publishes nothing.
+- **MINOR** — bumped when a PRD (umbrella milestone issue) closes. Reset PATCH to `0`.
+- **MAJOR** — bumped only on explicit human request.
+
+Publishing is one workflow: `.github/workflows/publish.yml` runs on every push to `main`, gates on `typecheck`/`test`/`build`, then publishes each changed package to npm via **OIDC trusted publishing** (no `NPM_TOKEN` secret). It packs with `pnpm pack` (rewrites `workspace:*` deps to real versions) and publishes the tarball with npm ≥ 11.5.1. One-time setup per package on npmjs.com: a trusted publisher pointing at `femoral/journey` → `publish.yml`; a brand-new package name needs a _pending_ trusted publisher (or a one-off manual first publish) before OIDC will accept it.
 
 ## Invariants — do not violate
 

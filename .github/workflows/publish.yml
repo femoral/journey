@@ -1,0 +1,69 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+# OIDC trusted publishing to npm — no NPM_TOKEN secret is stored.
+# Each package configures a trusted publisher (repo: femoral/journey,
+# workflow: publish.yml) once on npmjs.com.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; node 22 ships 10.x.
+      - run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      # Never publish bytes that don't typecheck / test / build.
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - name: Build publishable packages
+        run: >
+          pnpm
+          --filter @usejourney/core
+          --filter @usejourney/codegen
+          --filter @usejourney/cli
+          --filter @usejourney/k6-adapter
+          --filter @usejourney/postman-adapter
+          build
+
+      - name: Publish changed packages to npm
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/tarballs"
+          mkdir -p "$dist"
+          for dir in \
+            packages/core \
+            packages/codegen \
+            packages/cli \
+            packages/k6-adapter \
+            packages/postman-adapter; do
+            name=$(node -p "require('./$dir/package.json').name")
+            ver=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$ver" version >/dev/null 2>&1; then
+              echo "· $name@$ver already on npm — skip"
+              continue
+            fi
+            echo "↑ publishing $name@$ver"
+            # pnpm pack rewrites workspace:* deps to real versions in the tarball.
+            tgz=$(pnpm -C "$dir" pack --pack-destination "$dist" | tail -n1)
+            npm publish "$tgz" --access public
+          done
