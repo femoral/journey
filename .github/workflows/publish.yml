@@ -1,8 +1,8 @@
 name: Publish
 
+# Manual only — trigger from the Actions tab or `gh workflow run publish.yml`.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # OIDC trusted publishing to npm — no NPM_TOKEN secret is stored.
 # Each package configures a trusted publisher (repo: femoral/journey,
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish
   cancel-in-progress: false
 
 jobs:
