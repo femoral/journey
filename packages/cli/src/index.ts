@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import type { CacheMode } from "@usejourney/core";
 import { runEnvList } from "./commands/envList.js";
@@ -249,7 +250,12 @@ export function buildProgram(): Command {
   return program;
 }
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
+// Resolve argv[1] through realpath: when journey is installed as a bin, it
+// runs via a symlink shim whose path differs from import.meta.url (the real
+// module). Comparing raw argv[1] would leave the CLI silent on every install.
+const invoked = process.argv[1];
+const isDirectRun =
+  invoked != null && import.meta.url === pathToFileURL(realpathSync(invoked)).href;
 if (isDirectRun) {
   buildProgram().parseAsync(process.argv);
 }
