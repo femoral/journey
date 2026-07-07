@@ -41,6 +41,8 @@ export {
   SECRET_HEADERS,
   createConsoleLogger,
   describeError,
+  formatOpaqueBody,
+  isTextualContentType,
   loggerFromEnv,
   maskHeaders,
   type ConsoleLoggerOptions,

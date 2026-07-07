@@ -238,8 +238,32 @@ export interface ConsoleLoggerOptions {
   maxBodyChars?: number;
 }
 
-function fmtBody(body: unknown, max: number): string {
+/** Content-types treated as human-printable. Everything else is opaque (binary/file). */
+const TEXTUAL_CONTENT_TYPE_RE = /json|^text\/|xml|html|javascript|x-www-form-urlencoded|csv|yaml/i;
+
+/** True when a response body in this content-type is safe to print as-is. No signal (empty/undefined) defaults to textual. */
+export function isTextualContentType(contentType: string | undefined): boolean {
+  if (!contentType) return true;
+  return TEXTUAL_CONTENT_TYPE_RE.test(contentType);
+}
+
+function findHeader(headers: Record<string, string>, name: string): string | undefined {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  return undefined;
+}
+
+/** `file[N bytes]` from a `content-length` header, or `file[]` when the length is unknown. */
+export function formatOpaqueBody(headers: Record<string, string>): string {
+  const len = findHeader(headers, "content-length");
+  return len ? `file[${len} bytes]` : "file[]";
+}
+
+function fmtBody(body: unknown, max: number, headers: Record<string, string>): string {
   if (body === undefined || body === null) return "";
+  if (!isTextualContentType(findHeader(headers, "content-type"))) return formatOpaqueBody(headers);
   const s = typeof body === "string" ? body : JSON.stringify(body);
   return s.length > max ? `${s.slice(0, max)}… (${s.length - max} more chars)` : s;
 }
@@ -254,12 +278,12 @@ export function createConsoleLogger(opts: ConsoleLoggerOptions = {}): JourneyLog
       const headers = mask ? maskHeaders(req.headers) : req.headers;
       const headerKeys = Object.keys(headers);
       if (headerKeys.length > 0) write(`  headers ${JSON.stringify(headers)}`);
-      const body = fmtBody(req.body, max);
+      const body = fmtBody(req.body, max, req.headers);
       if (body) write(`  body    ${body}`);
     },
     onResponse(req, res) {
       write(`← ${res.status} ${req.method} ${req.url} (${res.durationMs}ms)`);
-      const body = fmtBody(res.body, max);
+      const body = fmtBody(res.body, max, res.headers);
       if (body) write(`  body    ${body}`);
     },
     onError(req, err, durationMs) {

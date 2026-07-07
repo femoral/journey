@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
+import { formatOpaqueBody, isTextualContentType } from "@usejourney/core";
 import {
   IconConsole,
   IconCopy,
@@ -553,6 +554,22 @@ function NetworkTab(props: {
   );
 }
 
+/** Renders a request/response body for the Debug Console. Non-textual content-types (images, octet-streams, files) print as `file[N bytes]`/`file[]` instead of being dumped raw. */
+export function formatConsoleBody(
+  body: unknown,
+  headers: Record<string, string> | undefined,
+): string {
+  if (body === undefined) return "";
+  const contentType = headers?.["content-type"] ?? headers?.["Content-Type"];
+  if (!isTextualContentType(contentType)) return formatOpaqueBody(headers ?? {});
+  if (typeof body === "string") return body;
+  try {
+    return JSON.stringify(body, null, 2);
+  } catch {
+    return String(body);
+  }
+}
+
 function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
   const [tab, setTab] = createSignal<"Request" | "Response" | "Headers">("Response");
   const [copied, setCopied] = createSignal(false);
@@ -563,15 +580,6 @@ function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* ignore — clipboard denied */
-    }
-  };
-  const bodyText = (body: unknown): string => {
-    if (body === undefined) return "";
-    if (typeof body === "string") return body;
-    try {
-      return JSON.stringify(body, null, 2);
-    } catch {
-      return String(body);
     }
   };
   return (
@@ -670,7 +678,9 @@ function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
                   "white-space": "pre-wrap",
                 }}
               >
-                <JsonPretty text={bodyText(props.entry.responseBody)} />
+                <JsonPretty
+                  text={formatConsoleBody(props.entry.responseBody, props.entry.responseHeaders)}
+                />
               </pre>
             }
           >
@@ -700,7 +710,9 @@ function DetailPane(props: { entry: ConsoleEntry }): JSX.Element {
               "white-space": "pre-wrap",
             }}
           >
-            <JsonPretty text={bodyText(props.entry.requestBody)} />
+            <JsonPretty
+              text={formatConsoleBody(props.entry.requestBody, props.entry.requestHeaders)}
+            />
           </pre>
         </Show>
         <Show when={tab() === "Headers"}>

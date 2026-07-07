@@ -87,6 +87,15 @@ Enables the built-in console logger — one line per request and response, writt
 
 Secret headers are masked automatically. The `DEBUG=journey` environment variable does the same thing — handy when you can't easily add a flag to the command (e.g. running through a script wrapper).
 
+A response with a non-textual `content-type` (images, PDFs, zips, `application/octet-stream`, …) prints as a size placeholder instead of a raw/garbled dump:
+
+```
+← 200 GET http://127.0.0.1:5180/files/logo.png (12ms)
+  body    file[204800 bytes]
+```
+
+`file[]` (no number) prints when the response has no `content-length` header.
+
 ## Run records
 
 Each invocation writes `.journey/cache/runs/<id>.run.json`, where `<id>` is an ISO timestamp with colons replaced by hyphens. The record contains every `JourneyResult` — journey name, step statuses, request method and URL, response (on success), error (on failure), and duration.

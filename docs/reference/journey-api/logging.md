@@ -128,6 +128,8 @@ Produces human-readable single-line output on `onRequest` / `onResponse` / `onEr
   body    {"token":"…","expiresIn":3600}
 ```
 
+A body whose `content-type` isn't textual (images, PDFs, zips, `application/octet-stream`, etc.) prints as `file[N bytes]` (from the `content-length` header) or `file[]` when the length is unknown, instead of a raw/garbled dump.
+
 ## `loggerFromEnv(env?)`
 
 ```ts

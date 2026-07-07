@@ -66,6 +66,42 @@ describe("execute() + console logger", () => {
     expect(responseLine).toMatch(/← 200 POST .* \(\d+ms\)/);
   });
 
+  it("prints file[N bytes] for a binary response body instead of the raw bytes", async () => {
+    const lines: string[] = [];
+    const logger = createConsoleLogger({ write: (l) => lines.push(l) });
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("\x89PNG\r\n\x1a\n", {
+          status: 200,
+          headers: { "content-type": "image/png", "content-length": "204800" },
+        }),
+    );
+    await execute(
+      { method: "GET", url: "https://example.com/x.png", headers: {} },
+      { fetchImpl, logger },
+    );
+    const bodyLine = lines.find((l) => l.startsWith("  body"));
+    expect(bodyLine).toBe("  body    file[204800 bytes]");
+  });
+
+  it("prints file[] when a binary response has no content-length header", async () => {
+    const lines: string[] = [];
+    const logger = createConsoleLogger({ write: (l) => lines.push(l) });
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("binary-ish", {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    );
+    await execute(
+      { method: "GET", url: "https://example.com/x.bin", headers: {} },
+      { fetchImpl, logger },
+    );
+    const bodyLine = lines.find((l) => l.startsWith("  body"));
+    expect(bodyLine).toBe("  body    file[]");
+  });
+
   it("invokes onError when fetch throws", async () => {
     const errors: unknown[] = [];
     const logger = createConsoleLogger({ write: () => {} });
