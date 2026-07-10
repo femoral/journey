@@ -45,6 +45,8 @@ export interface RunJourneyFileOptions {
   subJourneyCache?: SubJourneyCache;
   /** Default TTL (ms) for sub-journey cache writes. */
   subJourneyCacheTtlMs?: number;
+  /** Default request timeout (ms); 0 disables; unset → core's 60s default. */
+  timeoutMs?: number;
 }
 
 export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<JourneyResult[]> {
@@ -79,6 +81,9 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   if (opts.subJourneyCache !== undefined) ctx.subJourneyCache = opts.subJourneyCache;
   if (opts.subJourneyCacheTtlMs !== undefined) {
     ctx.subJourneyCacheTtlMs = opts.subJourneyCacheTtlMs;
+  }
+  if (opts.timeoutMs !== undefined) {
+    ctx.defaultTimeoutMs = opts.timeoutMs === 0 ? null : opts.timeoutMs;
   }
   const unpatchConsole = logger ? patchConsole(logger) : () => {};
   let results;

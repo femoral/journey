@@ -32,16 +32,16 @@ type Lazy<T> = T | (() => T | Promise<T>);
 
 ## Fields
 
-| Field       | Type                                                             | Default | Required | Notes                                                                                                                           |
-| ----------- | ---------------------------------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `endpoint`  | `EndpointRef<R>` \| `EndpointDescriptor`                         | —       | **Yes**  | Refs carry a response-type brand so `assert`/`after` get typed `res.body`. Descriptors yield `unknown`.                         |
-| `params`    | `Lazy<Record<string, string \| number>>`                         | —       | No       | Substituted into `{name}` path templates. Missing template var → runtime error `Missing path param "…"`. Values URL-encoded.    |
-| `query`     | `Lazy<Record<string, string \| number \| boolean \| undefined>>` | —       | No       | Appended as query string. `undefined` values dropped.                                                                           |
-| `headers`   | `Lazy<Record<string, string>>`                                   | —       | No       | Merged on top of `HttpContext.defaultHeaders`. Per-step keys win.                                                               |
-| `body`      | `Lazy<unknown>`                                                  | —       | No       | Strings sent raw. Non-strings `JSON.stringify`'d with `Content-Type: application/json` added if no content type is already set. |
-| `timeoutMs` | `number`                                                         | —       | No       | Wraps fetch in an `AbortController`. Aborted requests reject as step errors. No default.                                        |
-| `assert`    | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after the response arrives. Throw to fail.                                                                                 |
-| `after`     | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after `assert` succeeds (or right after the response if no `assert`). Use for closure-variable extraction.                 |
+| Field       | Type                                                             | Default | Required | Notes                                                                                                                                                                          |
+| ----------- | ---------------------------------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `endpoint`  | `EndpointRef<R>` \| `EndpointDescriptor`                         | —       | **Yes**  | Refs carry a response-type brand so `assert`/`after` get typed `res.body`. Descriptors yield `unknown`.                                                                        |
+| `params`    | `Lazy<Record<string, string \| number>>`                         | —       | No       | Substituted into `{name}` path templates. Missing template var → runtime error `Missing path param "…"`. Values URL-encoded.                                                   |
+| `query`     | `Lazy<Record<string, string \| number \| boolean \| undefined>>` | —       | No       | Appended as query string. `undefined` values dropped.                                                                                                                          |
+| `headers`   | `Lazy<Record<string, string>>`                                   | —       | No       | Merged on top of `HttpContext.defaultHeaders`. Per-step keys win.                                                                                                              |
+| `body`      | `Lazy<unknown>`                                                  | —       | No       | Strings sent raw. Non-strings `JSON.stringify`'d with `Content-Type: application/json` added if no content type is already set.                                                |
+| `timeoutMs` | `number`                                                         | —       | No       | Wraps fetch in an `AbortController`. Aborted requests reject as step errors. Overrides the run-wide default (60s, or `--timeout` on `run`/`serve`; `--timeout 0` disables it). |
+| `assert`    | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after the response arrives. Throw to fail.                                                                                                                                |
+| `after`     | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after `assert` succeeds (or right after the response if no `assert`). Use for closure-variable extraction.                                                                |
 
 ## `HttpResponse<T>`
 

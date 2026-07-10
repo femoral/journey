@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Endpoint } from "../src/endpoint.js";
-import { buildRequest, execute, resolveUrl } from "../src/http.js";
+import { DEFAULT_REQUEST_TIMEOUT_MS, buildRequest, execute, resolveUrl } from "../src/http.js";
 
 describe("resolveUrl", () => {
   it("uses ctx baseUrl for refs and interpolates params", () => {
@@ -103,5 +103,32 @@ describe("buildRequest + execute", () => {
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ ok: true });
     expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+});
+
+describe("default request timeout", () => {
+  const ep: Endpoint = { method: "GET", path: "/x", operationId: "c" };
+
+  it("falls back to DEFAULT_REQUEST_TIMEOUT_MS when nothing is set", () => {
+    const req = buildRequest({ endpoint: ep }, { baseUrl: "https://x" });
+    expect(req.timeoutMs).toBe(DEFAULT_REQUEST_TIMEOUT_MS);
+  });
+
+  it("uses ctx.defaultTimeoutMs when set", () => {
+    const req = buildRequest({ endpoint: ep }, { baseUrl: "https://x", defaultTimeoutMs: 5_000 });
+    expect(req.timeoutMs).toBe(5_000);
+  });
+
+  it("ctx.defaultTimeoutMs: null disables the default", () => {
+    const req = buildRequest({ endpoint: ep }, { baseUrl: "https://x", defaultTimeoutMs: null });
+    expect(req.timeoutMs).toBeUndefined();
+  });
+
+  it("a per-request timeoutMs overrides ctx.defaultTimeoutMs", () => {
+    const req = buildRequest(
+      { endpoint: ep, timeoutMs: 1_000 },
+      { baseUrl: "https://x", defaultTimeoutMs: null },
+    );
+    expect(req.timeoutMs).toBe(1_000);
   });
 });

@@ -64,6 +64,7 @@ export {
   buildRequest,
   execute,
   resolveUrl,
+  DEFAULT_REQUEST_TIMEOUT_MS,
   type BuildRequestOptions,
   type HttpContext,
   type HttpResponse,

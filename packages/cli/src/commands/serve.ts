@@ -13,6 +13,8 @@ export interface ServeOptions {
   cache?: CacheMode;
   /** Default TTL (ms) for sub-journey cache entries. */
   cacheTtlMs?: number;
+  /** Default request timeout (ms) for runs triggered via the API; 0 disables; unset → core's 60s default. */
+  timeoutMs?: number;
 }
 
 export async function runServe(opts: ServeOptions): Promise<number> {
@@ -24,6 +26,7 @@ export async function runServe(opts: ServeOptions): Promise<number> {
     ...(opts.debug !== undefined ? { debug: opts.debug } : {}),
     ...(opts.cache !== undefined ? { cache: opts.cache } : {}),
     ...(opts.cacheTtlMs !== undefined ? { cacheTtlMs: opts.cacheTtlMs } : {}),
+    ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
   });
   console.log(`Journey API listening at ${srv.url}`);
   console.log(`For the GUI, run: pnpm --filter @usejourney/gui dev`);

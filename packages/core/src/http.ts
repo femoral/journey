@@ -41,7 +41,17 @@ export interface HttpContext {
   subJourneyCache?: SubJourneyCache;
   /** Default TTL (ms) for sub-journey cache writes; per-call `cacheTtlMs` overrides. */
   subJourneyCacheTtlMs?: number;
+  /**
+   * Run-wide default request timeout (ms). Tri-state: `undefined` falls back
+   * to `DEFAULT_REQUEST_TIMEOUT_MS`; a number sets a custom default; `null`
+   * explicitly disables the default (no timeout). A step's own
+   * `timeoutMs` always overrides this.
+   */
+  defaultTimeoutMs?: number | null;
 }
+
+/** Fallback request timeout (ms) when neither a step nor `HttpContext.defaultTimeoutMs` set one. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
 export interface RequestSpec {
   method: HttpMethod;
@@ -114,7 +124,13 @@ export function buildRequest(opts: BuildRequestOptions, ctx: HttpContext): Reque
   }
   const spec: RequestSpec = { method: opts.endpoint.method, url, headers };
   if (hasBody) spec.body = opts.body;
-  if (opts.timeoutMs !== undefined) spec.timeoutMs = opts.timeoutMs;
+  const resolvedTimeout =
+    opts.timeoutMs !== undefined
+      ? opts.timeoutMs
+      : ctx.defaultTimeoutMs === null
+        ? undefined
+        : (ctx.defaultTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+  if (resolvedTimeout !== undefined) spec.timeoutMs = resolvedTimeout;
   return spec;
 }
 

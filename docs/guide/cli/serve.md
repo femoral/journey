@@ -14,7 +14,7 @@ Start the HTTP backend the GUI talks to. Also usable standalone for custom UIs o
 
 ```sh
 journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecure] \
-              [--cache <mode>] [--cache-ttl <ms>]
+              [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>]
 ```
 
 ## Flags
@@ -28,6 +28,7 @@ journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecu
 | `--insecure`       | boolean                               | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`. |
 | `--cache <mode>`   | `off` \| `run` \| `process` \| `disk` | `process`   | No       | Sub-journey output cache lifetime. See below.                                                                                                |
 | `--cache-ttl <ms>` | integer                               | —           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds.                                                                        |
+| `--timeout <ms>`   | integer                               | `60000`     | No       | Default request timeout for journey runs triggered via the API. `0` disables it. A step's own `timeoutMs` overrides this.                    |
 
 ## Behaviour
 

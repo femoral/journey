@@ -37,6 +37,8 @@ export interface StartServerOptions {
   cache?: CacheMode;
   /** Default TTL (ms) for sub-journey cache entries. */
   cacheTtlMs?: number;
+  /** Default request timeout (ms) for journey runs triggered via the API; 0 disables. */
+  timeoutMs?: number;
 }
 
 /**
@@ -339,6 +341,7 @@ async function route(
   setProjectDir: (next: string) => void,
   cacheFor: (projectDir: string) => SubJourneyCache | undefined,
   cacheTtlMs: number | undefined,
+  timeoutMs: number | undefined,
 ): Promise<void> {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -564,6 +567,7 @@ async function route(
         ...(debug ? { debug: true } : {}),
         ...(subJourneyCache !== undefined ? { subJourneyCache } : {}),
         ...(cacheTtlMs !== undefined ? { subJourneyCacheTtlMs: cacheTtlMs } : {}),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       });
       if (body.stream) {
         // Fire-and-forget: the broadcaster owns event delivery from here. We
@@ -678,6 +682,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       setProjectDir,
       cacheFor,
       opts.cacheTtlMs,
+      opts.timeoutMs,
     );
   });
 

@@ -35,6 +35,8 @@ export interface RunOptions {
   cache?: CacheMode;
   /** Default TTL (ms) for sub-journey cache entries. */
   cacheTtlMs?: number;
+  /** Default request timeout (ms); 0 disables; unset → core's 60s default. */
+  timeoutMs?: number;
 }
 
 /**
@@ -94,6 +96,9 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   });
   if (subCache) ctx.subJourneyCache = subCache;
   if (opts.cacheTtlMs !== undefined) ctx.subJourneyCacheTtlMs = opts.cacheTtlMs;
+  if (opts.timeoutMs !== undefined) {
+    ctx.defaultTimeoutMs = opts.timeoutMs === 0 ? null : opts.timeoutMs;
+  }
   const results: JourneyResult[] = await runAllRegistered(ctx);
   printResults(results);
 

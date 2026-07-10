@@ -81,6 +81,9 @@ export function buildProgram(): Command {
       "process",
     )
     .option("--cache-ttl <ms>", "Default sub-journey cache TTL in ms", (v) => parseInt(v, 10))
+    .option("--timeout <ms>", "Request timeout in ms; 0 disables (default 60000)", (v) =>
+      parseInt(v, 10),
+    )
     .description("Run one or more journeys (or --all)")
     .action(
       (
@@ -93,6 +96,7 @@ export function buildProgram(): Command {
           insecure?: boolean;
           cache?: CacheMode;
           cacheTtl?: number;
+          timeout?: number;
         },
       ) =>
         handle(() =>
@@ -106,6 +110,7 @@ export function buildProgram(): Command {
             ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
             ...(options.cache !== undefined ? { cache: options.cache } : {}),
             ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
+            ...(options.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
           }),
         ),
     );
@@ -213,6 +218,11 @@ export function buildProgram(): Command {
       "process",
     )
     .option("--cache-ttl <ms>", "Default sub-journey cache TTL in ms", (v) => parseInt(v, 10))
+    .option(
+      "--timeout <ms>",
+      "Request timeout in ms for journey runs triggered via the API; 0 disables (default 60000)",
+      (v) => parseInt(v, 10),
+    )
     .description("Run the GUI backend API for the current project")
     .action(
       (options: {
@@ -223,6 +233,7 @@ export function buildProgram(): Command {
         insecure?: boolean;
         cache?: CacheMode;
         cacheTtl?: number;
+        timeout?: number;
       }) => {
         const projectDir = options.project
           ? resolvePath(process.cwd(), options.project)
@@ -236,6 +247,7 @@ export function buildProgram(): Command {
             ...(options.insecure !== undefined ? { insecure: options.insecure } : {}),
             ...(options.cache !== undefined ? { cache: options.cache } : {}),
             ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
+            ...(options.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
           }),
         );
       },

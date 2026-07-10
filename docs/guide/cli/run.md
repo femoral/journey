@@ -14,7 +14,7 @@ Run one or more journeys. The main command.
 
 ```sh
 journey run [files...] [--env <name>] [--all] [--debug] [--watch] [--insecure] \
-            [--cache <mode>] [--cache-ttl <ms>]
+            [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>]
 ```
 
 ## Arguments and flags
@@ -29,6 +29,7 @@ journey run [files...] [--env <name>] [--all] [--debug] [--watch] [--insecure] \
 | `--insecure`       | boolean                               | `false`                     | No       | Disable TLS certificate verification. For self-signed certs or corporate CAs Node doesn't trust. Prints one warning to stderr per process. Equivalent to `tlsRejectUnauthorized: false` in `journey.config.json`. |
 | `--cache <mode>`   | `off` \| `run` \| `process` \| `disk` | `process`                   | No       | Sub-journey output cache lifetime. See below.                                                                                                                                                                     |
 | `--cache-ttl <ms>` | integer                               | —                           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds. Per-call `cacheTtlMs` overrides it.                                                                                                         |
+| `--timeout <ms>`   | integer                               | `60000`                     | No       | Default request timeout for every step. `0` disables it (no timeout). A step's own `timeoutMs` overrides this.                                                                                                    |
 
 ¹ Either pass file paths or use `--all`. With neither, the command errors: `No journey files to run.`
 
