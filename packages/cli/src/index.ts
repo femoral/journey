@@ -84,6 +84,11 @@ export function buildProgram(): Command {
     .option("--timeout <ms>", "Request timeout in ms; 0 disables (default 60000)", (v) =>
       parseInt(v, 10),
     )
+    .option(
+      "--connect-timeout <ms>",
+      "DNS + TCP + TLS connect timeout in ms; 0 disables (default 10000)",
+      (v) => parseInt(v, 10),
+    )
     .description("Run one or more journeys (or --all)")
     .action(
       (
@@ -97,6 +102,7 @@ export function buildProgram(): Command {
           cache?: CacheMode;
           cacheTtl?: number;
           timeout?: number;
+          connectTimeout?: number;
         },
       ) =>
         handle(() =>
@@ -111,6 +117,9 @@ export function buildProgram(): Command {
             ...(options.cache !== undefined ? { cache: options.cache } : {}),
             ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
             ...(options.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
+            ...(options.connectTimeout !== undefined
+              ? { connectTimeoutMs: options.connectTimeout }
+              : {}),
           }),
         ),
     );
@@ -223,6 +232,11 @@ export function buildProgram(): Command {
       "Request timeout in ms for journey runs triggered via the API; 0 disables (default 60000)",
       (v) => parseInt(v, 10),
     )
+    .option(
+      "--connect-timeout <ms>",
+      "DNS + TCP + TLS connect timeout in ms; 0 disables (default 10000)",
+      (v) => parseInt(v, 10),
+    )
     .description("Run the GUI backend API for the current project")
     .action(
       (options: {
@@ -234,6 +248,7 @@ export function buildProgram(): Command {
         cache?: CacheMode;
         cacheTtl?: number;
         timeout?: number;
+        connectTimeout?: number;
       }) => {
         const projectDir = options.project
           ? resolvePath(process.cwd(), options.project)
@@ -248,6 +263,9 @@ export function buildProgram(): Command {
             ...(options.cache !== undefined ? { cache: options.cache } : {}),
             ...(options.cacheTtl !== undefined ? { cacheTtlMs: options.cacheTtl } : {}),
             ...(options.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
+            ...(options.connectTimeout !== undefined
+              ? { connectTimeoutMs: options.connectTimeout }
+              : {}),
           }),
         );
       },

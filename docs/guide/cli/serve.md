@@ -3,6 +3,7 @@ title: journey serve
 description: Start the HTTP backend the GUI talks to.
 sources:
   - packages/cli/src/commands/serve.ts
+  - packages/cli/src/util/dispatcher.ts
   - packages/cli/src/server/server.ts
   - packages/cli/src/server/runner.ts
   - packages/cli/src/server/specDrift.ts
@@ -14,21 +15,23 @@ Start the HTTP backend the GUI talks to. Also usable standalone for custom UIs o
 
 ```sh
 journey serve [--port <n>] [--host <host>] [--project <dir>] [--debug] [--insecure] \
-              [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>]
+              [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>] \
+              [--connect-timeout <ms>]
 ```
 
 ## Flags
 
-| Flag               | Type                                  | Default     | Required | Purpose                                                                                                                                      |
-| ------------------ | ------------------------------------- | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--port <n>`       | number                                | `5181`      | No       | TCP port to listen on.                                                                                                                       |
-| `--host <host>`    | string                                | `127.0.0.1` | No       | Host to bind to. Default is localhost-only.                                                                                                  |
-| `--project <dir>`  | path                                  | `cwd`       | No       | Project directory (absolute or relative to `cwd`).                                                                                           |
-| `--debug`          | boolean                               | `false`     | No       | Log every request/response while running journeys.                                                                                           |
-| `--insecure`       | boolean                               | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`. |
-| `--cache <mode>`   | `off` \| `run` \| `process` \| `disk` | `process`   | No       | Sub-journey output cache lifetime. See below.                                                                                                |
-| `--cache-ttl <ms>` | integer                               | —           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds.                                                                        |
-| `--timeout <ms>`   | integer                               | `60000`     | No       | Default request timeout for journey runs triggered via the API. `0` disables it. A step's own `timeoutMs` overrides this.                    |
+| Flag                     | Type                                  | Default     | Required | Purpose                                                                                                                                                      |
+| ------------------------ | ------------------------------------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--port <n>`             | number                                | `5181`      | No       | TCP port to listen on.                                                                                                                                       |
+| `--host <host>`          | string                                | `127.0.0.1` | No       | Host to bind to. Default is localhost-only.                                                                                                                  |
+| `--project <dir>`        | path                                  | `cwd`       | No       | Project directory (absolute or relative to `cwd`).                                                                                                           |
+| `--debug`                | boolean                               | `false`     | No       | Log every request/response while running journeys.                                                                                                           |
+| `--insecure`             | boolean                               | `false`     | No       | Disable TLS verification for journey runs triggered through the API. Same effect as `tlsRejectUnauthorized: false` in `journey.config.json`.                 |
+| `--cache <mode>`         | `off` \| `run` \| `process` \| `disk` | `process`   | No       | Sub-journey output cache lifetime. See below.                                                                                                                |
+| `--cache-ttl <ms>`       | integer                               | —           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds.                                                                                        |
+| `--timeout <ms>`         | integer                               | `60000`     | No       | Default request timeout for journey runs triggered via the API. `0` disables it. A step's own `timeoutMs` overrides this.                                    |
+| `--connect-timeout <ms>` | integer                               | `10000`     | No       | Connect-phase budget (DNS + TCP + TLS) for those runs. `0` disables it. Distinct from `--timeout`; see [`journey run`](./run.md#timeout-vs-connect-timeout). |
 
 ## Behaviour
 

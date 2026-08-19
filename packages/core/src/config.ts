@@ -14,6 +14,13 @@ export const JourneyConfigSchema = z
     baseUrl: z.string().url().optional(),
     runHistoryKeepCount: z.number().int().min(0).default(20),
     tlsRejectUnauthorized: z.boolean().default(true),
+    /**
+     * Connect-phase budget (ms) covering DNS + TCP + TLS handshake. Distinct
+     * from the per-request timeout: that one wraps the whole fetch in an
+     * `AbortController`, while this one is an undici `Agent` option. Unset
+     * falls back to undici's 10s default; `0` disables the connect timeout.
+     */
+    connectTimeoutMs: z.number().int().min(0).optional(),
   })
   .strict();
 

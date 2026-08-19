@@ -15,7 +15,7 @@ import {
   type LoadedConfig,
   type SubJourneyCache,
 } from "@usejourney/core";
-import { enableInsecureTls } from "../commands/run.js";
+import { configureDispatcher } from "../util/dispatcher.js";
 import { patchConsole } from "./consolePatch.js";
 import { importJourneyFiles } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
@@ -56,10 +56,12 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
       ? resolve(process.cwd(), opts.file)
       : join(opts.journeysDir, opts.file);
 
-  let dispatcher: unknown;
-  if (opts.loaded.config.tlsRejectUnauthorized === false) {
-    dispatcher = await enableInsecureTls();
-  }
+  const dispatcher = await configureDispatcher({
+    insecure: opts.loaded.config.tlsRejectUnauthorized === false,
+    ...(opts.loaded.config.connectTimeoutMs !== undefined
+      ? { connectTimeoutMs: opts.loaded.config.connectTimeoutMs }
+      : {}),
+  });
 
   clearActiveEnvironment();
   const envName = opts.env ?? opts.loaded.config.defaultEnvironment;

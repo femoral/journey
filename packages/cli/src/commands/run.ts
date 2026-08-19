@@ -19,6 +19,7 @@ import {
 } from "@usejourney/core";
 import { overallOk, printResults } from "../report.js";
 import { discoverJourneyFiles } from "../util/discover.js";
+import { configureDispatcher } from "../util/dispatcher.js";
 import { importJourneyFiles } from "../util/loadJourneyFile.js";
 import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
@@ -37,28 +38,11 @@ export interface RunOptions {
   cacheTtlMs?: number;
   /** Default request timeout (ms); 0 disables; unset → core's 60s default. */
   timeoutMs?: number;
-}
-
-/**
- * Build an undici `Agent` that disables TLS verification and install it as
- * the process-wide global dispatcher so Node's built-in `fetch` honours it.
- * Prints one warning to stderr so the choice cannot leak silently into CI.
- * Idempotent — survives watch-mode reruns without re-warning or rebuilding
- * the agent. Returns the agent so per-request callers can also drop it on
- * `HttpContext.dispatcher` when they want explicit, non-global wiring.
- */
-let insecureAgent: unknown;
-export async function enableInsecureTls(): Promise<unknown> {
-  if (!insecureAgent) {
-    const { Agent, setGlobalDispatcher } = await import("undici");
-    insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
-    setGlobalDispatcher(insecureAgent as Parameters<typeof setGlobalDispatcher>[0]);
-    // Warn only after the agent is actually installed — otherwise a failed
-    // `import("undici")` would print the warning and leave the process
-    // unprotected, hiding the real failure on the retry.
-    console.error("journey: WARNING — TLS verification disabled (--insecure)");
-  }
-  return insecureAgent;
+  /**
+   * Connect timeout (ms) for DNS + TCP + TLS; 0 disables; unset → the config's
+   * `connectTimeoutMs`, else undici's 10s default.
+   */
+  connectTimeoutMs?: number;
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
@@ -88,9 +72,12 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();
   if (logger) ctx.logger = logger;
-  if (opts.insecure || loaded.config.tlsRejectUnauthorized === false) {
-    ctx.dispatcher = await enableInsecureTls();
-  }
+  const connectTimeoutMs = opts.connectTimeoutMs ?? loaded.config.connectTimeoutMs;
+  const dispatcher = await configureDispatcher({
+    insecure: opts.insecure || loaded.config.tlsRejectUnauthorized === false,
+    ...(connectTimeoutMs !== undefined ? { connectTimeoutMs } : {}),
+  });
+  if (dispatcher !== undefined) ctx.dispatcher = dispatcher;
   const subCache = createSubJourneyCache(opts.cache ?? "process", {
     diskDir: join(opts.projectDir, ".journey", "cache", "sub-journey"),
   });

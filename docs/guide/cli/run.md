@@ -3,6 +3,7 @@ title: journey run
 description: Run one or more journeys. The main command.
 sources:
   - packages/cli/src/commands/run.ts
+  - packages/cli/src/util/dispatcher.ts
   - packages/cli/src/report.ts
   - packages/core/src/runtime.ts
   - packages/core/src/history.ts
@@ -14,22 +15,24 @@ Run one or more journeys. The main command.
 
 ```sh
 journey run [files...] [--env <name>] [--all] [--debug] [--watch] [--insecure] \
-            [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>]
+            [--cache <mode>] [--cache-ttl <ms>] [--timeout <ms>] \
+            [--connect-timeout <ms>]
 ```
 
 ## Arguments and flags
 
-| Argument / flag    | Type                                  | Default                     | Required | Purpose                                                                                                                                                                                                           |
-| ------------------ | ------------------------------------- | --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[files...]`       | paths                                 | —                           | No¹      | Specific journey files to run. Relative paths resolve against `cwd`.                                                                                                                                              |
-| `--env <name>`     | string                                | `config.defaultEnvironment` | No       | Load `environments/<name>.json` before running.                                                                                                                                                                   |
-| `--all`            | boolean                               | `false`                     | No       | Run every `*.journey.ts` in `journeys/`.                                                                                                                                                                          |
-| `--debug`          | boolean                               | `false`                     | No       | Log every request/response to stderr. Also triggered by `DEBUG=journey`.                                                                                                                                          |
-| `--watch`          | boolean                               | `false`                     | No       | Rerun on changes to `.ts` / `.json` files in the watched directories.                                                                                                                                             |
-| `--insecure`       | boolean                               | `false`                     | No       | Disable TLS certificate verification. For self-signed certs or corporate CAs Node doesn't trust. Prints one warning to stderr per process. Equivalent to `tlsRejectUnauthorized: false` in `journey.config.json`. |
-| `--cache <mode>`   | `off` \| `run` \| `process` \| `disk` | `process`                   | No       | Sub-journey output cache lifetime. See below.                                                                                                                                                                     |
-| `--cache-ttl <ms>` | integer                               | —                           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds. Per-call `cacheTtlMs` overrides it.                                                                                                         |
-| `--timeout <ms>`   | integer                               | `60000`                     | No       | Default request timeout for every step. `0` disables it (no timeout). A step's own `timeoutMs` overrides this.                                                                                                    |
+| Argument / flag          | Type                                  | Default                     | Required | Purpose                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------- | --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[files...]`             | paths                                 | —                           | No¹      | Specific journey files to run. Relative paths resolve against `cwd`.                                                                                                                                              |
+| `--env <name>`           | string                                | `config.defaultEnvironment` | No       | Load `environments/<name>.json` before running.                                                                                                                                                                   |
+| `--all`                  | boolean                               | `false`                     | No       | Run every `*.journey.ts` in `journeys/`.                                                                                                                                                                          |
+| `--debug`                | boolean                               | `false`                     | No       | Log every request/response to stderr. Also triggered by `DEBUG=journey`.                                                                                                                                          |
+| `--watch`                | boolean                               | `false`                     | No       | Rerun on changes to `.ts` / `.json` files in the watched directories.                                                                                                                                             |
+| `--insecure`             | boolean                               | `false`                     | No       | Disable TLS certificate verification. For self-signed certs or corporate CAs Node doesn't trust. Prints one warning to stderr per process. Equivalent to `tlsRejectUnauthorized: false` in `journey.config.json`. |
+| `--cache <mode>`         | `off` \| `run` \| `process` \| `disk` | `process`                   | No       | Sub-journey output cache lifetime. See below.                                                                                                                                                                     |
+| `--cache-ttl <ms>`       | integer                               | —                           | No       | Default time-to-live for cached sub-journey outputs, in milliseconds. Per-call `cacheTtlMs` overrides it.                                                                                                         |
+| `--timeout <ms>`         | integer                               | `60000`                     | No       | Default request timeout for every step. `0` disables it (no timeout). A step's own `timeoutMs` overrides this.                                                                                                    |
+| `--connect-timeout <ms>` | integer                               | `10000`                     | No       | Budget for the connect phase (DNS + TCP + TLS handshake). `0` disables it. Separate from `--timeout` — see below. Equivalent to `connectTimeoutMs` in `journey.config.json`.                                      |
 
 ¹ Either pass file paths or use `--all`. With neither, the command errors: `No journey files to run.`
 
@@ -126,6 +129,41 @@ For long-lived projects (developer machines hitting a known-private staging clus
 ```
 
 Both paths install a process-wide undici `Agent` with `rejectUnauthorized: false` as the global dispatcher, so Node's `fetch` honours it. Per-request callers (e.g. `journey serve`'s API runner) also receive the agent on `HttpContext.dispatcher`. Don't ship a project with `tlsRejectUnauthorized: false` to CI — the warning is your only signal.
+
+## `--timeout` vs `--connect-timeout`
+
+The two flags cover different phases of a request, and raising one does nothing for the other.
+
+| Flag                     | Mechanism                                    | Covers                                       |
+| ------------------------ | -------------------------------------------- | -------------------------------------------- |
+| `--timeout <ms>`         | `AbortController` wrapped around the `fetch` | The request once a connection exists         |
+| `--connect-timeout <ms>` | undici `Agent` `connectTimeout`              | DNS resolution + TCP connect + TLS handshake |
+
+So a host that is slow to resolve or never completes its handshake fails at undici's 10s default no matter what `--timeout` says — including `--timeout 0`:
+
+```
+✗ POST https://internal.example/authcode failed after 10494ms: fetch failed
+  ← Connect Timeout Error (attempted address: internal.example:443, timeout: 10000ms)
+    (UND_ERR_CONNECT_TIMEOUT)
+```
+
+`UND_ERR_CONNECT_TIMEOUT` and a duration just over 10000ms are the fingerprint. Raise the connect budget instead:
+
+```sh
+journey run --connect-timeout 30000 --all
+```
+
+Or disable it entirely with `--connect-timeout 0`, which leaves the OS TCP timeout as the only bound — pair it with a real `--timeout` so a dead host can't hang the run forever.
+
+For a project that always talks to a slow-to-reach network, put it in `journey.config.json`:
+
+```json
+{
+  "connectTimeoutMs": 30000
+}
+```
+
+The flag wins over the config value. Both build the same process-wide undici `Agent` as `--insecure`, so the two compose into a single agent rather than fighting over the global dispatcher.
 
 ## Sub-journey output cache
 

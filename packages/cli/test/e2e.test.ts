@@ -81,13 +81,13 @@ journey("list pets", () => {
   }, 30000);
 
   it("--insecure builds an undici Agent and installs it as global dispatcher", async () => {
-    const { enableInsecureTls } = await import("../src/commands/run.js");
+    const { configureDispatcher } = await import("../src/util/dispatcher.js");
     const { getGlobalDispatcher } = await import("undici");
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const agent = await enableInsecureTls();
-      const again = await enableInsecureTls();
-      // Idempotent — same instance on a second call, no second warning.
+      const agent = await configureDispatcher({ insecure: true });
+      const again = await configureDispatcher({ insecure: true });
+      // Idempotent for the same option signature — same instance, no second warning.
       expect(again).toBe(agent);
       expect(getGlobalDispatcher()).toBe(agent);
       const warnings = errSpy.mock.calls
@@ -99,5 +99,39 @@ journey("list pets", () => {
     } finally {
       errSpy.mockRestore();
     }
+  });
+
+  it("no dispatcher options leaves the global dispatcher alone", async () => {
+    const { configureDispatcher } = await import("../src/util/dispatcher.js");
+    const { getGlobalDispatcher } = await import("undici");
+    const before = getGlobalDispatcher();
+    expect(await configureDispatcher({})).toBeUndefined();
+    expect(getGlobalDispatcher()).toBe(before);
+  });
+
+  it("--connect-timeout rebuilds the agent and passes the value to undici", async () => {
+    const { configureDispatcher } = await import("../src/util/dispatcher.js");
+    const { getGlobalDispatcher } = await import("undici");
+    const insecureOnly = await configureDispatcher({ insecure: true });
+    const withTimeout = await configureDispatcher({ insecure: true, connectTimeoutMs: 45_000 });
+    // Different option signature → a fresh agent, installed globally.
+    expect(withTimeout).not.toBe(insecureOnly);
+    expect(getGlobalDispatcher()).toBe(withTimeout);
+
+    // The value has to survive into the Agent's options — that's the whole
+    // point of the flag, since `--timeout` (an AbortController around fetch)
+    // cannot fire during the connect phase at all. undici keeps them on a
+    // Symbol("options"); reading it fails loudly if that shape ever changes.
+    const optionsSym = Object.getOwnPropertySymbols(withTimeout as object).find(
+      (sym) => sym.description === "options",
+    );
+    expect(optionsSym).toBeDefined();
+    const agentOptions = (withTimeout as Record<symbol, unknown>)[optionsSym!] as {
+      connectTimeout?: number;
+      connect?: { timeout?: number; rejectUnauthorized?: boolean };
+    };
+    expect(agentOptions.connectTimeout).toBe(45_000);
+    expect(agentOptions.connect?.timeout).toBe(45_000);
+    expect(agentOptions.connect?.rejectUnauthorized).toBe(false);
   });
 });

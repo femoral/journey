@@ -43,6 +43,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/cli/run.md` — journey run
 
 - `packages/cli/src/commands/run.ts`
+- `packages/cli/src/util/dispatcher.ts`
 - `packages/cli/src/report.ts`
 - `packages/core/src/runtime.ts`
 - `packages/core/src/history.ts`
@@ -50,6 +51,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/cli/serve.md` — journey serve
 
 - `packages/cli/src/commands/serve.ts`
+- `packages/cli/src/util/dispatcher.ts`
 - `packages/cli/src/server/server.ts`
 - `packages/cli/src/server/runner.ts`
 - `packages/cli/src/server/specDrift.ts`
@@ -334,6 +336,11 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 
 - `guide/cli/serve.md`
 - `reference/openapi-codegen.md`
+
+### `packages/cli/src/util/dispatcher.ts`
+
+- `guide/cli/run.md`
+- `guide/cli/serve.md`
 
 ### `packages/codegen/src/emit-endpoints.ts`
 

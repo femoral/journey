@@ -1,6 +1,6 @@
 import type { CacheMode } from "@usejourney/core";
 import { startServer } from "../server/server.js";
-import { enableInsecureTls } from "./run.js";
+import { configureDispatcher, setDispatcherDefaults } from "../util/dispatcher.js";
 
 export interface ServeOptions {
   projectDir: string;
@@ -15,10 +15,18 @@ export interface ServeOptions {
   cacheTtlMs?: number;
   /** Default request timeout (ms) for runs triggered via the API; 0 disables; unset → core's 60s default. */
   timeoutMs?: number;
+  /** Connect timeout (ms) for DNS + TCP + TLS; 0 disables; unset → undici's 10s default. */
+  connectTimeoutMs?: number;
 }
 
 export async function runServe(opts: ServeOptions): Promise<number> {
-  if (opts.insecure) await enableInsecureTls();
+  // Flags are process-level: recorded as defaults so a per-project rebuild in
+  // `runJourneyFile` can't drop them, then applied to the global dispatcher.
+  setDispatcherDefaults({
+    ...(opts.insecure !== undefined ? { insecure: opts.insecure } : {}),
+    ...(opts.connectTimeoutMs !== undefined ? { connectTimeoutMs: opts.connectTimeoutMs } : {}),
+  });
+  await configureDispatcher({});
   const srv = await startServer({
     projectDir: opts.projectDir,
     ...(opts.host !== undefined ? { host: opts.host } : {}),
