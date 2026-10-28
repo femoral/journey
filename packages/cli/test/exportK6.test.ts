@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -119,6 +121,56 @@ journey("b", { k6: { vus: 2 } }, () => { step("p", { endpoint: { method: "GET", 
       await runExportK6({ path: file, out: outFile, tags: ["smoke"] });
       const src = await readFile(outFile, "utf8");
       expect(src).toContain('"vus": 1');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("export k6 in a fresh project", () => {
+  it("plants the @usejourney/core link like `journey run`, and passes metrics/halt flags", async () => {
+    // Outside the monorepo, so `@usejourney/core` only resolves through the link.
+    const root = await mkdtemp(join(tmpdir(), "journey-fresh-export-"));
+    try {
+      await writeFile(join(root, "journey.config.json"), "{}");
+      await writeFile(join(root, "package.json"), '{"type":"module"}');
+      await mkdir(join(root, "journeys", "lib"), { recursive: true });
+      await writeFile(
+        join(root, "journeys", "lib", "profiles.ts"),
+        `declare const __ENV: Record<string, string> | undefined;
+export function pickProfile() {
+  const name = typeof __ENV !== "undefined" ? __ENV.OPT_NAME : undefined;
+  return name === "2X" ? { vus: 40 } : { vus: 1 };
+}
+`,
+      );
+      await writeFile(
+        join(root, "journeys", "flow.journey.ts"),
+        `import { journey, step } from "@usejourney/core";
+import { pickProfile } from "./lib/profiles.js";
+export const options = pickProfile();
+journey("flow", { tags: ["load"] }, () => {
+  step("ping", { endpoint: { method: "GET", path: "/ping" }, metric: "pong" });
+});
+`,
+      );
+      expect(existsSync(join(root, "node_modules", "@usejourney", "core"))).toBe(false);
+      const outDir = join(root, "k6");
+      await runExportK6({
+        path: join(root, "journeys"),
+        outDir,
+        tags: ["load"],
+        metricsPrefix: "wave",
+        haltOnFailure: true,
+      });
+      expect(existsSync(join(root, "node_modules", "@usejourney", "core", "package.json"))).toBe(
+        true,
+      );
+      const src = await readFile(join(outDir, "flow.k6.js"), "utf8");
+      expect(src).toContain('"metricsPrefix": "wave"');
+      expect(src).toContain('"haltOnFailure": true');
+      expect(src).toContain("var options = pickProfile();");
+      expect(src).toMatch(/export \{[^}]*\boptions\b[^}]*\}/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

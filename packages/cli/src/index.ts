@@ -138,16 +138,38 @@ export function buildProgram(): Command {
       (v: string, prev: string[] = []) => [...prev, v],
       [] as string[],
     )
+    .option(
+      "--metrics-prefix <prefix>",
+      "Emit custom metrics per step (<prefix>_<step>_duration Trend, <prefix>_<step>_tps Counter) and per iteration (<prefix>_flow_duration / <prefix>_flow_tps)",
+    )
+    .option(
+      "--halt-on-failure",
+      "Stop an iteration's remaining steps when an assert fails (mirrors journey run)",
+    )
     .description("Export one or more journeys as k6 scripts (path may be a file or directory)")
-    .action((path: string, options: { out?: string; outDir?: string; tag: string[] }) =>
-      handle(() =>
-        runExportK6({
-          path,
-          ...(options.out !== undefined ? { out: options.out } : {}),
-          ...(options.outDir !== undefined ? { outDir: options.outDir } : {}),
-          tags: options.tag,
-        }),
-      ),
+    .action(
+      (
+        path: string,
+        options: {
+          out?: string;
+          outDir?: string;
+          tag: string[];
+          metricsPrefix?: string;
+          haltOnFailure?: boolean;
+        },
+      ) =>
+        handle(() =>
+          runExportK6({
+            path,
+            ...(options.out !== undefined ? { out: options.out } : {}),
+            ...(options.outDir !== undefined ? { outDir: options.outDir } : {}),
+            ...(options.metricsPrefix !== undefined
+              ? { metricsPrefix: options.metricsPrefix }
+              : {}),
+            ...(options.haltOnFailure ? { haltOnFailure: true } : {}),
+            tags: options.tag,
+          }),
+        ),
     );
 
   exp

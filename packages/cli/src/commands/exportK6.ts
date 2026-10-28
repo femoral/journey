@@ -1,9 +1,10 @@
 import { stat } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import type { JourneyDef } from "@usejourney/core";
-import { exportToK6 } from "@usejourney/k6-adapter";
+import { exportToK6, findProjectDir } from "@usejourney/k6-adapter";
 import { discoverJourneyFiles } from "../util/discover.js";
 import { loadJourneyDefs } from "../util/loadJourneyFile.js";
+import { ensureProjectCoreLink } from "../util/projectCoreLink.js";
 
 export interface ExportK6CliOptions {
   /** File or directory. */
@@ -12,6 +13,10 @@ export interface ExportK6CliOptions {
   outDir?: string;
   /** AND semantics: a journey must carry every tag in the list to match. */
   tags?: string[];
+  /** Emit per-step / per-flow custom metrics named `<prefix>_<step>_duration|_tps`. */
+  metricsPrefix?: string;
+  /** Stop an iteration's remaining steps when an assert fails (like `journey run`). */
+  haltOnFailure?: boolean;
 }
 
 interface FileExport {
@@ -68,6 +73,11 @@ export async function runExportK6(opts: ExportK6CliOptions): Promise<number> {
     return 0;
   }
 
+  // Loading a journey imports `@usejourney/core`; plant the same project
+  // symlink `journey run` does, so a fresh project exports without a run first.
+  const projectDir = findProjectDir(isDir ? target : dirname(target)) ?? process.cwd();
+  await ensureProjectCoreLink(projectDir);
+
   const work: FileExport[] = [];
   for (const file of files) {
     const defs = await loadJourneyDefs(file);
@@ -87,6 +97,9 @@ export async function runExportK6(opts: ExportK6CliOptions): Promise<number> {
       ...(opts.out !== undefined ? { outFile: opts.out } : {}),
       ...(opts.outDir !== undefined ? { outDir: opts.outDir } : {}),
       ...(k6Options !== undefined ? { k6Options } : {}),
+      ...(opts.metricsPrefix !== undefined ? { metricsPrefix: opts.metricsPrefix } : {}),
+      ...(opts.haltOnFailure ? { haltOnFailure: true } : {}),
+      projectDir,
     });
     console.log(`Wrote k6 script → ${result.outFile}`);
     exported++;
