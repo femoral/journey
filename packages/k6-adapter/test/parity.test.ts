@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { clearRegistry, runAllRegistered } from "@usejourney/core";
 import { describe, expect, it } from "vitest";
 import { exportToK6 } from "../src/index.js";
+import { instantiate as instantiateScript } from "./harness.js";
 
 /**
  * Drift guard: the k6 adapter ships its own `shim.ts` re-implementation of the
@@ -88,48 +89,12 @@ async function runViaK6Shim(): Promise<{ requests: CapturedRequest[]; groups: st
     await rm(outDir, { recursive: true, force: true });
   }
 
-  // Drop the `k6/http` + `k6` imports (we inject those) and turn the
-  // `export default function` entry point into a value the factory returns.
-  const runnable = source
-    .replace(/^import .*$/gm, "")
-    .replace("export default function ()", "return function ()");
-
-  const requests: CapturedRequest[] = [];
-  const groups: string[] = [];
-
-  const http = {
-    request(
-      method: string,
-      url: string,
-      body: unknown,
-      params?: { headers?: Record<string, string> },
-    ) {
-      requests.push(normalize(method, url, body, params?.headers ?? {}));
-      return {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-        json: () => ({ ok: true }),
-        body: '{"ok":true}',
-      };
-    },
+  const h = instantiateScript(source, { env: { JOURNEY_BASE_URL: BASE } });
+  h.main();
+  return {
+    requests: h.requests.map((r) => normalize(r.method, r.url, r.body, r.headers)),
+    groups: h.groups,
   };
-  const check = (value: unknown, predicates: Record<string, (v: unknown) => boolean>): boolean => {
-    let ok = true;
-    for (const name of Object.keys(predicates)) {
-      if (!predicates[name]!(value)) ok = false;
-    }
-    return ok;
-  };
-  const group = (label: string, fn: () => void): void => {
-    groups.push(label);
-    fn();
-  };
-  const env = { JOURNEY_BASE_URL: BASE };
-
-  const factory = new Function("http", "check", "group", "__ENV", "console", runnable);
-  const main = factory(http, check, group, env, console) as () => void;
-  main();
-  return { requests, groups };
 }
 
 describe("k6 shim ⇄ @usejourney/core parity", () => {

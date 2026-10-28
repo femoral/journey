@@ -29,6 +29,14 @@ export interface StepOptions<E extends Endpoint> {
   headers?: Lazy<Record<string, string>>;
   body?: Lazy<unknown>;
   timeoutMs?: number;
+  /**
+   * k6 export only — ignored by `journey run`. Overrides the slug used for this
+   * step's custom metrics when exporting with `--metrics-prefix <p>`: the step
+   * records Trend `<p>_<metric>_duration` and Counter `<p>_<metric>_tps`
+   * instead of names derived from the step name. `false` opts the step out of
+   * per-step metrics (it still counts toward `<p>_flow_duration`).
+   */
+  metric?: string | false;
   assert?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
   after?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
 }

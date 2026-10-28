@@ -54,10 +54,10 @@ journey("list pets", () => {
       expect(src).toContain('import http from "k6/http"');
       expect(src).toContain('import { check, group } from "k6"');
       expect(src).not.toContain("@usejourney/core");
-      expect(src).toContain("const endpoints = {");
+      expect(src).toContain("var endpoints = {");
       expect(src).toContain("listPets:");
       expect(src).toContain('journey("list pets"');
-      expect(src).toContain("export default function");
+      expect(src).toMatch(/export \{[^}]*\bas default\b/);
       // The inlined generated endpoints carried TypeScript (`as unknown as
       // EndpointRef`, `as const`); k6's goja engine is JS-only, so the emitted
       // script must be free of all type syntax.
@@ -87,7 +87,8 @@ journey("load", () => {
         k6Options: { vus: 10, duration: "30s" },
       });
       const src = await readFile(result.outFile, "utf8");
-      expect(src).toContain("export const options =");
+      expect(src).toContain("var options = {");
+      expect(src).toMatch(/export \{[^}]*\boptions\b[^}]*\}/);
       expect(src).toContain('"vus": 10');
       expect(src).toContain('"duration": "30s"');
     } finally {
@@ -109,7 +110,7 @@ journey("plain", () => {
       );
       const result = await exportToK6({ journeyFile: journey });
       const src = await readFile(result.outFile, "utf8");
-      expect(src).not.toContain("export const options");
+      expect(src).not.toMatch(/\boptions\b/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -217,7 +218,7 @@ journey("checkout", () => {
       // its `@usejourney/core` import stripped). The TS→JS transpile pass strips
       // the `// ----- inlined from -----` marker comment, so assert on the
       // surviving declaration rather than the cosmetic marker.
-      expect(src).toContain("const acquireToken =");
+      expect(src).toContain("var acquireToken =");
       expect(src).not.toContain("export const acquireToken");
       expect(src).not.toContain("@usejourney/core");
     } finally {
@@ -232,6 +233,30 @@ describeIfK6("exportToK6 — live k6 run", () => {
 
   beforeAll(async () => {
     server = createServer((req, res) => {
+      if (req.url === "/upload" && req.method === "POST") {
+        // Echo the multipart file part's bytes back so the journey can assert on them.
+        const chunks: Buffer[] = [];
+        req.on("data", (c: Buffer) => chunks.push(c));
+        req.on("end", () => {
+          void new Response(Buffer.concat(chunks), {
+            headers: { "content-type": req.headers["content-type"] ?? "" },
+          })
+            .formData()
+            .then(async (form) => {
+              const file = form.get("file") as File;
+              const bytes = [...new Uint8Array(await file.arrayBuffer())];
+              res.writeHead(200, { "content-type": "application/json" });
+              res.end(
+                JSON.stringify({ name: file.name, type: file.type, bytes, kind: form.get("kind") }),
+              );
+            })
+            .catch(() => {
+              res.writeHead(400);
+              res.end();
+            });
+        });
+        return;
+      }
       if (req.url === "/pets" && req.method === "GET") {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify([{ id: "1" }]));
@@ -415,6 +440,71 @@ journey("checkout", () => {
       // The sub-journey ran under a k6 group named "warm up".
       expect(combined).toContain("warm up");
       expect(combined).toMatch(/checks.*100\.00%/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it("k6 run records custom metrics and uploads a multipart file", async () => {
+    const testDir = dirname(fileURLToPath(import.meta.url));
+    const base = join(testDir, "..", ".test-tmp");
+    await mkdir(base, { recursive: true });
+    const tmp = await mkdtemp(join(base, "k6-metrics-run-"));
+    try {
+      await writeFile(join(tmp, "journey.config.json"), "{}");
+      await mkdir(join(tmp, "fixtures"));
+      await writeFile(join(tmp, "fixtures", "img.png"), Buffer.from([0x89, 0x50, 0x00, 0xff]));
+      await mkdir(join(tmp, "journeys"));
+      const journey = join(tmp, "journeys", "upload.journey.ts");
+      await writeFile(
+        journey,
+        `import { journey, step, expect, multipart, fileFrom } from "@usejourney/core";
+
+journey("upload", () => {
+  step("list pets", {
+    endpoint: { method: "GET", path: "/pets" },
+    assert: (res) => expect(res.status).toBe(200),
+  });
+  step("upload document", {
+    endpoint: { method: "POST", path: "/upload" },
+    metric: "virus_scan_upload",
+    body: () => multipart({ kind: "png", file: fileFrom("fixtures/img.png", "image/png") }),
+    assert: (res) => {
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ name: "img.png", type: "image/png", bytes: [0x89, 0x50, 0x00, 0xff], kind: "png" });
+    },
+  });
+});
+`,
+      );
+      const { outFile } = await exportToK6({
+        journeyFile: journey,
+        outDir: join(tmp, "k6"),
+        metricsPrefix: "wave",
+      });
+      const child = spawn("k6", ["run", "--vus=1", "--iterations=2", outFile], {
+        env: { ...process.env, JOURNEY_BASE_URL: baseUrl },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d: Buffer) => {
+        stdout += d.toString();
+      });
+      child.stderr.on("data", (d: Buffer) => {
+        stderr += d.toString();
+      });
+      const code: number = await new Promise((res, rej) => {
+        child.once("error", rej);
+        child.once("close", (c) => res(c ?? 0));
+      });
+      const combined = stdout + stderr;
+      expect(code, `k6 failed:\n${combined}`).toBe(0);
+      expect(combined).toMatch(/checks.*100\.00%/);
+      expect(combined).toMatch(/wave_list_pets_duration\.*: avg=/);
+      expect(combined).toMatch(/wave_list_pets_tps\.*: 2\s/);
+      expect(combined).toMatch(/wave_virus_scan_upload_tps\.*: 2\s/);
+      expect(combined).toMatch(/wave_flow_duration\.*: avg=/);
+      expect(combined).toMatch(/wave_flow_tps\.*: 2\s/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

@@ -52,7 +52,8 @@ describe("export k6 tag filter", () => {
       expect(files).toEqual(["load.k6.js"]);
 
       const src = await readFile(join(outDir, "load.k6.js"), "utf8");
-      expect(src).toContain("export const options =");
+      expect(src).toContain("var options = {");
+      expect(src).toMatch(/export \{[^}]*\boptions\b[^}]*\}/);
       expect(src).toContain('"vus": 10');
       expect(src).toContain('"duration": "30s"');
     } finally {

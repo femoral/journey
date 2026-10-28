@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { exportToK6 } from "../src/index.js";
+import { instantiate as instantiateScript } from "./harness.js";
 
 /**
  * Sub-journey cache parity for the k6 shim. The cache is per-VU and in-memory:
@@ -33,8 +34,8 @@ async function emit(src: string): Promise<string> {
 }
 
 /**
- * Instantiate the emitted script with stubbed k6 globals (as in parity.test.ts)
- * and hand back the captured-request array plus the entry function so the test
+ * Instantiate the emitted script with stubbed k6 modules (see harness.ts) and
+ * hand back the captured-request array plus the entry function so the test
  * can drive iterations itself. `now` lets the TTL test inject a fake clock —
  * the shim only ever calls `Date.now()`.
  */
@@ -42,41 +43,16 @@ function instantiate(
   source: string,
   opts: { env?: Record<string, string>; now?: () => number } = {},
 ): { requests: Captured[]; main: () => void } {
-  const runnable = source
-    .replace(/^import .*$/gm, "")
-    .replace("export default function ()", "return function ()");
-
-  const requests: Captured[] = [];
-  const http = {
-    request(
-      method: string,
-      url: string,
-      _body: unknown,
-      params?: { headers?: Record<string, string> },
-    ) {
-      requests.push({ method, url, headers: params?.headers ?? {} });
-      return {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-        json: () => ({ ok: true, id: 1, token: "tok" }),
-        body: '{"ok":true,"id":1,"token":"tok"}',
-      };
-    },
-  };
-  const check = (value: unknown, predicates: Record<string, (v: unknown) => boolean>): boolean => {
-    let ok = true;
-    for (const name of Object.keys(predicates)) if (!predicates[name]!(value)) ok = false;
-    return ok;
-  };
-  const group = (_label: string, fn: () => void): void => {
-    fn();
-  };
-  const env = { JOURNEY_BASE_URL: BASE, ...(opts.env ?? {}) };
-  const DateStub = opts.now ? { now: opts.now } : Date;
-
-  const factory = new Function("http", "check", "group", "__ENV", "console", "Date", runnable);
-  const main = factory(http, check, group, env, console, DateStub) as () => void;
-  return { requests, main };
+  const h = instantiateScript(source, {
+    env: { JOURNEY_BASE_URL: BASE, ...(opts.env ?? {}) },
+    ...(opts.now ? { now: opts.now } : {}),
+    respond: () => ({
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: '{"ok":true,"id":1,"token":"tok"}',
+    }),
+  });
+  return { requests: h.requests, main: () => void h.main() };
 }
 
 const count = (reqs: Captured[], suffix: string): number =>
