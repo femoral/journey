@@ -3,6 +3,15 @@ import solid from "vite-plugin-solid";
 
 export default defineConfig({
   plugins: [solid()],
+  build: {
+    rollupOptions: {
+      // @usejourney/core's single-file bundle imports node builtins (fs, path,
+      // crypto) that vite stubs out for the browser. The GUI only uses pure
+      // helpers (formatOpaqueBody, …), so the node code is tree-shaken — shim
+      // the stub's missing named exports instead of failing the build.
+      shimMissingExports: true,
+    },
+  },
   server: {
     port: 5173,
     strictPort: false,
