@@ -73,7 +73,7 @@ export async function runJourneyFile(opts: RunJourneyFileOptions): Promise<Journ
   await ensureProjectCoreLink(opts.loaded.projectDir);
   await importJourneyFiles([abs]);
 
-  const ctx: HttpContext = {};
+  const ctx: HttpContext = { baseDir: opts.loaded.projectDir };
   const baseUrl = resolveBaseUrl(opts.loaded.config);
   if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.logger ?? (opts.debug ? createConsoleLogger() : loggerFromEnv());

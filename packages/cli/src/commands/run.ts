@@ -67,7 +67,8 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   await ensureProjectCoreLink(opts.projectDir);
   await importJourneyFiles(files);
 
-  const ctx: HttpContext = {};
+  // `fileFrom()` relative paths resolve against the project root.
+  const ctx: HttpContext = { baseDir: opts.projectDir };
   const baseUrl = resolveBaseUrl(loaded.config);
   if (baseUrl) ctx.baseUrl = baseUrl;
   const logger = opts.debug ? createConsoleLogger() : loggerFromEnv();

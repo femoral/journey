@@ -74,6 +74,16 @@ export {
 export { fetch } from "./fetch.js";
 
 export {
+  fileFrom,
+  isFileRef,
+  isMultipartBody,
+  multipart,
+  type FileRef,
+  type MultipartBody,
+  type MultipartValue,
+} from "./body.js";
+
+export {
   DiskSubJourneyCache,
   MemorySubJourneyCache,
   createSubJourneyCache,

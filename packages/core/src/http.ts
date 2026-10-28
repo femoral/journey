@@ -1,3 +1,4 @@
+import { defaultContentType, describeBodyForLog, encodeBody } from "./body.js";
 import type { SubJourneyCache } from "./cache.js";
 import { isEndpointRef, type Endpoint, type HttpMethod } from "./endpoint.js";
 import type { JourneyLogger, RequestLog } from "./logger.js";
@@ -48,6 +49,11 @@ export interface HttpContext {
    * `timeoutMs` always overrides this.
    */
   defaultTimeoutMs?: number | null;
+  /**
+   * Directory that relative `fileFrom()` paths resolve against. The CLI sets
+   * it to the project root; unset falls back to `process.cwd()`.
+   */
+  baseDir?: string;
 }
 
 /** Fallback request timeout (ms) when neither a step nor `HttpContext.defaultTimeoutMs` set one. */
@@ -119,8 +125,17 @@ export function buildRequest(opts: BuildRequestOptions, ctx: HttpContext): Reque
     ...(opts.headers ?? {}),
   };
   const hasBody = opts.body !== undefined;
-  if (hasBody && !("content-type" in lower(headers))) {
-    headers["Content-Type"] = "application/json";
+  if (hasBody) {
+    const contentType = defaultContentType(opts.body);
+    if (contentType === null) {
+      // multipart: fetch generates `multipart/form-data; boundary=…` itself; a
+      // caller-supplied Content-Type can't carry that boundary, so drop it.
+      for (const k of Object.keys(headers)) {
+        if (k.toLowerCase() === "content-type") delete headers[k];
+      }
+    } else if (!("content-type" in lower(headers))) {
+      headers["Content-Type"] = contentType;
+    }
   }
   const spec: RequestSpec = { method: opts.endpoint.method, url, headers };
   if (hasBody) spec.body = opts.body;
@@ -145,14 +160,24 @@ export async function execute(req: RequestSpec, ctx: HttpContext): Promise<HttpR
     method: req.method,
     url: req.url,
     headers: req.headers,
-    ...(req.body !== undefined ? { body: req.body } : {}),
+    ...(req.body !== undefined ? { body: describeBodyForLog(req.body) } : {}),
   };
   ctx.logger?.onRequest?.(logReq);
 
   const f = ctx.fetchImpl ?? fetch;
   const init: RequestInit = { method: req.method, headers: req.headers };
   if (req.body !== undefined) {
-    init.body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    let encoded;
+    try {
+      encoded = await encodeBody(req.body, ctx.baseDir);
+    } catch (err) {
+      ctx.logger?.onError?.(logReq, err, 0);
+      throw err;
+    }
+    init.body = encoded.body;
+    if (encoded.contentType !== undefined) {
+      init.headers = { ...req.headers, "Content-Type": encoded.contentType };
+    }
   }
   if (ctx.dispatcher !== undefined) {
     // `dispatcher` is a Node/undici extension typed as `Dispatcher` by
