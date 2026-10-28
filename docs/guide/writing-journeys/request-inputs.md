@@ -3,6 +3,7 @@ title: Request inputs — params, query, headers, body
 description: The four fields that build the HTTP request — when to use each, what they accept, and what the runtime does with them.
 sources:
   - packages/core/src/http.ts
+  - packages/core/src/body.ts
   - packages/core/src/runtime.ts
 ---
 
@@ -79,15 +80,17 @@ step("create", {
 
 ### Automatic `Content-Type`
 
-If the step has a `body` and no `Content-Type` is set (case-insensitive check), the runtime adds `Content-Type: application/json` for you. Override explicitly if you need a different content type:
+If the step has a `body` and no `Content-Type` is set (case-insensitive check), the runtime adds one for you: `application/json` for strings and objects, the file's type for `fileFrom()`, `application/octet-stream` for raw bytes. Override explicitly if you need a different content type:
 
 ```ts
 step("upload", {
   endpoint: endpoints.uploadAvatar,
-  headers: { "Content-Type": "application/octet-stream" },
+  headers: { "Content-Type": "application/x-custom" },
   body: rawBytes,
 });
 ```
+
+`multipart()` bodies are the exception: the runtime always sets `multipart/form-data; boundary=…` itself and **drops** any `Content-Type` you pass, because a hand-written one can't carry the generated boundary.
 
 ## `body` — request body
 
@@ -97,11 +100,14 @@ body?: Lazy<unknown>;
 
 Behavior depends on the runtime type:
 
-| Value type            | What fetch sees                                                 |
-| --------------------- | --------------------------------------------------------------- |
-| `string`              | Sent as-is (`init.body = value`)                                |
-| Anything else         | `JSON.stringify(value)` + auto `Content-Type: application/json` |
-| `undefined` / omitted | No body sent                                                    |
+| Value type                            | What is sent                                                         |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| `string`                              | Sent as-is                                                           |
+| `multipart({ … })`                    | `multipart/form-data`; text fields + file parts (see below)          |
+| `fileFrom(path, contentType?)`        | The file's bytes, `Content-Type: contentType` (default octet-stream) |
+| `Uint8Array` / `ArrayBuffer` / `Blob` | The bytes as-is, `Content-Type: application/octet-stream` unless set |
+| Anything else                         | `JSON.stringify(value)` + auto `Content-Type: application/json`      |
+| `undefined` / omitted                 | No body sent                                                         |
 
 ```ts
 step("create", {
@@ -116,7 +122,37 @@ step("raw upload", {
 });
 ```
 
-For binary payloads, pass a `Uint8Array` / `ArrayBuffer` and set the content type yourself — fetch handles them natively, and Journey will not JSON-encode a non-string value only if you're careful to coerce it. If you need a truly binary flow, use a descriptor endpoint and pass the raw value.
+### File uploads — `multipart()` and `fileFrom()`
+
+```ts
+import { fileFrom, multipart } from "@usejourney/core";
+
+function fileFrom(path: string, contentType?: string, filename?: string): FileRef;
+function multipart(parts: Record<string, string | number | boolean | FileRef>): MultipartBody;
+```
+
+`fileFrom()` references a file on disk. **Relative paths resolve against the project root** (the directory holding `journey.config.json`), not the journey file — keep fixtures in e.g. `fixtures/`. The bytes are read when the request is sent. `filename` (reported in a multipart part) defaults to the path's basename.
+
+```ts
+// multipart/form-data with a text field and a 10 MB PNG
+step("virus scan upload", {
+  endpoint: endpoints.virusScan,
+  headers: () => ({ Authorization: `Sid ${sid}` }),
+  body: () =>
+    multipart({
+      channel: "WAVE",
+      file: fileFrom("fixtures/sample-10mb.png", "image/png"),
+    }),
+});
+
+// raw binary body
+step("put avatar", {
+  endpoint: endpoints.putAvatar,
+  body: fileFrom("fixtures/avatar.png", "image/png"),
+});
+```
+
+Both work identically under `journey run` and [`journey export k6`](../cli/export-k6#file-uploads) (where the file is pre-loaded at k6 init time — pass the path as a **string literal** so the export can find it). A missing file fails the step (`journey run`) or the export.
 
 ## Resolution order
 

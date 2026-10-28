@@ -151,7 +151,7 @@ journey init <dir> --spec openapi.yaml     # Scaffold a new project from an Open
 journey generate                            # Regenerate endpoint/model files from spec
 journey run <journey-file> [--env <name>]  # Run a specific journey
 journey run --all [--env <name>]           # Run all journeys in the project
-journey export k6 <journey-file>           # Export a journey as a k6 script
+journey export k6 <journey-file> [--metrics-prefix <p>]  # Export a journey as a k6 script
 journey export postman <journey-file>      # Export a journey as a Postman Collection v2.1.0
 journey env list                           # List available environments
 ```
@@ -177,7 +177,7 @@ Framework-agnostic TypeScript library shared by CLI, GUI, and k6 adapter. Execut
 
 ### k6 Adapter
 
-Takes a `.journey.ts` file and emits a valid k6 script. Maps `assert()` callbacks to k6 `check()`. Enables load testing without rewriting flows from scratch.
+Takes a `.journey.ts` file and bundles it into a self-contained k6 script. Maps `assert()` callbacks to k6 `check()`, sub-journeys to `group()`, and supports `fetch` in hooks, async hooks, `multipart()` / `fileFrom()` uploads, and opt-in per-step custom metrics (`--metrics-prefix`). Enables load testing without rewriting flows from scratch. See [`docs/guide/cli/export-k6.md`](docs/guide/cli/export-k6.md).
 
 ### Postman Adapter
 

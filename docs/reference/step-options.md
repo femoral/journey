@@ -5,6 +5,7 @@ sources:
   - packages/core/src/runtime.ts
   - packages/core/src/endpoint.ts
   - packages/core/src/http.ts
+  - packages/core/src/body.ts
 ---
 
 # Step options reference
@@ -23,6 +24,7 @@ interface StepOptions<E extends Endpoint> {
   headers?: Lazy<Record<string, string>>;
   body?: Lazy<unknown>;
   timeoutMs?: number;
+  metric?: string | false; // k6 export only
   assert?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
   after?: (res: HttpResponse<ResponseOf<E>>) => void | Promise<void>;
 }
@@ -32,16 +34,17 @@ type Lazy<T> = T | (() => T | Promise<T>);
 
 ## Fields
 
-| Field       | Type                                                             | Default | Required | Notes                                                                                                                                                                          |
-| ----------- | ---------------------------------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `endpoint`  | `EndpointRef<R>` \| `EndpointDescriptor`                         | —       | **Yes**  | Refs carry a response-type brand so `assert`/`after` get typed `res.body`. Descriptors yield `unknown`.                                                                        |
-| `params`    | `Lazy<Record<string, string \| number>>`                         | —       | No       | Substituted into `{name}` path templates. Missing template var → runtime error `Missing path param "…"`. Values URL-encoded.                                                   |
-| `query`     | `Lazy<Record<string, string \| number \| boolean \| undefined>>` | —       | No       | Appended as query string. `undefined` values dropped.                                                                                                                          |
-| `headers`   | `Lazy<Record<string, string>>`                                   | —       | No       | Merged on top of `HttpContext.defaultHeaders`. Per-step keys win.                                                                                                              |
-| `body`      | `Lazy<unknown>`                                                  | —       | No       | Strings sent raw. Non-strings `JSON.stringify`'d with `Content-Type: application/json` added if no content type is already set.                                                |
-| `timeoutMs` | `number`                                                         | —       | No       | Wraps fetch in an `AbortController`. Aborted requests reject as step errors. Overrides the run-wide default (60s, or `--timeout` on `run`/`serve`; `--timeout 0` disables it). |
-| `assert`    | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after the response arrives. Throw to fail.                                                                                                                                |
-| `after`     | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after `assert` succeeds (or right after the response if no `assert`). Use for closure-variable extraction.                                                                |
+| Field       | Type                                                             | Default | Required | Notes                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ---------------------------------------------------------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`  | `EndpointRef<R>` \| `EndpointDescriptor`                         | —       | **Yes**  | Refs carry a response-type brand so `assert`/`after` get typed `res.body`. Descriptors yield `unknown`.                                                                                                                                                                                                                                                        |
+| `params`    | `Lazy<Record<string, string \| number>>`                         | —       | No       | Substituted into `{name}` path templates. Missing template var → runtime error `Missing path param "…"`. Values URL-encoded.                                                                                                                                                                                                                                   |
+| `query`     | `Lazy<Record<string, string \| number \| boolean \| undefined>>` | —       | No       | Appended as query string. `undefined` values dropped.                                                                                                                                                                                                                                                                                                          |
+| `headers`   | `Lazy<Record<string, string>>`                                   | —       | No       | Merged on top of `HttpContext.defaultHeaders`. Per-step keys win.                                                                                                                                                                                                                                                                                              |
+| `body`      | `Lazy<unknown>`                                                  | —       | No       | Strings sent raw. `multipart({…})` → `multipart/form-data` (caller `Content-Type` dropped). `fileFrom(path, type?)` / `Uint8Array` / `ArrayBuffer` / `Blob` → raw bytes. Anything else `JSON.stringify`'d. A default `Content-Type` is added if none is set. See [file uploads](../guide/writing-journeys/request-inputs#file-uploads-multipart-and-filefrom). |
+| `timeoutMs` | `number`                                                         | —       | No       | Wraps fetch in an `AbortController`. Aborted requests reject as step errors. Overrides the run-wide default (60s, or `--timeout` on `run`/`serve`; `--timeout 0` disables it).                                                                                                                                                                                 |
+| `metric`    | `string \| false`                                                | —       | No       | k6 export only (ignored by `journey run`). With `journey export k6 --metrics-prefix <p>`, overrides the step's metric slug (`<p>_<metric>_duration` / `_tps`); `false` records no per-step metric. See [custom metrics](../guide/cli/export-k6#custom-metrics).                                                                                                |
+| `assert`    | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after the response arrives. Throw to fail.                                                                                                                                                                                                                                                                                                                |
+| `after`     | `(res: HttpResponse<ResponseOf<E>>) => void \| Promise<void>`    | —       | No       | Runs after `assert` succeeds (or right after the response if no `assert`). Use for closure-variable extraction.                                                                                                                                                                                                                                                |
 
 ## `HttpResponse<T>`
 

@@ -14,6 +14,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/cli/export-k6.md` — journey export k6
 
 - `packages/cli/src/commands/exportK6.ts`
+- `packages/core/src/body.ts`
 - `packages/k6-adapter/src/index.ts`
 - `packages/k6-adapter/src/shim.ts`
 
@@ -159,6 +160,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `guide/writing-journeys/request-inputs.md` — Request inputs — params, query, headers, body
 
 - `packages/core/src/http.ts`
+- `packages/core/src/body.ts`
 - `packages/core/src/runtime.ts`
 
 ### `guide/writing-journeys/state.md` — State between steps
@@ -214,6 +216,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 ### `reference/journey-api/http.md` — HTTP
 
 - `packages/core/src/http.ts`
+- `packages/core/src/body.ts`
 
 ### `reference/journey-api/index.md` — Journey API
 
@@ -250,6 +253,7 @@ Auto-generated from the `sources:` frontmatter of each doc page. Edit the frontm
 - `packages/core/src/runtime.ts`
 - `packages/core/src/endpoint.ts`
 - `packages/core/src/http.ts`
+- `packages/core/src/body.ts`
 
 ## By source file
 
@@ -368,6 +372,13 @@ When a PR touches any of these paths, check the linked doc page(s) for updates.
 ### `packages/codegen/src/types.ts`
 
 - `reference/openapi-codegen.md`
+
+### `packages/core/src/body.ts`
+
+- `guide/cli/export-k6.md`
+- `guide/writing-journeys/request-inputs.md`
+- `reference/journey-api/http.md`
+- `reference/step-options.md`
 
 ### `packages/core/src/cache.ts`
 

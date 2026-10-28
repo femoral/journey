@@ -365,8 +365,35 @@ journey("flow", () => {
 
 Called outside a run context (top-level scripts, module load), the wrapper short-circuits to
 `globalThis.fetch` with no behaviour change — the same helper module is safe to reuse from ad-hoc
-code. When each hop is meaningful enough to assert on, model it as a step in a reusable sub-journey
-instead (see above) — those steps are observable natively.
+code. The same code works in `journey export k6`: the shim maps `fetch` to `http.request` and
+resolves to a minimal Response (`status`, `ok`, `headers.get()`, `json()`, `text()`; string/binary
+request bodies only), and async hooks are awaited. When each hop is meaningful enough to assert on,
+model it as a step in a reusable sub-journey instead (see above) — those steps are observable
+natively.
+
+### File uploads (multipart / binary)
+
+`multipart()` and `fileFrom()` from `@usejourney/core` build upload bodies that work the same under
+`journey run` and `journey export k6`. Paths are relative to the **project root** (where
+`journey.config.json` lives) — keep fixtures in e.g. `fixtures/`. For k6, pass the path as a
+**string literal** so the export can pre-load it with `open(path, "b")` at init.
+
+```ts
+import { journey, step, expect, multipart, fileFrom } from "@usejourney/core";
+
+step("virus scan upload", {
+  endpoint: endpoints.virusScan,
+  headers: () => ({ Authorization: `Sid ${sid}` }), // no Content-Type: it's generated with the boundary
+  body: () =>
+    multipart({
+      channel: "WAVE",
+      file: fileFrom("fixtures/sample-10mb.png", "image/png", "Sample-png-image-10mb.png"),
+    }),
+  assert: (res) => expect(res.status).toBe(200),
+});
+
+step("raw bytes", { endpoint: endpoints.putAvatar, body: fileFrom("fixtures/a.png", "image/png") });
+```
 
 ### Two journeys in one file
 
@@ -423,7 +450,7 @@ assert(res) {
 | `toContain is only supported on strings and arrays` / `toMatch is only supported on strings`           | Wrong matcher for the value type                                                                 | Use `toBe`/`toEqual` for non-string/array values.                                                                                                                      |
 | `Authorization: "Bearer "` sent on every request                                                       | Forgot the arrow function — value captured at registration when `token` was `""`                 | `headers: () => ({ Authorization: \`Bearer ${token}\` })`.                                                                                                             |
 | Import error: `Cannot find module '../generated/endpoints'`                                            | Wrong relative path, or codegen never ran                                                        | Path is relative to the `.journey.ts` file; import with the `.js` extension (`../generated/endpoints.js`); run `journey generate` if `generated/` is empty.            |
-| A non-string `body` was sent JSON-encoded when you wanted raw bytes                                    | Objects are auto-`JSON.stringify`-ed with `Content-Type: application/json`                       | Pass a `string` and set `Content-Type` yourself; for binary, use a descriptor endpoint and pass the raw value.                                                         |
+| A non-string `body` was sent JSON-encoded when you wanted raw bytes                                    | Plain objects are auto-`JSON.stringify`-ed with `Content-Type: application/json`                 | Use `fileFrom("fixtures/x.bin", "type")`, a `Uint8Array` / `ArrayBuffer`, or `multipart({...})` for form uploads — all sent as bytes, in `journey run` and k6.         |
 | Helper's upstream `fetch()` calls don't appear in the Debug Console / run history                      | Raw `globalThis.fetch` bypasses Journey's logger pipeline                                        | `import { fetch } from "@usejourney/core"` in the helper — drop-in replacement that routes through the active run's logger. See _Observable HTTP_ in §3.               |
 | GUI step timeline rewrites itself mid-run when a helper injects an auth step                           | Stale GUI build pre-dates the `step:planned` SSE event                                           | Update to the GUI build that consumes `step:planned` (replaces the parsed idle list with the runner's resolved plan at run start).                                     |
 | `invokeJourney(...) called outside a journey(...) body`                                                | `invokeJourney()` at module scope                                                                | Move it inside `journey(name, () => { ... })` — it is a pipeline node, registered like `step()`.                                                                       |
@@ -443,12 +470,32 @@ substitution, header merge, auto `Content-Type`) → `fetch` (with abort timer i
 
 ## 5. `export k6`, `export postman`, `serve`
 
-- **`journey export k6 [file] [--tag <tag>] [--out <file>] [--out-dir <dir>]`** — transpiles a
-  `.journey.ts` into a k6 load script. `assert()` becomes a k6 `check()`. A journey's `options.k6`
-  block (`{ vus, duration, ... }`) is baked into the script's `export const options`; `--tag` filters
-  which journeys are emitted. A sub-journey (`invokeJourney`) is inlined under a k6 `group()` named
-  after the child; a `cacheKey`'d call is honored **in memory, per-VU** — a hit skips the child's
-  requests, and `JOURNEY_CACHE=off` forces every iteration cold. Provided by `@usejourney/k6-adapter`.
+- **`journey export k6 <file|dir> [--tag <tag>] [--out <file>] [--out-dir <dir>] [--metrics-prefix <p>] [--halt-on-failure]`**
+  — bundles a `.journey.ts` (with esbuild) into a self-contained k6 load script. Provided by
+  `@usejourney/k6-adapter`. Works in a fresh project (plants the `@usejourney/core` link like `run`).
+  - `assert()` becomes a k6 `check()` named `<journey> › <step>`. By default a failed check lets the
+    iteration continue; `--halt-on-failure` stops the iteration's remaining steps (like `journey run`).
+  - A journey's `options.k6` block is baked into `export const options`; `--tag` filters which files
+    are emitted. One flow per file (options and the default function are module-scoped).
+  - **Run-time profiles:** instead of `k6:`, a journey file may `export const options = pickProfile()`
+    reading `typeof __ENV !== "undefined" ? __ENV.OPT_NAME : undefined` — re-exported as-is, evaluated
+    in k6's init context (`k6 run -e OPT_NAME=2X …`). Don't combine with a `k6:` block; no `export default`.
+  - **Metrics:** `--metrics-prefix wave` → per step a Trend `wave_<step_slug>_duration`
+    (`res.timings.duration`, ms, plain number) + Counter `wave_<step_slug>_tps`, sub-journey steps
+    included (an auth sub-journey with steps `auth` / `session` → `wave_auth_*` / `wave_session_*`);
+    per completed iteration `wave_flow_duration` (sum of step durations) + `wave_flow_tps`. Override a
+    slug with the step option `metric: "fetch_cards"`, or `metric: false` to skip one. Declared at k6
+    init by dry-evaluating journey bodies, so keep bodies side-effect free.
+  - **Base URL / env:** refs use `JOURNEY_BASE_URL` (fallback `BASE_URL`); `env("X")` reads `__ENV.X`
+    (pass `-e X=…`). Environment files are not baked in.
+  - **Imports:** relative modules of any form (named, aliased, `* as NS`, default, JSON) are bundled
+    with their own scope. npm/`node:`/remote imports and core exports the shim lacks fail the export
+    with file:line.
+  - **Hooks:** `fetch` from core works; async lazy values and async `assert`/`after` are awaited.
+    `multipart()` / `fileFrom()` work (literal paths pre-loaded via `open()`).
+  - A sub-journey (`invokeJourney`) is inlined under a k6 `group()` named after the child; a
+    `cacheKey`'d call is honored **in memory, per-VU** — a hit skips the child's requests, and
+    `JOURNEY_CACHE=off` forces every iteration cold (use it for load runs that should re-auth).
 - **`journey export postman [--out <file>] [--out-dir <dir>] [--bundle] [--thread-state]`** — serializes
   loaded journeys into a Postman Collection v2.1.0 JSON plus environment files. A sub-journey becomes a
   nested folder, with the call's inputs as folder-scoped variables; a `cacheKey`'d call skips its request

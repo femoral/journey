@@ -97,3 +97,7 @@ Calls fired from inside the journey body **before** the first step runs (top-lev
 `fetch` reads the same `HttpContext` that `runJourney` passes around — specifically `ctx.logger`. It does not consult `ctx.baseUrl`, `ctx.defaultHeaders`, `ctx.fetchImpl`, or `ctx.dispatcher`. Those affect the typed step pipeline only; the wrapped `fetch` is meant for cases where the helper is doing something outside the typed flow on purpose (different host, opaque token endpoint, multipart upload).
 
 If you need the dispatcher / fetchImpl behaviour (e.g. `--insecure` TLS), call the typed step pipeline via a descriptor `step()` instead — that will route through `execute()` and pick up the ctx fields.
+
+## Under `journey export k6`
+
+The k6 shim provides its own `fetch`: it calls `http.request` synchronously and resolves to a minimal Response-like object — `status`, `ok`, `statusText`, `url`, `headers.get()` / `has()` / `forEach()`, `json()`, `text()`. It rejects only on network errors (k6 status `0`). Request bodies may be strings or binary (`Uint8Array` / `ArrayBuffer`). Hooks that `await fetch(…)` are awaited by the exported script. See [export k6](../../guide/cli/export-k6#fetch-and-async-hooks).
